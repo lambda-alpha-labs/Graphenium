@@ -1,0 +1,8 @@
+# Ignore toolchain and build artifacts
+# Patterns use gitignore-style glob syntax.
+# A trailing `/` matches the directory and all contents recursively.
+.rust-toolchain/
+target/
+node_modules/
+__pycache__/
+.venv/

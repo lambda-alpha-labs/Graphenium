@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: gm-darwin-arm64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: gm-darwin-x86_64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: gm-linux-x86_64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact: gm-linux-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: gm-windows-x86_64
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare artifact (unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar -czf ${{ matrix.artifact }}.tar.gz gm
+
+      - name: Prepare artifact (windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ${{ matrix.artifact }}.zip gm.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact }}.*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+
+      - name: Generate release notes
+        run: |
+          echo "## Graphenium $(echo $GITHUB_REF | sed 's|refs/tags/v||')" > notes.md
+          echo "" >> notes.md
+          echo "- AST extraction for 9 languages" >> notes.md
+          echo "- MCP server with 13 graph tools" >> notes.md
+          echo "- Query CLI with keyword-scored traversal" >> notes.md
+          echo "- Louvain community detection" >> notes.md
+          echo "- AST-only and semantic extraction modes" >> notes.md
+          echo "- Watch and incremental update support" >> notes.md
+          echo "- \`gm doctor\` diagnostic command" >> notes.md
+          echo "- \`gm setup\` for Claude/Cursor/CodeWhale" >> notes.md
+          echo "" >> notes.md
+          echo "### Install" >> notes.md
+          echo '```sh' >> notes.md
+          echo "cargo install graphenium" >> notes.md
+          echo '```' >> notes.md
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: |
+            gm-darwin-arm64/gm-darwin-arm64.tar.gz
+            gm-darwin-x86_64/gm-darwin-x86_64.tar.gz
+            gm-linux-x86_64/gm-linux-x86_64.tar.gz
+            gm-linux-arm64/gm-linux-arm64.tar.gz
+            gm-windows-x86_64/gm-windows-x86_64.zip

@@ -1,0 +1,38 @@
+# Rust build output
+/target/
+
+# Local Rust toolchain (sandbox artifacts)
+/.rust-toolchain/
+
+# Graphenium generated output
+/graphenium-out/
+
+# Personal planning and notes (not part of the project)
+/docs/plans/
+/New Work Items/
+/HTML_graph_improvement_idea.md
+/graphenium-phased-implementation-plan.md
+/README_improved.md
+/SESSION_HANDOFF.md
+
+# Local assistant/editor configuration
+/.claude/
+/.mcp.json
+/opencode.json
+
+# Local environment and secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local AI assistant data
+/.codewhale/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
