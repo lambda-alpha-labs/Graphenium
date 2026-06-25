@@ -153,6 +153,15 @@ impl GrapheniumGraph {
         })
     }
 
+    /// Get all edges between two nodes, matching by the current node ID.
+    pub fn edges_between(&self, a: &str, b: &str) -> Vec<&Edge> {
+        self.edges_iter()
+            .filter(|e| {
+                (e.source == a && e.target == b) || (e.source == b && e.target == a)
+            })
+            .collect()
+    }
+
     pub fn edges_iter(&self) -> impl Iterator<Item = &Edge> {
         self.inner.edge_weights()
     }

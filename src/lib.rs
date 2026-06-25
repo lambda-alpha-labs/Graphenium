@@ -37,6 +37,7 @@ pub mod cluster;
 pub mod detect;
 pub mod doctor;
 pub mod embed;
+pub mod harness;
 pub mod error;
 pub mod export;
 pub mod extract;
@@ -47,6 +48,7 @@ pub mod resolver;
 pub mod semantic;
 pub mod serve;
 pub mod telemetry;
+pub mod trust;
 pub mod validate;
 pub mod watch;
 

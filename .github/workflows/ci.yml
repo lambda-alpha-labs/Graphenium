@@ -19,6 +19,14 @@ jobs:
       - run: cargo test
       - run: cargo build --release
 
+      # Trust quality gate: run gm check on the self-analysis graph
+      - name: Install gm
+        run: cargo install --path .
+      - name: Build self-graph
+        run: gm run . --no-semantic --no-viz
+      - name: Trust check
+        run: gm check --min-resolution 80 --max-ambiguous 10
+
   fmt:
     name: Format
     runs-on: ubuntu-latest

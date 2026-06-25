@@ -11,8 +11,10 @@ use graphenium::detect::{self, DetectOptions};
 use graphenium::export;
 use graphenium::export::json::load_graph;
 use graphenium::extract::{self, ExtractMode, ExtractOptions};
+use graphenium::harness;
 use graphenium::model::graph::GrapheniumGraph;
-use graphenium::model::ExtractionResult;
+use graphenium::model::{Confidence, ExtractionResult};
+use graphenium::trust;
 use graphenium::ranking;
 use graphenium::report::{self, ReportInput};
 use graphenium::semantic::{self, AiProvider, SemanticOptions};
@@ -124,6 +126,25 @@ enum Commands {
         graph: Option<PathBuf>,
     },
 
+    /// Run trust quality checks and enforce gates for CI
+    Check {
+        /// Path to the graph to check
+        #[arg(long, default_value = "graphenium-out/graph.json")]
+        graph: PathBuf,
+
+        /// Minimum resolution percentage (default: 80)
+        #[arg(long, default_value_t = 80.0)]
+        min_resolution: f64,
+
+        /// Maximum number of ambiguous edges allowed (default: 10)
+        #[arg(long, default_value_t = 10)]
+        max_ambiguous: usize,
+
+        /// Exit with non-zero if any check fails
+        #[arg(long)]
+        strict: bool,
+    },
+
     /// Diff two graph snapshots and show symbol-level changes
     Diff {
         /// Path to the old (before) graph.json
@@ -231,6 +252,13 @@ async fn main() {
             graphenium::doctor::run_doctor(graph.as_deref());
             Ok(())
         }
+
+        Commands::Check {
+            graph,
+            min_resolution,
+            max_ambiguous,
+            strict,
+        } => cmd_check(&graph, min_resolution, max_ambiguous, strict),
 
         Commands::Diff {
             before,
@@ -690,6 +718,70 @@ fn cmd_query(
     ));
 
     print!("{output}");
+    Ok(())
+}
+
+// ── `check` command ────────────────────────────────────────────────────────────
+
+fn cmd_check(
+    graph_path: &Path,
+    min_resolution: f64,
+    max_ambiguous: usize,
+    strict: bool,
+) -> graphenium::Result<()> {
+    let graph = export::json::load_graph(graph_path)?;
+    let mut report = trust::ResolutionReport::default();
+
+    // Build resolution report from graph edges
+    for edge in graph.edges_iter() {
+        match edge.relation.as_str() {
+            "imports" => {
+                report.total_import_edges += 1;
+                if edge.resolution_status.as_deref() == Some("resolved") {
+                    report.resolved_imports += 1;
+                }
+                if edge.resolution_status.as_deref() == Some("unresolved") {
+                    report.unresolved_refs += 1;
+                }
+            }
+            "calls" => {
+                report.total_call_edges += 1;
+                if edge.resolution_status.as_deref() == Some("resolved") {
+                    report.resolved_calls += 1;
+                }
+            }
+            _ => {
+                // method edges: contains, etc.
+                if edge.relation != "contains" && edge.relation != "method" {
+                    report.total_method_edges += 1;
+                    if edge.resolution_status.as_deref() == Some("resolved") {
+                        report.resolved_methods += 1;
+                    }
+                }
+            }
+        }
+        match edge.confidence {
+            Confidence::Extracted => {}
+            Confidence::Inferred => report.heuristic_edges += 1,
+            Confidence::Ambiguous => report.ambiguous_edges += 1,
+        }
+    }
+
+    let result = harness::check_resolution_quality(&graph, &report, min_resolution, max_ambiguous);
+
+    for detail in &result.details {
+        println!("{detail}");
+    }
+
+    if !result.passed {
+        eprintln!("\n⚠ Trust check FAILED");
+        if strict {
+            std::process::exit(1);
+        }
+    } else {
+        println!("\n✓ Trust check PASSED");
+    }
+
     Ok(())
 }
 

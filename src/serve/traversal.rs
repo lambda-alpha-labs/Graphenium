@@ -566,6 +566,82 @@ pub fn shortest_path_with_filters(
     None
 }
 
+/// Find the safest path between two nodes — prefers edges with highest
+/// confidence/resolution provenance.
+pub fn safest_path_with_filters(
+    graph: &GrapheniumGraph,
+    from_id: &str,
+    to_id: &str,
+    allowed: Option<&HashSet<String>>,
+    include_relations: &[String],
+    exclude_relations: &[String],
+) -> Option<(Vec<String>, f64)> {
+    if allowed.is_some_and(|allowed| !allowed.contains(from_id) || !allowed.contains(to_id)) {
+        return None;
+    }
+
+    let mut visited: HashSet<String> = HashSet::new();
+    let mut costs: HashMap<String, f64> = HashMap::new();
+    let mut parents: HashMap<String, String> = HashMap::new();
+
+    costs.insert(from_id.to_string(), 0.0);
+
+    loop {
+        // Find the unvisited node with the lowest cost
+        let current = costs
+            .iter()
+            .filter(|(id, _)| !visited.contains(*id))
+            .min_by(|(_, ca), (_, cb)| ca.partial_cmp(cb).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(id, _)| id.clone());
+
+        let current = match current {
+            Some(id) => id,
+            None => return None,
+        };
+
+        if current == to_id {
+            let mut path = vec![to_id.to_string()];
+            let mut cursor = to_id;
+            while let Some(parent) = parents.get(cursor) {
+                path.push(parent.clone());
+                cursor = parent;
+            }
+            path.reverse();
+            let cost = *costs.get(to_id).unwrap_or(&0.0);
+            let safety_score = 1.0 / (1.0 + cost);
+            return Some((path, safety_score));
+        }
+
+        visited.insert(current.clone());
+        let current_cost = *costs.get(&current).unwrap_or(&f64::MAX);
+
+        for neighbor in filtered_neighbors(
+            graph,
+            &current,
+            allowed,
+            include_relations,
+            exclude_relations,
+        ) {
+            if visited.contains(&neighbor) {
+                continue;
+            }
+            let edge_confidence = graph
+                .edges_between(&current, &neighbor)
+                .iter()
+                .map(|e| e.confidence_score)
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .unwrap_or(0.5);
+            let edge_cost = 1.0 - edge_confidence;
+            let new_cost = current_cost + edge_cost;
+
+            if new_cost < *costs.get(&neighbor).unwrap_or(&f64::MAX) {
+                costs.insert(neighbor.clone(), new_cost);
+                parents.insert(neighbor.clone(), current.clone());
+            }
+        }
+    }
+}
+
 fn filtered_neighbors(
     graph: &GrapheniumGraph,
     id: &str,
