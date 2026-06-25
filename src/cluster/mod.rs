@@ -1,4 +1,5 @@
 pub mod cohesion;
+pub mod drift;
 pub mod focus;
 pub mod louvain;
 pub mod split;
