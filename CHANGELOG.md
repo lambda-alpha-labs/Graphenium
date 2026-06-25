@@ -2,7 +2,7 @@
 
 All notable changes to Graphenium are documented in this file.
 
-## v0.3.0 (unreleased) — Trust Core, Repository Verification, Change Safety
+## v0.3.0 (2026-06-25) — Trust Core, Repository Verification, Change Safety
 
 ### Added
 - **Trust Foundation**: EvidenceSpan with SHA256 hashing, stale detection, Claim model
