@@ -312,8 +312,12 @@ A good assistant workflow:
 3. Treat `AMBIGUOUS` edges as leads to inspect.
 4. Read source code before making implementation changes.
 
-`graph_stats` reports the confidence breakdown so you know what kind of graph
-you're working with.
+Every edge also carries provenance metadata: `extractor` (which system produced
+the edge: `tree-sitter`, `llm`, `resolver`, etc.) and `resolution_status`
+(whether the edge target was successfully resolved: `resolved`, `unresolved`,
+`heuristic`, `inferred`). The `graph_stats` tool reports both the confidence
+breakdown and the provenance breakdown so you know exactly what kind of graph
+you are working with.
 
 ---
 
@@ -388,11 +392,13 @@ gm query "<keywords>" [OPTIONS]
 |---|---|---|
 | `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
 | `--budget N` | `2000` | Output token budget |
+| `--mode MODE` | `lexical` | Query mode: `lexical` (keyword), `structural` (graph distance), or `hybrid` |
 | `--dfs` | off | Use depth-first search |
 
 ```sh
 gm query "authentication login session"
 gm query "parser ast walker" --dfs --budget 4000
+gm query "database connection" --mode structural
 ```
 
 ### `gm serve`
@@ -446,6 +452,25 @@ gm setup <claude|cursor|codewhale> [--graph PATH]
 gm setup claude
 gm setup cursor
 gm setup codewhale
+```
+
+### `gm diff`
+
+Diff two graph snapshots and show symbol-level changes.
+
+```
+gm diff [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--before PATH` | (empty graph) | Path to the old graph.json |
+| `--after PATH` | `graphenium-out/graph.json` | Path to the new graph.json |
+| `--impact` | off | Show downstream impact analysis and review order |
+
+```sh
+gm diff --before old-graph.json --after new-graph.json
+gm diff --after new-graph.json --impact
 ```
 
 ---

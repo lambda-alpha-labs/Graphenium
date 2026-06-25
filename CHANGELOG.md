@@ -2,7 +2,43 @@
 
 All notable changes to Graphenium are documented in this file.
 
-## [0.1.0] (unreleased)
+## v2 (unreleased)
+
+### Added
+
+- Graph schema versioning: `schema_version`, `graphenium_version`,
+  `created_at`, `project_root`, `extraction_modes`, `languages` in metadata
+- Edge and node provenance: `extractor` and `resolution_status` fields
+  on every edge (tree-sitter edges marked `resolved`, LLM edges by confidence)
+- Cross-file import resolver: marks import edges as `resolved` or `unresolved`
+- Directed graph projections: `DirectedProjection` rebuilds directed views
+  from the undirected petgraph using `src_original`/`tgt_original`
+- PageRank on directed projections for architectural importance scoring
+- Reverse reachability analysis: find all nodes that can reach a target
+- Community boundary crossing scores: identifies cross-community connectors
+- Rooted dominators: identifies mandatory gateways in dependency subgraphs
+- `chokepoint_report`: combined ranking from PageRank, degree, and topology
+- Confidence-aware ranking explanations for all chokepoint output
+- `gm diff --before --after`: graph snapshot diffing with symbol inventory
+- `symbol_inventory_diff`: detects added, removed, and community-changed symbols
+- `downstream_impact`: reverse reachability for blast radius analysis
+- `review_order`: recommended review order by risk (removed > changed > added)
+- `gm query --mode`: lexical (default), structural (graph distance), hybrid
+- Text embeddings: TF-based search with cosine similarity (`embed` module)
+- Node2Vec structural embeddings: random walks + co-occurrence training
+- Runtime telemetry overlay: OTEL-compatible trace import, hot path queries,
+  runtime-weighted traversal with P50/P95/P99 latency percentiles
+- `gm doctor` reports schema version, build version, extraction modes,
+  and detected languages
+
+### Changed
+
+- `build_merged` now resolves imports before graph assembly
+- MCP `graph_stats` output includes provenance breakdown (extractor counts)
+  and graph metadata (schema version, modes, languages)
+- Subgraph output in MCP tools shows `[extractor:status]` on connections
+
+## [0.1.0] (2026-06-23)
 
 ### Added
 
@@ -26,3 +62,8 @@ All notable changes to Graphenium are documented in this file.
 - `.grapheniumignore` support for excluding directories
 - Confidence model: EXTRACTED, INFERRED, AMBIGUOUS edge labelling
 - Label disambiguation and qualified labels for duplicate symbol names
+- `gm doctor` diagnostic command
+- `gm setup` MCP config generator for Claude, Cursor, CodeWhale
+- GitHub Actions CI with test, fmt, clippy jobs
+- GitHub Actions release workflow for 5 platforms
+- One-line curl installer (`install.sh`)
