@@ -46,6 +46,7 @@ pub mod ranking;
 pub mod report;
 pub mod semantic;
 pub mod serve;
+pub mod telemetry;
 pub mod validate;
 pub mod watch;
 
