@@ -3,8 +3,8 @@
 **Persistent structural memory for AI coding agents.**
 
 Graphenium turns your repository into a queryable graph so Claude, Cursor,
-and other MCP-compatible assistants can answer structural questions in ~20 ms,
-often before reading a single source file. **Especially valuable in large,
+and other MCP-compatible assistants can answer many structural questions in
+milliseconds, often before reading a single source file. **Especially valuable in large,
 multi-module, or unfamiliar codebases** where grep-and-trace navigation breaks
 down:
 
@@ -15,6 +15,9 @@ down:
 - Which files belong to the same community?
 
 It replaces grep-and-trace navigation, not source-code understanding.
+
+Status: AST + Resolver and Semantic Pass are stable. Telemetry Overlay is
+experimental.
 
 ![Demo](docs/demo.gif)
 
@@ -151,10 +154,16 @@ gm doctor
 
 ### After changes
 
-After saving or generating another graph snapshot, compare the structural
-impact of your changes:
+Before making a change, save the current graph:
 
 ```sh
+cp graphenium-out/graph.json old-graph.json
+```
+
+After rebuilding, compare the snapshots:
+
+```sh
+gm run . --no-semantic --no-viz
 gm diff --before old-graph.json --after graphenium-out/graph.json --impact
 ```
 
@@ -192,7 +201,7 @@ matches your performance and budget needs.
 | Layer | What you get | Best for | Cost / API key |
 |---|---|---|---|
 | **1. AST + Resolver** (Terrain) **[Stable]** | Deterministic syntax extraction, import binding, resolved calls where supported, methods, inheritance, and communities. | Syntax-accurate architectural mapping and basic navigation. | Free, local |
-| **2. Semantic Pass** (Road Network) **[Stable]** | Inferred conceptual dependencies, docstring rationale, and cross-file relationships. | Behavioural tracing and richer agent reasoning. | Paid, LLM key |
+| **2. Semantic Pass** (Road Network) **[Stable]** | Inferred conceptual dependencies, docstring rationale, and cross-file relationships. | Behavioral tracing and richer agent reasoning. | Paid, LLM key |
 | **3. Telemetry Overlay** (Live Traffic) **[Experimental]** | OTEL trace integration, P50/P95/P99 latency percentiles, and hot-path mapping. | Runtime-aware optimization and production-sensitive refactoring. | Free, local JSON |
 
 ```sh
@@ -349,7 +358,7 @@ and provenance.
 
 - **EXTRACTED**: Tree-sitter AST, resolver output, Stack Graphs, or manually
   confirmed inspection. Treat as source-backed.
-- **INFERRED**: LLM or behavioural heuristic reasoning. Treat as a
+- **INFERRED**: LLM or behavioral heuristic reasoning. Treat as a
   high-probability hint.
 - **AMBIGUOUS**: Heuristic uncertainty. Treat as a lead to investigate, not as
   a fact.
@@ -425,7 +434,7 @@ gm run [PATH] [OPTIONS]
 
 | Option | Description |
 |---|---|
-| `PATH` | Directory to analyse, default `.` |
+| `PATH` | Directory to analyze, default `.` |
 | `--no-semantic` | Skip LLM extraction and use local structural results |
 | `--no-viz` | Skip HTML generation |
 | `--provider NAME` | AI provider: `anthropic`, `openai`, `openrouter`, `deepseek`, or `openai-compatible` |
@@ -538,7 +547,7 @@ gm diff --after new-graph.json --impact
 
 ## Output files
 
-Graphenium writes outputs to `graphenium-out/` inside the analysed directory.
+Graphenium writes outputs to `graphenium-out/` inside the analyzed directory.
 
 | File | Purpose |
 |---|---|
@@ -564,7 +573,7 @@ src/
   serve/       MCP server, tool handlers, and mode-aware query traversal
   semantic/    async LLM batch extraction client and response parser
   telemetry/   OTEL trace import, EMA percentile estimation, and hot-path queries (experimental)
-  export/      JSON export, HTML visualisation
+  export/      JSON export, HTML visualization
   cache/       mtime manifest and semantic extraction cache
   watch/       file-system watcher with incremental patching
 ```
@@ -573,7 +582,7 @@ src/
 
 ## Limitations
 
-- **Local graphs are structural, not fully behavioural.** AST and
+- **Local graphs are structural, not fully behavioral.** AST and
   resolver-backed extraction capture imports, containment, declarations, method
   relationships, and some resolved calls where language support is available.
   They do not model full runtime behaviour, dynamic dispatch, reflection,
