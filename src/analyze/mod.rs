@@ -1,6 +1,7 @@
 pub mod diff;
 pub mod god;
 pub mod questions;
+pub mod rank;
 pub mod surprise;
 
 use crate::cluster::CommunityStats;
