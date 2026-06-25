@@ -473,9 +473,14 @@ pub fn subgraph_to_text_with_match_details(
                     continue;
                 }
                 if let Some(nb) = graph.node_data(neighbor_id) {
+                    let provenance = match (&edge.extractor, &edge.resolution_status) {
+                        (Some(ext), Some(stat)) => format!(" [{ext}:{stat}]"),
+                        (Some(ext), None) => format!(" [{ext}]"),
+                        _ => String::new(),
+                    };
                     connections.push_str(&format!(
-                        "- {} `{}` {}\n",
-                        node.label, edge.relation, nb.label
+                        "- {} `{}` {}{}\n",
+                        node.label, edge.relation, nb.label, provenance
                     ));
                 }
             }

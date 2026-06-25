@@ -40,3 +40,4 @@ package-lock.json
 Thumbs.db
 *.swp
 *.swo
+package.json
