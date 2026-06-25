@@ -2036,12 +2036,10 @@ impl GrapheniumServer {
 
     // ── New MCP tools (agent_change_gate, diff_graph, next_files_to_read, review_plan) ──
 
-    #[tool(
-        description = "Evaluate policy gates for a set of changed nodes. \
+    #[tool(description = "Evaluate policy gates for a set of changed nodes. \
         Builds a resolution report from the current graph, evaluates default \
         policies (MinResolution, MaxAmbiguous, etc.) with optional threshold \
-        overrides, and returns a markdown table of pass/fail for each gate."
-    )]
+        overrides, and returns a markdown table of pass/fail for each gate.")]
     fn agent_change_gate(
         &self,
         #[tool(param)]
@@ -2184,10 +2182,7 @@ impl GrapheniumServer {
         let new = match crate::export::json::load_graph(Path::new(&after_graph)) {
             Ok(g) => g,
             Err(e) => {
-                return format!(
-                    "Failed to load 'after' graph from '{}': {}",
-                    after_graph, e
-                );
+                return format!("Failed to load 'after' graph from '{}': {}", after_graph, e);
             }
         };
 
@@ -2241,12 +2236,10 @@ impl GrapheniumServer {
         output
     }
 
-    #[tool(
-        description = "Return the 'must-read' files from a verification plan \
+    #[tool(description = "Return the 'must-read' files from a verification plan \
         for a set of changed nodes. Each entry lists a file path and the reason \
         it needs to be reviewed. Useful for quickly seeing what files an agent \
-        should read next."
-    )]
+        should read next.")]
     fn next_files_to_read(
         &self,
         #[tool(param)]
@@ -2262,8 +2255,7 @@ impl GrapheniumServer {
         let plan = crate::analyze::verifier::plan_verification(&graph, &ids, None);
 
         if plan.must_read.is_empty() {
-            return "No files to read — no changed nodes found or graph is empty."
-                .to_string();
+            return "No files to read — no changed nodes found or graph is empty.".to_string();
         }
 
         let mut output = String::new();
@@ -2303,10 +2295,7 @@ impl GrapheniumServer {
             Some(ref p) => match crate::export::json::load_graph(Path::new(p)) {
                 Ok(g) => g,
                 Err(e) => {
-                    return format!(
-                        "Failed to load 'before' graph from '{}': {}",
-                        p, e
-                    );
+                    return format!("Failed to load 'before' graph from '{}': {}", p, e);
                 }
             },
             None => crate::model::GrapheniumGraph::new(),
@@ -2316,10 +2305,7 @@ impl GrapheniumServer {
             Some(ref p) => match crate::export::json::load_graph(Path::new(p)) {
                 Ok(g) => g,
                 Err(e) => {
-                    return format!(
-                        "Failed to load 'after' graph from '{}': {}",
-                        p, e
-                    );
+                    return format!("Failed to load 'after' graph from '{}': {}", p, e);
                 }
             },
             None => {
@@ -2340,8 +2326,7 @@ impl GrapheniumServer {
             })
             .collect();
 
-        let plan =
-            crate::analyze::verifier::plan_verification(&after, &changed_ids, None);
+        let plan = crate::analyze::verifier::plan_verification(&after, &changed_ids, None);
 
         let mut output = String::new();
         output.push_str("## Review Plan\n\n");

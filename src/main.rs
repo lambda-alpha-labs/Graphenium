@@ -10,6 +10,7 @@ use graphenium::cluster::{self, ClusterOptions};
 use graphenium::detect::{self, DetectOptions};
 use graphenium::export;
 use graphenium::export::json::load_graph;
+use graphenium::extract::ci;
 use graphenium::extract::{self, ExtractMode, ExtractOptions};
 use graphenium::harness;
 use graphenium::model::graph::GrapheniumGraph;
@@ -19,7 +20,6 @@ use graphenium::report::{self, ReportInput};
 use graphenium::semantic::{self, AiProvider, SemanticOptions};
 use graphenium::serve::traversal as serve_traversal;
 use graphenium::trust;
-use graphenium::extract::ci;
 
 // ── CLI definition ─────────────────────────────────────────────────────────────
 
@@ -1301,7 +1301,10 @@ fn discover_ci_configs(root: &Path) -> Vec<PathBuf> {
         if let Ok(entries) = std::fs::read_dir(&workflows) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |e| e == "yml" || e == "yaml") {
+                if path
+                    .extension()
+                    .map_or(false, |e| e == "yml" || e == "yaml")
+                {
                     files.push(path);
                 }
             }
@@ -1344,11 +1347,7 @@ fn cmd_doctor_repository(graph_path: Option<&Path>) {
             );
             println!(
                 "  Created at ............. {}",
-                graph
-                    .metadata
-                    .created_at
-                    .as_deref()
-                    .unwrap_or("(unknown)")
+                graph.metadata.created_at.as_deref().unwrap_or("(unknown)")
             );
             let modes = graph
                 .metadata
@@ -1369,7 +1368,10 @@ fn cmd_doctor_repository(graph_path: Option<&Path>) {
             println!("  Edges .................. {}", graph.edge_count());
         }
         Err(e) => {
-            eprintln!("[graphenium] Could not load graph at {}: {e}", load_path.display());
+            eprintln!(
+                "[graphenium] Could not load graph at {}: {e}",
+                load_path.display()
+            );
         }
     }
 }
