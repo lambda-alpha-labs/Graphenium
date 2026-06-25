@@ -11,8 +11,8 @@ use graphenium::detect::{self, DetectOptions};
 use graphenium::export;
 use graphenium::export::json::load_graph;
 use graphenium::extract::{self, ExtractMode, ExtractOptions};
-use graphenium::model::ExtractionResult;
 use graphenium::model::graph::GrapheniumGraph;
+use graphenium::model::ExtractionResult;
 use graphenium::ranking;
 use graphenium::report::{self, ReportInput};
 use graphenium::semantic::{self, AiProvider, SemanticOptions};
@@ -232,9 +232,11 @@ async fn main() {
             Ok(())
         }
 
-        Commands::Diff { before, after, impact } => {
-            cmd_diff(before.as_deref(), &after, impact)
-        }
+        Commands::Diff {
+            before,
+            after,
+            impact,
+        } => cmd_diff(before.as_deref(), &after, impact),
 
         Commands::Setup {
             target,
@@ -439,8 +441,20 @@ async fn cmd_run(
                 y += 1;
             }
             let leap = is_leap(y);
-            let month_days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30,
-                             31, 31, 30, 31, 30, 31];
+            let month_days = [
+                31,
+                if leap { 29 } else { 28 },
+                31,
+                30,
+                31,
+                30,
+                31,
+                31,
+                30,
+                31,
+                30,
+                31,
+            ];
             let mut mo = 1usize;
             for &md in month_days.iter() {
                 if remaining < md {
@@ -724,10 +738,7 @@ fn cmd_diff(before: Option<&Path>, after: &Path, show_impact: bool) -> grapheniu
     }
 
     if !diff.removed_edges.is_empty() {
-        println!(
-            "## Removed Edges ({})",
-            diff.removed_edges.len()
-        );
+        println!("## Removed Edges ({})", diff.removed_edges.len());
         for (s, t, r) in &diff.removed_edges {
             println!("  - {s} `{r}` {t}");
         }
@@ -751,7 +762,11 @@ fn cmd_diff(before: Option<&Path>, after: &Path, show_impact: bool) -> grapheniu
         println!("## Community Changes ({})", community_changes.len());
         for change in &community_changes {
             if let analyze::impact::SymbolChange::CommunityChanged {
-                id, label, old_community, new_community, ..
+                id,
+                label,
+                old_community,
+                new_community,
+                ..
             } = change
             {
                 println!(
@@ -767,10 +782,7 @@ fn cmd_diff(before: Option<&Path>, after: &Path, show_impact: bool) -> grapheniu
     // Impact analysis
     if show_impact && !impact.downstream_nodes.is_empty() {
         println!("## Downstream Impact");
-        println!(
-            "  - {} affected nodes",
-            impact.downstream_nodes.len()
-        );
+        println!("  - {} affected nodes", impact.downstream_nodes.len());
         println!(
             "  - {} affected communities",
             impact.affected_communities.len()
@@ -792,13 +804,8 @@ fn cmd_diff(before: Option<&Path>, after: &Path, show_impact: bool) -> grapheniu
                     analyze::impact::SymbolChange::Added { id, label, .. } => {
                         println!("  {}. ADDED {label} ({id})", i + 1);
                     }
-                    analyze::impact::SymbolChange::CommunityChanged {
-                        id, label, ..
-                    } => {
-                        println!(
-                            "  {}. COMMUNITY CHANGED {label} ({id})",
-                            i + 1
-                        );
+                    analyze::impact::SymbolChange::CommunityChanged { id, label, .. } => {
+                        println!("  {}. COMMUNITY CHANGED {label} ({id})", i + 1);
                     }
                 }
             }

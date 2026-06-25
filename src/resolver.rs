@@ -30,9 +30,7 @@ pub fn resolve_imports(results: &mut [ExtractionResult]) {
                 .entry(node.label.clone())
                 .or_insert_with(|| node.id.clone());
             if let Some(ref ql) = node.qualified_label {
-                exports
-                    .entry(ql.clone())
-                    .or_insert_with(|| node.id.clone());
+                exports.entry(ql.clone()).or_insert_with(|| node.id.clone());
             }
         }
     }
@@ -62,8 +60,7 @@ mod tests {
     fn make_result(nodes: Vec<(&str, &str, &str)>, edges: Vec<(&str, &str)>) -> ExtractionResult {
         let mut r = ExtractionResult::new();
         for (id, label, file) in nodes {
-            r.nodes
-                .push(Node::new(id, label, FileType::Code, file));
+            r.nodes.push(Node::new(id, label, FileType::Code, file));
         }
         for (src, tgt) in edges {
             r.edges

@@ -89,21 +89,45 @@ pub fn cosine_similarity(a: &TfVector, b: &TfVector) -> f64 {
 fn is_stop_word(word: &str) -> bool {
     matches!(
         word,
-        "the" | "a" | "an" | "and" | "or" | "in" | "on" | "at" | "to" | "for"
-            | "of" | "is" | "it" | "as" | "by" | "with" | "from" | "this" | "that"
-            | "was" | "are" | "be" | "has" | "had" | "not" | "but" | "what" | "all"
-            | "when" | "where" | "how" | "which"
+        "the"
+            | "a"
+            | "an"
+            | "and"
+            | "or"
+            | "in"
+            | "on"
+            | "at"
+            | "to"
+            | "for"
+            | "of"
+            | "is"
+            | "it"
+            | "as"
+            | "by"
+            | "with"
+            | "from"
+            | "this"
+            | "that"
+            | "was"
+            | "are"
+            | "be"
+            | "has"
+            | "had"
+            | "not"
+            | "but"
+            | "what"
+            | "all"
+            | "when"
+            | "where"
+            | "how"
+            | "which"
     )
 }
 
 /// Search for nodes whose text embeddings are most similar to a query.
 ///
 /// Returns node IDs sorted by similarity descending.
-pub fn search_by_text(
-    graph: &GrapheniumGraph,
-    query: &str,
-    top_k: usize,
-) -> Vec<(String, f64)> {
+pub fn search_by_text(graph: &GrapheniumGraph, query: &str, top_k: usize) -> Vec<(String, f64)> {
     let vectors = build_text_embeddings(graph);
 
     // Build query vector
@@ -132,7 +156,8 @@ pub fn search_by_text(
         .filter(|(_, score)| *score > 0.0)
         .collect();
 
-    similarities.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    similarities
+        .sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     similarities.truncate(top_k);
     similarities
 }
@@ -205,7 +230,9 @@ pub fn train_node2vec(
             let window = 3;
             for j in (i.saturating_sub(window))..=(i + window).min(walk.len() - 1) {
                 if i != j {
-                    *cooccur.entry((node.clone(), walk[j].clone())).or_insert(0.0) += 1.0;
+                    *cooccur
+                        .entry((node.clone(), walk[j].clone()))
+                        .or_insert(0.0) += 1.0;
                 }
             }
         }
@@ -299,7 +326,8 @@ pub fn find_similar_structural(
         })
         .collect();
 
-    similarities.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    similarities
+        .sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     similarities.truncate(top_k);
     similarities
 }
@@ -311,13 +339,48 @@ mod tests {
 
     fn make_graph() -> GrapheniumGraph {
         let mut g = GrapheniumGraph::new();
-        g.upsert_node(Node::new("auth_login", "AuthLogin", FileType::Code, "src/auth.rs"));
-        g.upsert_node(Node::new("auth_logout", "AuthLogout", FileType::Code, "src/auth.rs"));
-        g.upsert_node(Node::new("db_query", "DBQuery", FileType::Code, "src/db.rs"));
-        g.upsert_node(Node::new("db_connect", "DBConnect", FileType::Code, "src/db.rs"));
-        g.add_edge(Edge::extracted("auth_login", "auth_logout", "imports", "src/auth.rs"));
-        g.add_edge(Edge::extracted("auth_login", "db_query", "calls", "src/auth.rs"));
-        g.add_edge(Edge::extracted("db_query", "db_connect", "calls", "src/db.rs"));
+        g.upsert_node(Node::new(
+            "auth_login",
+            "AuthLogin",
+            FileType::Code,
+            "src/auth.rs",
+        ));
+        g.upsert_node(Node::new(
+            "auth_logout",
+            "AuthLogout",
+            FileType::Code,
+            "src/auth.rs",
+        ));
+        g.upsert_node(Node::new(
+            "db_query",
+            "DBQuery",
+            FileType::Code,
+            "src/db.rs",
+        ));
+        g.upsert_node(Node::new(
+            "db_connect",
+            "DBConnect",
+            FileType::Code,
+            "src/db.rs",
+        ));
+        g.add_edge(Edge::extracted(
+            "auth_login",
+            "auth_logout",
+            "imports",
+            "src/auth.rs",
+        ));
+        g.add_edge(Edge::extracted(
+            "auth_login",
+            "db_query",
+            "calls",
+            "src/auth.rs",
+        ));
+        g.add_edge(Edge::extracted(
+            "db_query",
+            "db_connect",
+            "calls",
+            "src/db.rs",
+        ));
         g
     }
 

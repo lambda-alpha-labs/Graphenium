@@ -111,7 +111,8 @@ fn build_node(v: &serde_json::Value) -> Option<Node> {
     let source_file = str_field(v, "source_file").unwrap_or_default();
     let source_location = str_field(v, "source_location").unwrap_or_default();
     let file_type = parse_file_type(v["file_type"].as_str().unwrap_or("code"));
-    let mut node = Node::new(id, label, file_type, source_file).with_source_location(source_location);
+    let mut node =
+        Node::new(id, label, file_type, source_file).with_source_location(source_location);
     // LLM-generated nodes get provenance
     node.extractor = Some("llm".to_string());
     node.resolution_status = Some("inferred".to_string());
@@ -133,11 +134,14 @@ fn build_edge(v: &serde_json::Value) -> Option<Edge> {
     edge.confidence_score = confidence_score;
     // LLM-generated edges get provenance based on their confidence level
     edge.extractor = Some("llm".to_string());
-    edge.resolution_status = Some(match edge.confidence {
-        crate::model::Confidence::Extracted => "resolved",
-        crate::model::Confidence::Inferred => "inferred",
-        crate::model::Confidence::Ambiguous => "ambiguous",
-    }.to_string());
+    edge.resolution_status = Some(
+        match edge.confidence {
+            crate::model::Confidence::Extracted => "resolved",
+            crate::model::Confidence::Inferred => "inferred",
+            crate::model::Confidence::Ambiguous => "ambiguous",
+        }
+        .to_string(),
+    );
     Some(edge)
 }
 

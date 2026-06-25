@@ -135,8 +135,8 @@ pub fn downstream_impact(
 
     // Count edges that touch downstream nodes
     for edge in graph.edges_iter() {
-        let touches = downstream_set.contains(&edge.source)
-            || downstream_set.contains(&edge.target);
+        let touches =
+            downstream_set.contains(&edge.source) || downstream_set.contains(&edge.target);
         if !touches {
             continue;
         }
@@ -169,9 +169,9 @@ pub fn review_order(impact: &ImpactReport) -> Vec<&SymbolChange> {
 
     for change in &impact.changed_symbols {
         let priority = match change {
-            SymbolChange::Removed { .. } => 0,  // Highest priority
+            SymbolChange::Removed { .. } => 0, // Highest priority
             SymbolChange::CommunityChanged { .. } => 1,
-            SymbolChange::Added { .. } => 2,     // Lowest priority
+            SymbolChange::Added { .. } => 2, // Lowest priority
         };
 
         // Count how many downstream nodes depend on this symbol
@@ -186,9 +186,7 @@ pub fn review_order(impact: &ImpactReport) -> Vec<&SymbolChange> {
     }
 
     // Sort by priority (ascending), then by downstream count (descending)
-    scored.sort_unstable_by(|a, b| {
-        a.2.cmp(&b.2).then_with(|| b.1.cmp(&a.1))
-    });
+    scored.sort_unstable_by(|a, b| a.2.cmp(&b.2).then_with(|| b.1.cmp(&a.1)));
 
     scored.into_iter().map(|(c, _, _)| c).collect()
 }
@@ -259,9 +257,16 @@ mod tests {
     fn symbol_inventory_detects_additions() {
         let (old, new) = make_test_graphs();
         let changes = symbol_inventory_diff(&old, &new);
-        let adds: Vec<_> = changes.iter().filter_map(|c| {
-            if let SymbolChange::Added { id, .. } = c { Some(id.clone()) } else { None }
-        }).collect();
+        let adds: Vec<_> = changes
+            .iter()
+            .filter_map(|c| {
+                if let SymbolChange::Added { id, .. } = c {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
         assert!(adds.contains(&"d".to_string()));
     }
 

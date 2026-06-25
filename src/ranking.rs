@@ -412,7 +412,9 @@ fn score_structural(
         while let Some((current, dist)) = queue.pop_front() {
             let weight = 1.0 / (1.0 + dist * 0.5);
             *distance_scores.entry(current.clone()).or_insert(0.0) += weight;
-            if dist >= 3.0 { continue; }
+            if dist >= 3.0 {
+                continue;
+            }
             if let Some(edges) = proj.outgoing.get(&current) {
                 for (tgt, _) in edges {
                     if visited.insert(tgt.clone()) {
@@ -427,7 +429,11 @@ fn score_structural(
     for (id, score) in distance_scores {
         if let Some(node) = graph.node_data(&id) {
             let matched = if seed_ids.contains(&id) {
-                seeded.iter().find(|n| n.id == id).map(|n| n.matched_keywords.clone()).unwrap_or_default()
+                seeded
+                    .iter()
+                    .find(|n| n.id == id)
+                    .map(|n| n.matched_keywords.clone())
+                    .unwrap_or_default()
             } else {
                 Vec::new()
             };
@@ -435,13 +441,25 @@ fn score_structural(
                 id: id.clone(),
                 score: score * query_rank_multiplier(graph, node),
                 matched_keywords: matched,
-                matched_fields: if seed_ids.contains(&id) { vec!["structural".to_string()] } else { Vec::new() },
-                fallback_reason: if seed_ids.contains(&id) { None } else { Some(format!("structural distance {score:.2}")) },
+                matched_fields: if seed_ids.contains(&id) {
+                    vec!["structural".to_string()]
+                } else {
+                    Vec::new()
+                },
+                fallback_reason: if seed_ids.contains(&id) {
+                    None
+                } else {
+                    Some(format!("structural distance {score:.2}"))
+                },
             });
         }
     }
 
-    scored.sort_unstable_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    scored.sort_unstable_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     scored
 }
 
@@ -459,16 +477,25 @@ fn score_hybrid(
         combined.insert(node.id.clone(), (node.score * 0.6, node));
     }
     for node in structural {
-        let entry = combined.entry(node.id.clone()).or_insert((0.0, node.clone()));
+        let entry = combined
+            .entry(node.id.clone())
+            .or_insert((0.0, node.clone()));
         entry.0 += node.score * 0.4;
     }
 
-    let mut result: Vec<RankedNode> = combined.into_values().map(|(score, mut node)| {
-        node.score = score;
-        node
-    }).collect();
+    let mut result: Vec<RankedNode> = combined
+        .into_values()
+        .map(|(score, mut node)| {
+            node.score = score;
+            node
+        })
+        .collect();
 
-    result.sort_unstable_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    result.sort_unstable_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     result
 }
 

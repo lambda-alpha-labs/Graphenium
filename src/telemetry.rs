@@ -163,7 +163,8 @@ fn update_percentiles(meta: &mut RuntimeMetadata, latency_ms: f64) {
 
 /// Load traces from a JSON file (supports both OTEL ResourceSpans and flat arrays).
 pub fn load_traces(path: &std::path::Path) -> Result<Vec<TraceSpan>, String> {
-    let content = std::fs::read_to_string(path).map_err(|e| format!("Cannot read trace file: {e}"))?;
+    let content =
+        std::fs::read_to_string(path).map_err(|e| format!("Cannot read trace file: {e}"))?;
     let value: serde_json::Value =
         serde_json::from_str(&content).map_err(|e| format!("Cannot parse JSON: {e}"))?;
 
@@ -181,31 +182,31 @@ pub fn load_traces(path: &std::path::Path) -> Result<Vec<TraceSpan>, String> {
         return Ok(spans);
     }
 
-    Err("Unrecognized trace format: expected an array of spans or a ResourceSpans object".to_string())
+    Err(
+        "Unrecognized trace format: expected an array of spans or a ResourceSpans object"
+            .to_string(),
+    )
 }
 
 /// Match trace names to graph nodes and return a runtime overlay.
-pub fn build_overlay(
-    graph: &GrapheniumGraph,
-    spans: &[TraceSpan],
-) -> RuntimeOverlay {
+pub fn build_overlay(graph: &GrapheniumGraph, spans: &[TraceSpan]) -> RuntimeOverlay {
     let mut overlay = RuntimeOverlay::default();
     overlay.import_traces(spans);
     overlay
 }
 
 /// Score nodes by runtime frequency (hot paths).
-pub fn hot_path_query(
-    overlay: &RuntimeOverlay,
-    top_k: usize,
-) -> Vec<(String, u64, f64)> {
+pub fn hot_path_query(overlay: &RuntimeOverlay, top_k: usize) -> Vec<(String, u64, f64)> {
     let mut results: Vec<(String, u64, f64)> = overlay
         .node_metrics
         .iter()
         .map(|(name, meta)| (name.clone(), meta.call_count, meta.p95_ms))
         .collect();
 
-    results.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal)));
+    results.sort_unstable_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal))
+    });
     results.truncate(top_k);
     results
 }
@@ -243,11 +244,36 @@ mod tests {
 
     fn make_graph() -> GrapheniumGraph {
         let mut g = GrapheniumGraph::new();
-        g.upsert_node(Node::new("auth_login", "AuthLogin", FileType::Code, "src/auth.rs"));
-        g.upsert_node(Node::new("auth_logout", "AuthLogout", FileType::Code, "src/auth.rs"));
-        g.upsert_node(Node::new("db_query", "DBQuery", FileType::Code, "src/db.rs"));
-        g.add_edge(Edge::extracted("auth_login", "auth_logout", "imports", "src/auth.rs"));
-        g.add_edge(Edge::extracted("auth_login", "db_query", "calls", "src/auth.rs"));
+        g.upsert_node(Node::new(
+            "auth_login",
+            "AuthLogin",
+            FileType::Code,
+            "src/auth.rs",
+        ));
+        g.upsert_node(Node::new(
+            "auth_logout",
+            "AuthLogout",
+            FileType::Code,
+            "src/auth.rs",
+        ));
+        g.upsert_node(Node::new(
+            "db_query",
+            "DBQuery",
+            FileType::Code,
+            "src/db.rs",
+        ));
+        g.add_edge(Edge::extracted(
+            "auth_login",
+            "auth_logout",
+            "imports",
+            "src/auth.rs",
+        ));
+        g.add_edge(Edge::extracted(
+            "auth_login",
+            "db_query",
+            "calls",
+            "src/auth.rs",
+        ));
         g
     }
 

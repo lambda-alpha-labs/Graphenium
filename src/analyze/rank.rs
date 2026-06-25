@@ -122,7 +122,11 @@ pub fn page_rank(proj: &DirectedProjection, d: f64, max_iter: usize) -> HashMap<
         return HashMap::new();
     }
 
-    let mut ranks: HashMap<String, f64> = proj.nodes.iter().map(|id| (id.clone(), 1.0 / n as f64)).collect();
+    let mut ranks: HashMap<String, f64> = proj
+        .nodes
+        .iter()
+        .map(|id| (id.clone(), 1.0 / n as f64))
+        .collect();
     let dangling = 1.0 / n as f64;
 
     for _iter in 0..max_iter {
@@ -187,11 +191,7 @@ pub fn community_boundary_crossings(
                 if sc != tc {
                     // Score: edge weight * confidence score
                     let score = edge.weight * edge.confidence_score;
-                    scores.push((
-                        edge.source.clone(),
-                        edge.target.clone(),
-                        score,
-                    ));
+                    scores.push((edge.source.clone(), edge.target.clone(), score));
                 }
             }
         }
@@ -209,10 +209,7 @@ pub fn community_boundary_crossings(
 /// iterative algorithm suitable for small to medium graphs.
 ///
 /// The root node maps to itself as its own dominator.
-pub fn rooted_dominators(
-    proj: &DirectedProjection,
-    root: &str,
-) -> HashMap<String, Option<String>> {
+pub fn rooted_dominators(proj: &DirectedProjection, root: &str) -> HashMap<String, Option<String>> {
     use std::collections::BTreeSet;
 
     // Topological order via BFS from root
