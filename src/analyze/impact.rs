@@ -159,6 +159,40 @@ pub fn downstream_impact(
     }
 }
 
+/// Generate a recommended review order from an impact report.
+///
+/// Returns changed symbols sorted by: removed first (highest risk), then
+/// community changes, then additions. Within each group, sorted by
+/// downstream impact.
+pub fn review_order(impact: &ImpactReport) -> Vec<&SymbolChange> {
+    let mut scored: Vec<(&SymbolChange, usize, i32)> = Vec::new();
+
+    for change in &impact.changed_symbols {
+        let priority = match change {
+            SymbolChange::Removed { .. } => 0,  // Highest priority
+            SymbolChange::CommunityChanged { .. } => 1,
+            SymbolChange::Added { .. } => 2,     // Lowest priority
+        };
+
+        // Count how many downstream nodes depend on this symbol
+        let id = match change {
+            SymbolChange::Added { id, .. }
+            | SymbolChange::Removed { id, .. }
+            | SymbolChange::CommunityChanged { id, .. } => id,
+        };
+        let downstream_count = impact.downstream_nodes.contains(id) as usize;
+
+        scored.push((change, downstream_count, priority));
+    }
+
+    // Sort by priority (ascending), then by downstream count (descending)
+    scored.sort_unstable_by(|a, b| {
+        a.2.cmp(&b.2).then_with(|| b.1.cmp(&a.1))
+    });
+
+    scored.into_iter().map(|(c, _, _)| c).collect()
+}
+
 /// Add confidence metadata to chokepoint report (Phase 2.7).
 /// Each entry includes edge confidence breakdown for the node's neighborhood.
 pub fn chokepoint_with_confidence(

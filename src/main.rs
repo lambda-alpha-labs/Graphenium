@@ -12,6 +12,7 @@ use graphenium::export;
 use graphenium::export::json::load_graph;
 use graphenium::extract::{self, ExtractMode, ExtractOptions};
 use graphenium::model::ExtractionResult;
+use graphenium::model::graph::GrapheniumGraph;
 use graphenium::ranking;
 use graphenium::report::{self, ReportInput};
 use graphenium::semantic::{self, AiProvider, SemanticOptions};
@@ -119,6 +120,23 @@ enum Commands {
         graph: Option<PathBuf>,
     },
 
+    /// Diff two graph snapshots and show symbol-level changes
+    Diff {
+        /// Path to the old (before) graph.json
+        /// If omitted, reads the last snapshot from the current out dir
+        #[arg(long)]
+        before: Option<PathBuf>,
+
+        /// Path to the new (after) graph.json
+        /// Defaults to the current graphenium-out/graph.json
+        #[arg(long, default_value = "graphenium-out/graph.json")]
+        after: PathBuf,
+
+        /// Show detailed impact analysis
+        #[arg(long)]
+        impact: bool,
+    },
+
     /// Print MCP setup instructions for an AI assistant
     Setup {
         /// Target assistant: claude, cursor, codewhale
@@ -206,6 +224,10 @@ async fn main() {
         Commands::Doctor { graph } => {
             graphenium::doctor::run_doctor(graph.as_deref());
             Ok(())
+        }
+
+        Commands::Diff { before, after, impact } => {
+            cmd_diff(before.as_deref(), &after, impact)
         }
 
         Commands::Setup {
@@ -646,6 +668,135 @@ fn cmd_query(
     ));
 
     print!("{output}");
+    Ok(())
+}
+
+// ── `diff` command ─────────────────────────────────────────────────────────────
+
+fn cmd_diff(before: Option<&Path>, after: &Path, show_impact: bool) -> graphenium::Result<()> {
+    // Load the "after" graph (the new one)
+    let new = export::json::load_graph(after)?;
+
+    // Load the "before" graph (if provided, otherwise use an empty graph)
+    let old = match before {
+        Some(p) => export::json::load_graph(p)?,
+        None => GrapheniumGraph::new(),
+    };
+
+    // Compute diffs
+    let diff = analyze::diff::diff(&old, &new);
+    let symbol_changes = analyze::impact::symbol_inventory_diff(&old, &new);
+    let impact = analyze::impact::downstream_impact(&new, &symbol_changes);
+
+    println!("# Graph Diff\n");
+
+    if diff.added_nodes.is_empty()
+        && diff.removed_nodes.is_empty()
+        && diff.added_edges.is_empty()
+        && diff.removed_edges.is_empty()
+    {
+        println!("No changes detected.");
+        return Ok(());
+    }
+
+    if !diff.removed_nodes.is_empty() {
+        println!("## Removed Symbols ({})", diff.removed_nodes.len());
+        for id in &diff.removed_nodes {
+            println!("  - {id}");
+        }
+        println!();
+    }
+
+    if !diff.added_nodes.is_empty() {
+        println!("## Added Symbols ({})", diff.added_nodes.len());
+        for id in &diff.added_nodes {
+            println!("  - {id}");
+        }
+        println!();
+    }
+
+    if !diff.removed_edges.is_empty() {
+        println!(
+            "## Removed Edges ({})",
+            diff.removed_edges.len()
+        );
+        for (s, t, r) in &diff.removed_edges {
+            println!("  - {s} `{r}` {t}");
+        }
+        println!();
+    }
+
+    if !diff.added_edges.is_empty() {
+        println!("## Added Edges ({})", diff.added_edges.len());
+        for (s, t, r) in &diff.added_edges {
+            println!("  - {s} `{r}` {t}");
+        }
+        println!();
+    }
+
+    // Community changes
+    let community_changes: Vec<_> = symbol_changes
+        .iter()
+        .filter(|c| matches!(c, analyze::impact::SymbolChange::CommunityChanged { .. }))
+        .collect();
+    if !community_changes.is_empty() {
+        println!("## Community Changes ({})", community_changes.len());
+        for change in &community_changes {
+            if let analyze::impact::SymbolChange::CommunityChanged {
+                id, label, old_community, new_community, ..
+            } = change
+            {
+                println!(
+                    "  - {label} ({id}): community {old:?} -> {new:?}",
+                    old = old_community,
+                    new = new_community
+                );
+            }
+        }
+        println!();
+    }
+
+    // Impact analysis
+    if show_impact && !impact.downstream_nodes.is_empty() {
+        println!("## Downstream Impact");
+        println!(
+            "  - {} affected nodes",
+            impact.downstream_nodes.len()
+        );
+        println!(
+            "  - {} affected communities",
+            impact.affected_communities.len()
+        );
+        println!(
+            "  - {} EXTRACTED, {} INFERRED, {} AMBIGUOUS edges",
+            impact.extracted_edges, impact.inferred_edges, impact.ambiguous_edges
+        );
+
+        // Review order
+        let order = analyze::impact::review_order(&impact);
+        if !order.is_empty() {
+            println!("\n## Recommended Review Order");
+            for (i, change) in order.iter().enumerate() {
+                match change {
+                    analyze::impact::SymbolChange::Removed { id, label, .. } => {
+                        println!("  {}. REMOVED {label} ({id})", i + 1);
+                    }
+                    analyze::impact::SymbolChange::Added { id, label, .. } => {
+                        println!("  {}. ADDED {label} ({id})", i + 1);
+                    }
+                    analyze::impact::SymbolChange::CommunityChanged {
+                        id, label, ..
+                    } => {
+                        println!(
+                            "  {}. COMMUNITY CHANGED {label} ({id})",
+                            i + 1
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
