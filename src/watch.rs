@@ -22,6 +22,7 @@ use crate::analyze;
 use crate::build;
 use crate::cluster::{self, ClusterOptions};
 use crate::detect::{self, classify, DetectOptions};
+use crate::export;
 use crate::export::json;
 use crate::extract::{self, ExtractOptions};
 use crate::model::{FileType, GrapheniumGraph};
@@ -286,6 +287,10 @@ fn try_incremental(
 }
 
 fn full_rebuild_and_log(root: &Path, out_dir: &Path, start: Instant) {
+    // Snapshot the old graph before rebuilding (for blast radius display)
+    let old_json_path = out_dir.join("graph.json");
+    let old_graph = export::json::load_graph(&old_json_path).ok();
+
     match full_rebuild(root, out_dir) {
         Ok((nodes, edges, communities)) => {
             eprintln!(
@@ -295,6 +300,34 @@ fn full_rebuild_and_log(root: &Path, out_dir: &Path, start: Instant) {
                 edges,
                 communities
             );
+
+            // Show blast radius if we have a snapshot to compare
+            if let Ok(new_graph) = export::json::load_graph(&old_json_path) {
+                if let Some(ref old) = old_graph {
+                    let mut changed_labels: Vec<String> = Vec::new();
+                    for n in new_graph.nodes() {
+                        if !old.contains_node(&n.id) {
+                            changed_labels.push(format!("+{}", n.label));
+                        }
+                    }
+                    for n in old.nodes() {
+                        if !new_graph.contains_node(&n.id) {
+                            changed_labels.push(format!("-{}", n.label));
+                        }
+                    }
+                    if !changed_labels.is_empty() {
+                        eprintln!(
+                            "[graphenium] Blast radius: {} symbols changed",
+                            changed_labels.len()
+                        );
+                        if changed_labels.len() <= 20 {
+                            for label in &changed_labels {
+                                eprintln!("  {label}");
+                            }
+                        }
+                    }
+                }
+            }
         }
         Err(e) => {
             eprintln!("[graphenium] Full rebuild failed: {e}");
