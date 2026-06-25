@@ -20,14 +20,15 @@ Use Graphenium when grep-and-trace navigation breaks down:
 - Which files belong to the same community?
 - What is the blast radius of this change?
 - Which graph facts are source-backed, inferred, or ambiguous?
+- Does this repository still meet the trust-quality bar for CI?
 
 Graphenium replaces repeated repository navigation, not source-code
 understanding. Agents still read source code before making implementation
-changes. They just start with a structural memory instead of a blank context
+changes. They just start with structural memory instead of a blank context
 window.
 
-Status: AST + Resolver and Semantic Pass are stable. Telemetry Overlay is
-experimental.
+Status: AST + Resolver, Semantic Pass, symbol diff, and `gm check` quality gates
+are stable. Telemetry Overlay is experimental.
 
 ![Demo](docs/demo.gif)
 
@@ -41,8 +42,8 @@ Graphenium is built for a narrower and increasingly important lane:
 > **Trust-aware repository memory for AI coding agents.**
 
 A useful agent does not only need matching files. It needs orientation, paths,
-impact, confidence, and compact context. Graphenium is designed around that
-workflow.
+impact, confidence, compact context, and verification guidance. Graphenium is
+designed around that workflow.
 
 | Need | Generic code search | Generic code graph | Graphenium |
 |---|---|---|---|
@@ -53,11 +54,13 @@ workflow.
 | Explain confidence and provenance | Rare | Rare | Core model |
 | Separate extracted, inferred, and ambiguous facts | Rare | Rare | Yes |
 | Show change blast radius | Rare | Sometimes | Built in |
+| Enforce repository trust gates in CI | Rare | Rare | Built in with `gm check` |
 | Keep context compact for LLMs | Not primary | Not primary | Primary design goal |
 
 Graphenium is not trying to be the biggest static analyzer or the broadest
 semantic search database. It is trying to be the most reliable structural
-memory layer an AI coding agent can use before it reads files.
+memory and quality-gate layer an AI coding agent can use before it reads files
+or proposes changes.
 
 ---
 
@@ -84,6 +87,13 @@ The usual workflow has five persistent problems:
 - **Unclear trust boundaries.** Agents often cannot tell whether a relationship
   is source-backed, heuristic, LLM-inferred, or uncertain.
 
+> **Context-token reduction.** Traditional grep-and-trace navigation forces an
+> assistant to load raw source files merely to trace a call chain, quickly
+> consuming tens of thousands of context tokens. Graphenium exposes repository
+> topology as compact graph output, often fitting the useful structure of a
+> large codebase into a few thousand tokens. That preserves the context window
+> for reasoning and code synthesis instead of search.
+
 Graphenium runs analysis once, persists the result as a graph, and exposes it
 to assistants through an [MCP](https://modelcontextprotocol.io) server. A new AI
 session can begin with the same structural knowledge the last one had.
@@ -103,6 +113,8 @@ session can begin with the same structural knowledge the last one had.
   agents can distinguish source-backed facts from inferred leads.
 - **Safer change planning.** `gm diff` identifies changed symbols, downstream
   impact, and a risk-sorted review order.
+- **CI trust gates.** `gm check` enforces graph-quality thresholds so repository
+  trust does not silently degrade.
 
 ---
 
@@ -151,14 +163,17 @@ The binary is installed as `gm`.
 ### First run
 
 ```sh
-# Build a graph, no API key needed
+# 1. Build a local graph, no API key needed
 gm run . --no-semantic --no-viz
 
-# Query it
+# 2. Query it with lexical, structural, or hybrid retrieval
 gm query "authentication login session" --budget 1000
 
-# Check your installation
-gm doctor
+# 3. Check graph resolution coverage and trust metrics
+gm doctor --resolution
+
+# 4. Enforce quality gates, returning non-zero if graph quality degrades
+gm check --min-resolution 80 --max-ambiguous 10
 ```
 
 ### After changes
@@ -183,10 +198,10 @@ gm diff --before old-graph.json --after graphenium-out/graph.json --impact
 ### 1. Persistent repository graph
 
 Graphenium models a repository as typed nodes and directed edges. Nodes include
-functions, methods, classes, modules, structs, traits, documents, images, and
-architectural concepts. Edges include imports, containment, method membership,
-calls, uses, inheritance, implementations, conceptual dependencies, and
-rationale links.
+functions, methods, classes, modules, structs, traits, documents, images,
+build targets, CI jobs, and architectural concepts. Edges include imports,
+containment, method membership, calls, uses, inheritance, implementations,
+conceptual dependencies, rationale links, test coverage, and CI relationships.
 
 The result is a durable structural memory that an assistant can query instead
 of rediscovering the repository from scratch.
@@ -235,8 +250,32 @@ gm diff --before old-graph.json --after graphenium-out/graph.json --impact
   affected callers or consumers.
 - **Automated review order.** A risk-sorted plan that prioritizes removed
   symbols, community moves, then additions, weighted by dependency counts.
+- **Verification planning.** Optional review plans show what should be read,
+  tested, and inspected before relying on a change.
 
-### 4. Agent-first MCP interface
+### 4. Policy-based quality gates for CI/CD
+
+Graphenium can act as a local and CI-based quality gate for agent-generated or
+human-authored code. The `gm check` command evaluates repository resolution
+coverage, stale evidence ratio, ambiguous edge counts, and policy thresholds.
+
+```sh
+# Enforce trust quality gates in CI
+gm check --min-resolution 80 --max-ambiguous 10
+```
+
+If the repository graph falls below your quality threshold, `gm check` returns a
+non-zero exit code. That lets CI block a risky change or alert reviewers before
+an agent or developer relies on degraded graph quality.
+
+#### Graphenium is self-gated
+
+Graphenium dogfoods its own trust model. The project CI runs `gm check` against
+Graphenium's own graph on every commit, so changes that degrade resolution
+quality, increase ambiguity beyond the threshold, or introduce stale evidence
+are caught before release.
+
+### 5. Agent-first MCP interface
 
 Graphenium exposes compact graph tools through MCP, so assistants can ask
 structural questions without reading unrelated source files.
@@ -266,7 +305,7 @@ Write tools:
 
 All writes persist to disk immediately.
 
-v3 read tools (confidence-aware and policy-driven):
+v3 read tools, confidence-aware and policy-driven:
 
 | Tool | Purpose |
 |---|---|
@@ -275,12 +314,12 @@ v3 read tools (confidence-aware and policy-driven):
 | `unresolved_references` | Missing dependencies the resolver could not bind |
 | `safest_path` | Confidence-aware pathfinding between two nodes, preferring `EXTRACTED` edges |
 | `verification_plan` | Prioritized verification plan based on impact and risk |
-| `blast_radius` | Downstream impact analysis — files and symbols affected by a change |
+| `blast_radius` | Downstream impact analysis, files and symbols affected by a change |
 | `agent_change_gate` | Policy-based gate checks for CI pipelines |
-| `diff_graph` | Snapshot comparison — symbol-level diff between two graph versions |
+| `diff_graph` | Snapshot comparison, symbol-level diff between two graph versions |
 | `next_files_to_read` | Reading order recommendation derived from a verification plan |
 
-### 5. Multi-mode retrieval
+### 6. Multi-mode retrieval
 
 Graphenium supports multiple query modes:
 
@@ -288,6 +327,7 @@ Graphenium supports multiple query modes:
 gm query "authentication login" --mode lexical     # TF-cosine keyword scoring
 gm query "database connection" --mode structural  # Topological neighbor clusters
 gm query "parser ast walker" --mode hybrid        # Keyword plus structural proximity
+gm query "parser ast walker" --safe               # Confidence-aware traversal
 ```
 
 This keeps Graphenium structural-first while still allowing agents to retrieve
@@ -302,9 +342,9 @@ matches your performance, privacy, and budget needs.
 
 | Layer | What you get | Best for | Cost / API key |
 |---|---|---|---|
-| **1. AST + Resolver** (Terrain) **[Stable]** | Deterministic syntax extraction, import binding, resolved calls where supported, methods, inheritance, and communities | Syntax-accurate architectural mapping and basic navigation | Free, local |
+| **1. AST + Resolver** (Terrain) **[Stable]** | Deterministic syntax extraction, import binding, resolved calls where supported, methods, inheritance, communities, build targets, and CI structure | Syntax-accurate architectural mapping and basic navigation | Free, local |
 | **2. Semantic Pass** (Road Network) **[Stable]** | Inferred conceptual dependencies, docstring rationale, and cross-file relationships | Behavioral tracing and richer agent reasoning | Paid, LLM key |
-| **3. Telemetry Overlay** (Live Traffic) **[Experimental]** | OTEL trace integration, P50/P95/P99 latency percentiles, and hot-path mapping | Runtime-aware optimization and production-sensitive refactoring | Free, local JSON |
+| **3. Telemetry Overlay** (Live Traffic) **[Experimental]** | OTEL trace integration, P50/P95/P99 latency percentiles, regression comparison, and hot-path mapping | Runtime-aware optimization and production-sensitive refactoring | Free, local JSON |
 
 ```sh
 # Tier 1: AST-only with deterministic import resolution, default local mode
@@ -313,9 +353,8 @@ gm run . --no-semantic --no-viz
 # Tier 2: Add LLM-inferred relationships
 gm run . --provider anthropic
 
-# Tier 3: Telemetry overlay support is experimental.
-# It ingests OpenTelemetry traces to weight the graph with runtime behavior.
-# Import commands and trace schemas may change before stabilization.
+# Tier 3: Import OpenTelemetry traces to weight graph edges with latency and frequency, experimental
+# See src/telemetry.rs for the OTEL trace import API
 ```
 
 The `graph_stats` tool reports edge confidence and provenance breakdowns, so
@@ -335,6 +374,8 @@ the assistant knows what kind of graph it is using.
   surprising cross-boundary edges, and review order.
 - **Code review.** Inspect changed symbols, affected communities, and risk
   surfaces before reviewing files line by line.
+- **CI trust enforcement.** Use `gm check` to prevent graph-quality regressions
+  and ambiguous dependency growth from entering the main branch.
 - **Agent memory.** Preserve repository structure across assistant sessions.
 
 ## What Graphenium is not
@@ -421,9 +462,10 @@ Graphenium models a codebase as nodes, edges, and topology.
 ### Nodes
 
 Nodes represent meaningful entities: functions, methods, classes, modules,
-structs, traits, documents, images, and architectural concepts. Each node
-carries metadata such as label, qualified label, file type, source file, source
-location, and community ID.
+structs, traits, documents, images, build targets, CI jobs, test cases,
+dependencies, and architectural concepts. Each node carries metadata such as
+label, qualified label, file type, source file, source location, confidence,
+provenance, and community ID.
 
 ### Edges
 
@@ -438,15 +480,17 @@ Edges are typed, directed relationships.
 | `uses` | Cross-file usage dependency | AST / resolver / semantic |
 | `inherits` | OOP inheritance | AST / semantic |
 | `implements` | Interface/trait implementation | AST / semantic |
-| `depends_on` | Conceptual dependency | Semantic |
+| `depends_on` | Conceptual dependency or package dependency | AST / repository extraction / semantic |
+| `tests` | Test case or test target verifies a symbol or module | AST / repository extraction |
+| `runs_in` | Build target or test target runs in a CI job | CI extraction |
 | `rationale_for` | Document/comment explains code | Semantic |
 
 ### Topology
 
 Graphenium analyzes the graph to surface communities, hub nodes, shortest
-paths, surprising cross-community connections, architectural focus paths, and
-change impact. The assistant can orient itself structurally before reading
-implementation details.
+paths, safest paths, surprising cross-community connections, architectural
+focus paths, stale evidence, policy drift, and change impact. The assistant can
+orient itself structurally before reading implementation details.
 
 ---
 
@@ -467,8 +511,9 @@ extraction across 9 languages.
 | C++ | `.cpp`, `.cc`, `.cxx`, `.hpp` | Classes, functions, include directives |
 | C# | `.cs` | Classes, methods, using directives, namespaces |
 
-Semantic extraction also processes documents (`.md`, `.rst`, `.txt`), PDFs,
-and images.
+Repository extraction also detects `Cargo.toml`, `package.json`, and GitHub
+Actions workflows. Semantic extraction also processes documents (`.md`, `.rst`,
+`.txt`), PDFs, and images.
 
 Build with only the languages you need:
 
@@ -526,8 +571,8 @@ gm query "<keywords>" [OPTIONS]
 | `--safe` | off | Confidence-aware pathfinding: only traverse edges with `EXTRACTED` or `INFERRED` confidence, skip `AMBIGUOUS` |
 
 ```sh
-gm query "parser ast walker" --safe                         # Confidence-aware pathfinding
-gm query "authentication login" --mode lexical     # TF-cosine keyword scoring
+gm query "parser ast walker" --safe               # Confidence-aware pathfinding
+gm query "authentication login" --mode lexical    # TF-cosine keyword scoring
 gm query "database connection" --mode structural  # Topological neighbor clusters
 gm query "parser ast walker" --mode hybrid        # Keyword plus structural proximity
 ```
@@ -565,16 +610,61 @@ gm watch . --debounce 2.0
 ### `gm doctor`
 
 Run diagnostic checks on your Graphenium installation: binary location, graph
-file health, tree-sitter languages, API keys, and graph quality.
+file health, tree-sitter languages, API keys, schema, resolution quality, and
+graph trust metrics.
 
-Use `--schema` to dump the full graph schema (node kinds, edge kinds, confidence
-levels, and provenance metadata). Use `--resolution` to generate a detailed
-resolution-quality report covering resolved vs unresolved references.
+Use `--schema` to dump the full graph schema (node kinds, edge kinds,
+confidence levels, and provenance metadata). Use `--resolution` to generate a
+detailed resolution-quality report covering resolved vs unresolved references.
+Use `--repository` for repository metadata summary.
 
 ```text
 gm doctor [--graph PATH]
 gm doctor --schema              # Dump graph schema
 gm doctor --resolution          # Resolution quality diagnostics
+gm doctor --repository          # Repository metadata summary
+```
+
+### `gm check`
+
+Run trust quality gates for CI. Evaluates the current graph against confidence,
+resolution, ambiguity, stale-evidence, and architecture-drift thresholds.
+
+```text
+gm check [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
+| `--min-resolution N` | `80` | Minimum accepted resolution coverage percentage |
+| `--max-ambiguous N` | `10` | Maximum allowed ambiguous edge count |
+
+```sh
+gm check                                      # Default quality gates
+gm check --min-resolution 80 --max-ambiguous 10
+gm check --min-resolution 70 --max-ambiguous 20 --strict  # Fail on degraded quality
+```
+
+### `gm diff`
+
+Diff two graph snapshots and show symbol-level changes.
+
+```text
+gm diff [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--before PATH` | empty graph | Path to the old `graph.json` |
+| `--after PATH` | `graphenium-out/graph.json` | Path to the new `graph.json` |
+| `--impact` | off | Show downstream impact analysis and review order |
+| `--review-plan` | off | Generate a prioritized verification plan based on symbol-level changes and community impact |
+
+```sh
+gm diff --before old-graph.json --after new-graph.json
+gm diff --after new-graph.json --impact
+gm diff --before old-graph.json --after new-graph.json --review-plan
 ```
 
 ### `gm setup`
@@ -591,46 +681,38 @@ gm setup cursor
 gm setup codewhale
 ```
 
-### `gm diff`
+### `gm graph`
 
-Diff two graph snapshots and show symbol-level changes.
-
-```text
-gm diff [OPTIONS]
-```
-
-| Option | Default | Description |
-|---|---|---|
-| `--before PATH` | empty graph | Path to the old `graph.json` |
-| `--after PATH` | `graphenium-out/graph.json` | Path to the new `graph.json` |
-| `--impact` | off | Show downstream impact analysis and review order |
-| `--review-plan` | off | Generates a prioritized verification plan based on symbol-level changes and community impact |
-
-```sh
-gm diff --before old-graph.json --after new-graph.json
-gm diff --after new-graph.json --impact
-gm diff --before old-graph.json --after new-graph.json --review-plan
-```
-
-### `gm check`
-
-Run trust quality gates for CI. Evaluates the current graph against configurable
-policies and reports confidence thresholds, unresolved-reference ratios, and
-architectural drift.
+Inspect repository metadata and CI extraction results.
 
 ```text
-gm check [OPTIONS]
+gm graph schema [--graph PATH]                    # Show graph schema and metadata
+gm graph build-map [--graph PATH]                 # Show detected build targets
+gm graph test-map [--graph PATH]                  # Show detected test targets
+gm graph migrate <graph.json>                     # Migrate older graph schema
 ```
 
-| Option | Default | Description |
-|---|---|---|
-| `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
-| `--policy PATH` | – | Path to policy configuration file |
-| `--ci` | off | Machine-readable JSON output for CI pipelines |
-
 ```sh
-gm check                                                    # Default quality gates
-gm check --policy ci-policy.toml --ci                       # CI mode with custom policy
+gm graph schema
+gm graph build-map
+gm graph test-map
+```
+
+### `gm snapshot`
+
+Manage graph snapshots for diff and drift analysis.
+
+```text
+gm snapshot create --name <name> [--graph PATH]
+gm snapshot list
+```
+
+### `gm gate`
+
+Run quality gates with diff-based analysis.
+
+```text
+gm gate --diff <before.json> <after.json>
 ```
 
 ---
@@ -653,49 +735,64 @@ Graphenium writes outputs to `graphenium-out/` inside the analyzed directory.
 
 ```text
 src/
-  extract/     tree-sitter syntax extraction for 9 languages
-  model/       graph, node, edge, and hyperedge schemas plus graph metadata
-  resolver/    cross-file import binding and target resolution
-  embed/       TF-based cosine similarities and Node2Vec structural embeddings
+  extract/     tree-sitter syntax extraction for 9 languages plus repository config extraction
+  model/       graph, node, edge, claim, hyperedge schemas, and graph metadata
+  resolver.rs  cross-file import binding and target resolution
+  trust.rs     evidence spans, claim model, resolution reporting
+  harness.rs   trust-gate check for CI
+  policy.rs    policy-based quality gates
+  embed.rs     TF-based cosine similarities and Node2Vec structural embeddings
   cluster/     Louvain community detection, split/focus clustering, and cohesion scoring
   detect/      file classification, sensitive skipping, and corpus health checks
-  analyze/     PageRank, chokepoint reporting, dominators, reverse reachability, and surprise edges
+  analyze/     PageRank, chokepoints, dominators, reverse reachability, gates, and surprise edges
   serve/       MCP server, tool handlers, and mode-aware query traversal
   semantic/    async LLM batch extraction client and response parser
-  telemetry/   OTEL trace import, EMA percentile estimation, and hot-path queries (experimental)
-  export/      JSON export, HTML visualization
-  cache/       mtime manifest and semantic extraction cache
-  watch/       file-system watcher with incremental patching
+  telemetry/   OTEL trace import, EMA percentile estimation, regression compare, and hot paths
+  export/      JSON export, HTML visualization, and schema export
+  cache/       mtime manifest, semantic extraction cache, and graph snapshots
+  watch.rs     file-system watcher with incremental patching and live blast-radius display
 ```
 
 ---
 
-## v3 Features
+## v3 features
 
-### 1. CI extraction
+### 1. Evidence-backed graph facts
 
-Graphenium now auto-detects `Cargo.toml`, `package.json`, and GitHub Actions
-workflows during extraction, creating graph nodes for build targets, external
+Graphenium stores confidence and provenance on graph relationships so agents can
+separate source-backed facts from inferred or ambiguous leads. Evidence metadata
+and resolution status make graph output inspectable instead of black-box.
+
+### 2. CI extraction
+
+Graphenium detects `Cargo.toml`, `package.json`, and GitHub Actions workflows
+during extraction, creating graph nodes for build targets, external
 dependencies, and CI pipeline stages. This enables drift detection between
-declared dependencies and actual import usage.
+declared dependencies, actual import usage, and configured pipeline behavior.
 
-### 2. Architecture drift detection
+### 3. Architecture drift detection
 
-Compare the declared architecture (via policy files or external docs) against
-the extracted graph. Drift is reported as mismatches between expected and actual
+Compare declared architecture in policy files or external docs against the
+extracted graph. Drift is reported as mismatches between expected and actual
 module boundaries, dependency directions, and community clusters.
 
-### 3. Policy-based gates
+### 4. Policy-based gates
 
-Define policies in TOML files (confidence thresholds, allowed dependency
-directions, module ownership, naming conventions) and enforce them via
-`gm check`. Gates can block CI pipelines when the graph violates policy.
+Define policies in TOML files for confidence thresholds, allowed dependency
+directions, module ownership, naming conventions, stale evidence, and ambiguity
+budgets. Enforce them with `gm check` locally or in CI.
 
-### 4. Watch-mode blast radius display
+### 5. Watch-mode blast radius display
 
-In watch mode (`gm watch`), the blast radius of detected changes is displayed
-in real time. As files are modified, the watcher highlights which symbols are
-affected, which dependents may need attention, and the risk-sorted review order.
+In watch mode (`gm watch`), Graphenium displays the blast radius of detected
+changes in real time. As files are modified, the watcher highlights affected
+symbols, dependents that need attention, and the risk-sorted review order.
+
+### 6. Runtime telemetry comparison
+
+Experimental telemetry support compares baseline and current OpenTelemetry
+trace exports, helping connect structural changes to route-level or path-level
+runtime regressions.
 
 ---
 
@@ -718,6 +815,9 @@ affected, which dependents may need attention, and the risk-sorted review order.
 - **Telemetry is an overlay, not a profiler.** Runtime trace ingestion can
   weight existing graph edges with latency and frequency data, but Graphenium
   does not replace a tracing backend, profiler, or APM system.
+- **Quality gates are only as good as the graph and policy.** `gm check` helps
+  enforce trust thresholds, but teams should tune policies to their repository,
+  language mix, and risk tolerance.
 
 ---
 
