@@ -1,20 +1,30 @@
 # Graphenium
 
-**Persistent structural memory for AI coding agents.**
+**Provenance-aware structural memory for AI coding agents.**
 
-Graphenium turns your repository into a queryable graph so Claude, Cursor,
-and other MCP-compatible assistants can answer many structural questions in
-milliseconds, often before reading a single source file. **Especially valuable in large,
-multi-module, or unfamiliar codebases** where grep-and-trace navigation breaks
-down:
+Graphenium turns a repository into a persistent, queryable architecture graph
+so Claude, Cursor, and other MCP-compatible assistants can navigate large
+codebases without starting from zero every session.
+
+Most code tools help humans search files. Graphenium gives AI agents something
+more useful: a durable map of the repository, with confidence and provenance on
+every relationship. The assistant can see not only what is connected, but how
+that connection was discovered and how much it should trust it.
+
+Use Graphenium when grep-and-trace navigation breaks down:
 
 - What calls this function?
 - What depends on this module?
 - What are the architectural hubs?
 - What is the shortest path between these components?
 - Which files belong to the same community?
+- What is the blast radius of this change?
+- Which graph facts are source-backed, inferred, or ambiguous?
 
-It replaces grep-and-trace navigation, not source-code understanding.
+Graphenium replaces repeated repository navigation, not source-code
+understanding. Agents still read source code before making implementation
+changes. They just start with a structural memory instead of a blank context
+window.
 
 Status: AST + Resolver and Semantic Pass are stable. Telemetry Overlay is
 experimental.
@@ -23,77 +33,76 @@ experimental.
 
 ---
 
-## Why Graphenium exists
+## Why Graphenium is different
 
-AI coding assistants are good at reading code, but they navigate repositories
-like a human using `grep`: search for a symbol, open the file, follow imports,
-open more files, infer relationships. Then do it all again in the next session.
+There are many code search tools, semantic search tools, and static analyzers.
+Graphenium is built for a narrower and increasingly important lane:
 
-In a 50-file project, grep works. In a 5,000-file monorepo with deep import
-chains, it does not. That workflow has five persistent problems:
+> **Trust-aware repository memory for AI coding agents.**
 
-- **Repeated cold starts.** Every new session begins without a durable model
-  of the repository.
-- **Context window pressure.** Raw source files are large; navigation consumes
-  tokens that could be used for reasoning.
-- **No structural memory.** After reading files, the assistant has no persisted
-  graph of how modules, functions, and concepts relate.
-- **Missed cross-file relationships.** Grep surfaces text matches, not
-  architectural topology, hubs, communities, or paths.
-- **Scale multiplies the pain.** Every new file and dependency makes the
-  grep-and-trace loop slower and more expensive. The graph stays fast regardless
-  of repo size.
+A useful agent does not only need matching files. It needs orientation, paths,
+impact, confidence, and compact context. Graphenium is designed around that
+workflow.
 
-Graphenium runs analysis once, persists the result as a graph, and exposes it
-to assistants via an [MCP](https://modelcontextprotocol.io) server. The graph
-becomes the assistant's long-term memory for your repository.
+| Need | Generic code search | Generic code graph | Graphenium |
+|---|---|---|---|
+| Find text or symbols | Yes | Sometimes | Yes |
+| Understand repository topology | Limited | Yes | Yes |
+| Persist structure across sessions | Usually no | Sometimes | Yes |
+| Serve context directly to AI agents | Limited | Sometimes | MCP-first |
+| Explain confidence and provenance | Rare | Rare | Core model |
+| Separate extracted, inferred, and ambiguous facts | Rare | Rare | Yes |
+| Show change blast radius | Rare | Sometimes | Built in |
+| Keep context compact for LLMs | Not primary | Not primary | Primary design goal |
 
-**What changes:**
-
-- **Orientation in seconds, not minutes.** `architecture_summary` gives a
-  30-second map of the codebase before the assistant reads a single file.
-- **Context stays focused.** Instead of filling the context window with raw
-  source during navigation, the assistant reasons over compact graph output and
-  reads only the files that matter.
-- **Memory survives sessions.** The graph persists. A new AI session starts
-  with the same structural knowledge the last one had.
+Graphenium is not trying to be the biggest static analyzer or the broadest
+semantic search database. It is trying to be the most reliable structural
+memory layer an AI coding agent can use before it reads files.
 
 ---
 
-## What it's good at, and what it's not
+## The problem
 
-**Good at**
+AI coding assistants are good at reading code, but they navigate repositories
+like a human using `grep`: search for a symbol, open the file, follow imports,
+open more files, infer relationships, then repeat the same process in the next
+session.
 
-- **Navigating large codebases.** In 50+ file repos, monorepos, or unfamiliar
-  projects, grep-and-trace wastes context. The graph replaces that navigation
-  loop.
-- AI-assisted code navigation: answer structural questions without repeatedly
-  reading files.
-- Impact analysis: identify connected nodes before changing a function, class,
-  or module.
-- Onboarding: get a high-level architectural map of an unfamiliar repo fast.
-- Refactoring planning: find god nodes, low-cohesion communities, and
-  surprising cross-boundary edges.
-- Code review: inspect symbols, degrees, and hotspots before reviewing a
-  changed file.
-- Keeping the graph current with watch mode during active development.
+In a 50-file project, that works. In a 5,000-file monorepo with deep import
+chains, it wastes time, tokens, and attention.
 
-**Not a replacement for**
+The usual workflow has five persistent problems:
 
-- **Reading source code.** The graph captures structure and relationships, not
-  implementation logic. An assistant still needs to read actual code before
-  making implementation changes.
-- **A full language server.** It does not perform complete type checking or
-  language-specific semantic analysis at LSP depth.
-- **Runtime execution.** Local graph extraction is static analysis plus optional
-  LLM extraction. Telemetry overlays can import runtime data, but Graphenium
-  does not execute the program.
-- **A general-purpose semantic search engine.** Graphenium is primarily a
-  structural repository graph. Hybrid retrieval combines keyword and graph
-  topology signals, but it is not a replacement for a full code embedding
-  database or semantic search engine.
-- **Security scanning.** Relationship graphs are not a substitute for dedicated
-  SAST tools.
+- **Repeated cold starts.** Every new session begins without a durable model of
+  the repository.
+- **Context window pressure.** Raw source files are large. Navigation consumes
+  tokens that should be used for reasoning.
+- **No structural memory.** After reading files, the assistant has no persisted
+  graph of how modules, functions, and concepts relate.
+- **Missed cross-file relationships.** Grep surfaces text matches, not topology,
+  hubs, communities, shortest paths, or blast radius.
+- **Unclear trust boundaries.** Agents often cannot tell whether a relationship
+  is source-backed, heuristic, LLM-inferred, or uncertain.
+
+Graphenium runs analysis once, persists the result as a graph, and exposes it
+to assistants through an [MCP](https://modelcontextprotocol.io) server. A new AI
+session can begin with the same structural knowledge the last one had.
+
+---
+
+## What changes with Graphenium
+
+- **Orientation in seconds.** `architecture_summary` gives an agent a compact
+  map of the codebase before it reads implementation files.
+- **Focused context.** Instead of stuffing raw files into the context window for
+  navigation, the assistant asks graph questions and reads only the files that
+  matter.
+- **Durable memory.** The graph persists across sessions and can be reloaded
+  without restarting the MCP server.
+- **Trust-aware reasoning.** Every edge carries confidence and provenance, so
+  agents can distinguish source-backed facts from inferred leads.
+- **Safer change planning.** `gm diff` identifies changed symbols, downstream
+  impact, and a risk-sorted review order.
 
 ---
 
@@ -114,7 +123,7 @@ gm run . --no-semantic --no-viz
 # Ask structural questions
 gm query "what calls build_from_extraction?"
 
-# Or connect an AI assistant via MCP and ask directly
+# Or connect an AI assistant through MCP and ask directly
 ```
 
 ---
@@ -169,40 +178,118 @@ gm diff --before old-graph.json --after graphenium-out/graph.json --impact
 
 ---
 
-## Symbol-level diff and blast-radius analysis
+## Core capabilities
 
-Graphenium is not just a passive repository map. It actively calculates the
-structural consequences of code changes. The `gm diff` command compares two
-graph snapshots, such as your `main` branch graph and your working-directory
-graph, to perform change impact analysis.
+### 1. Persistent repository graph
+
+Graphenium models a repository as typed nodes and directed edges. Nodes include
+functions, methods, classes, modules, structs, traits, documents, images, and
+architectural concepts. Edges include imports, containment, method membership,
+calls, uses, inheritance, implementations, conceptual dependencies, and
+rationale links.
+
+The result is a durable structural memory that an assistant can query instead
+of rediscovering the repository from scratch.
+
+### 2. Provenance-aware trust model
+
+Every node and edge is labeled with confidence and provenance.
+
+| Confidence | Meaning | How agents should treat it |
+|---|---|---|
+| `EXTRACTED` | Tree-sitter AST, resolver output, Stack Graphs, or manually confirmed inspection | Treat as source-backed |
+| `INFERRED` | LLM or behavioral heuristic reasoning | Treat as a high-probability hint |
+| `AMBIGUOUS` | Heuristic uncertainty or conflicting evidence | Treat as a lead to investigate |
+
+Provenance metadata records how a connection was produced:
+
+- `extractor`: `tree-sitter`, `resolver`, `llm`, `manual-mcp-write`, or
+  `runtime-otel`
+- `resolution_status`: `resolved`, `unresolved`, `heuristic`, or `inferred`
+
+Example agent-facing output:
+
+```text
+[Graphenium] Connection: require_session  calls  validate_token [resolver:resolved] -> High trust
+[Graphenium] Connection: auth_service  uses  db_client [llm:inferred] -> Inspect before relying on it
+```
+
+This is Graphenium's main design principle: **do not make the agent guess how
+much to trust the graph.**
+
+### 3. Symbol-level diff and blast-radius analysis
+
+Graphenium is not only a passive repository map. It calculates the structural
+consequences of code changes.
 
 ```sh
 # Diff your current graph against an older snapshot to show impact
 gm diff --before old-graph.json --after graphenium-out/graph.json --impact
 ```
 
-**What it gives the AI agent:**
+`gm diff` gives the agent:
 
-- **Symbol inventory diff.** Detects which symbols were added, removed,
-  renamed, or moved across communities.
-- **Downstream impact.** Uses directed reverse reachability to identify callers
-  or consumers affected by modified symbols.
-- **Automated review order.** Generates a recommended, risk-sorted review order:
-  removed symbols first, then community moves, then additions, weighted by
-  downstream dependency counts.
+- **Symbol inventory diff.** Added, removed, renamed, or moved symbols.
+- **Downstream impact.** Directed reverse reachability from changed symbols to
+  affected callers or consumers.
+- **Automated review order.** A risk-sorted plan that prioritizes removed
+  symbols, community moves, then additions, weighted by dependency counts.
+
+### 4. Agent-first MCP interface
+
+Graphenium exposes compact graph tools through MCP, so assistants can ask
+structural questions without reading unrelated source files.
+
+Read tools:
+
+| Tool | Purpose |
+|---|---|
+| `graph_stats` | Node/edge counts, file types, confidence and provenance breakdowns |
+| `architecture_summary` | Communities, focus paths, god nodes, and confidence summary |
+| `query_graph` | Keyword-scored BFS/DFS traversal within a token budget |
+| `get_node` | Full node details by ID or label |
+| `get_neighbors` | Direct neighbours with edge types and confidence |
+| `get_community` | All nodes in a community cluster |
+| `god_nodes` | Top N most-connected hub nodes |
+| `shortest_path` | Path between any two components |
+| `summarize_file` | Every symbol extracted from a source file |
+| `reload_graph` | Hot-swap the graph without restarting |
+
+Write tools:
+
+| Tool | Purpose |
+|---|---|
+| `add_node` | Register concepts the AST cannot capture |
+| `add_edge` | Record relationships confirmed through inspection |
+| `remove_edge` | Correct false positives or stale relationships |
+
+All writes persist to disk immediately.
+
+### 5. Multi-mode retrieval
+
+Graphenium supports multiple query modes:
+
+```sh
+gm query "authentication login" --mode lexical     # TF-cosine keyword scoring
+gm query "database connection" --mode structural  # Topological neighbor clusters
+gm query "parser ast walker" --mode hybrid        # Keyword plus structural proximity
+```
+
+This keeps Graphenium structural-first while still allowing agents to retrieve
+useful context when naming conventions differ across the codebase.
 
 ---
 
 ## Three-tier repository model
 
-Graphenium offers three progressive layers of analysis. Run in the mode that
-matches your performance and budget needs.
+Graphenium offers three progressive layers of analysis. Run the mode that
+matches your performance, privacy, and budget needs.
 
 | Layer | What you get | Best for | Cost / API key |
 |---|---|---|---|
-| **1. AST + Resolver** (Terrain) **[Stable]** | Deterministic syntax extraction, import binding, resolved calls where supported, methods, inheritance, and communities. | Syntax-accurate architectural mapping and basic navigation. | Free, local |
-| **2. Semantic Pass** (Road Network) **[Stable]** | Inferred conceptual dependencies, docstring rationale, and cross-file relationships. | Behavioral tracing and richer agent reasoning. | Paid, LLM key |
-| **3. Telemetry Overlay** (Live Traffic) **[Experimental]** | OTEL trace integration, P50/P95/P99 latency percentiles, and hot-path mapping. | Runtime-aware optimization and production-sensitive refactoring. | Free, local JSON |
+| **1. AST + Resolver** (Terrain) **[Stable]** | Deterministic syntax extraction, import binding, resolved calls where supported, methods, inheritance, and communities | Syntax-accurate architectural mapping and basic navigation | Free, local |
+| **2. Semantic Pass** (Road Network) **[Stable]** | Inferred conceptual dependencies, docstring rationale, and cross-file relationships | Behavioral tracing and richer agent reasoning | Paid, LLM key |
+| **3. Telemetry Overlay** (Live Traffic) **[Experimental]** | OTEL trace integration, P50/P95/P99 latency percentiles, and hot-path mapping | Runtime-aware optimization and production-sensitive refactoring | Free, local JSON |
 
 ```sh
 # Tier 1: AST-only with deterministic import resolution, default local mode
@@ -212,12 +299,43 @@ gm run . --no-semantic --no-viz
 gm run . --provider anthropic
 
 # Tier 3: Telemetry overlay support is experimental.
-# It ingests OpenTelemetry traces to weight the graph with runtime behaviour.
+# It ingests OpenTelemetry traces to weight the graph with runtime behavior.
 # Import commands and trace schemas may change before stabilization.
 ```
 
 The `graph_stats` tool reports edge confidence and provenance breakdowns, so
 the assistant knows what kind of graph it is using.
+
+---
+
+## What Graphenium is good at
+
+- **Large-codebase navigation.** Replace repeated grep-and-trace loops with
+  persistent graph queries.
+- **AI-assisted orientation.** Give agents a compact architecture map before
+  they spend tokens on raw files.
+- **Impact analysis.** Identify connected nodes and downstream consumers before
+  changing a function, class, or module.
+- **Refactoring planning.** Find god nodes, low-cohesion communities,
+  surprising cross-boundary edges, and review order.
+- **Code review.** Inspect changed symbols, affected communities, and risk
+  surfaces before reviewing files line by line.
+- **Agent memory.** Preserve repository structure across assistant sessions.
+
+## What Graphenium is not
+
+- **Not a replacement for reading source code.** The graph captures structure
+  and relationships, not implementation logic.
+- **Not a full language server.** It does not perform complete type checking or
+  language-specific semantic analysis at LSP depth.
+- **Not a program executor.** Local graph extraction is static analysis plus
+  optional LLM extraction. Telemetry overlays can import runtime data, but
+  Graphenium does not execute the program.
+- **Not a general-purpose semantic search engine.** Hybrid retrieval combines
+  keyword and graph topology signals, but Graphenium is primarily a structural
+  repository graph.
+- **Not a security scanner.** Relationship graphs are not a substitute for
+  dedicated SAST, taint analysis, or vulnerability research tools.
 
 ---
 
@@ -281,40 +399,9 @@ to fall back to `gm query` when MCP is unavailable.
 
 ---
 
-## What the assistant can ask
-
-Once connected, the assistant has access to Graphenium's core graph tools.
-
-**Read tools:**
-
-| Tool | Purpose |
-|---|---|
-| `graph_stats` | Node/edge counts, file types, confidence breakdown |
-| `architecture_summary` | Communities, focus paths, god nodes, confidence summary |
-| `query_graph` | Keyword-scored BFS/DFS traversal within a token budget |
-| `get_node` | Full node details by ID or label |
-| `get_neighbors` | Direct neighbours with edge types and confidence |
-| `get_community` | All nodes in a community cluster |
-| `god_nodes` | Top N most-connected hub nodes |
-| `shortest_path` | Path between any two components |
-| `summarize_file` | Every symbol extracted from a source file |
-| `reload_graph` | Hot-swap the graph without restarting |
-
-**Write tools:**
-
-| Tool | Purpose |
-|---|---|
-| `add_node` | Register concepts the AST cannot capture |
-| `add_edge` | Record relationships confirmed through inspection |
-| `remove_edge` | Correct false positives or stale relationships |
-
-All writes persist to disk immediately.
-
----
-
 ## Repository memory model
 
-Graphenium models a codebase as three things.
+Graphenium models a codebase as nodes, edges, and topology.
 
 ### Nodes
 
@@ -345,49 +432,6 @@ Graphenium analyzes the graph to surface communities, hub nodes, shortest
 paths, surprising cross-community connections, architectural focus paths, and
 change impact. The assistant can orient itself structurally before reading
 implementation details.
-
----
-
-## Trust and provenance model
-
-To prevent the AI from treating guesswork as ground truth, Graphenium enforces
-a multi-dimensional trust model. Every node and edge is labeled with confidence
-and provenance.
-
-### 1. Confidence tiers
-
-- **EXTRACTED**: Tree-sitter AST, resolver output, Stack Graphs, or manually
-  confirmed inspection. Treat as source-backed.
-- **INFERRED**: LLM or behavioral heuristic reasoning. Treat as a
-  high-probability hint.
-- **AMBIGUOUS**: Heuristic uncertainty. Treat as a lead to investigate, not as
-  a fact.
-
-### 2. Provenance metadata
-
-Every connection in the graph carries metadata tracking how it was resolved:
-
-- `extractor`: Identifies the system that produced the edge, such as
-  `tree-sitter`, `resolver`, `llm`, `manual-mcp-write`, or `runtime-otel`.
-- `resolution_status`: Discloses how the target was bound, such as `resolved`,
-  `unresolved`, `heuristic`, or `inferred`.
-
-AI assistants use this metadata to weigh their conclusions:
-
-```text
-[Graphenium] Connection: require_session  calls  validate_token [resolver:resolved] -> High trust
-[Graphenium] Connection: auth_service  uses  db_client [llm:inferred] -> Inspect before relying on it
-```
-
-A good assistant workflow:
-
-1. Trust `EXTRACTED` edges as source-backed.
-2. Use `INFERRED` edges as strong hints.
-3. Treat `AMBIGUOUS` edges as leads to inspect.
-4. Read source code before making implementation changes.
-
-`graph_stats` reports both confidence and provenance breakdowns so you know
-exactly what kind of graph you are working with.
 
 ---
 
@@ -585,7 +629,7 @@ src/
 - **Local graphs are structural, not fully behavioral.** AST and
   resolver-backed extraction capture imports, containment, declarations, method
   relationships, and some resolved calls where language support is available.
-  They do not model full runtime behaviour, dynamic dispatch, reflection,
+  They do not model full runtime behavior, dynamic dispatch, reflection,
   generated code, or framework-specific execution paths. Richer cross-file
   `calls`, `uses`, and `implements` relationships may require the semantic
   pass, manual graph writes, or telemetry overlays.
