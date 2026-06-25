@@ -146,30 +146,53 @@ gm doctor
 
 ---
 
-## Map vs traffic overlay
+## Symbol-Level Diff & Blast Radius Analysis
 
-Graphenium has two extraction modes. Both are useful; they serve different
-purposes.
-
-| Mode | What you get | Best for | API key |
-|---|---|---|---|
-| **AST-only** | Imports, containment, methods, symbols, structural communities | Architecture map, blast radius, orientation | No |
-| **Semantic** | Uses, conceptual dependencies, rationale, inferred cross-file relationships | Behavioural tracing, richer agent reasoning | Yes |
-
-> AST-only mode gives the assistant a map. Semantic mode adds the traffic
-> overlay.
+Graphenium is not just a passive repository map; it actively calculates the
+structural consequences of code changes. The `gm diff` command compares two
+graph snapshots (e.g., your `main` branch vs. your working directory) to
+perform change impact analysis.
 
 ```sh
-# AST-only, local, no key needed
-gm run . --no-semantic --no-viz
-
-# Semantic: adds LLM-inferred relationships
-export ANTHROPIC_API_KEY=sk-ant-...
-gm run . --provider anthropic    # also: openai, deepseek, openrouter
+# Diff your current graph against an older snapshot to show impact
+gm diff --before old-graph.json --after graphenium-out/graph.json --impact
 ```
 
-The `graph_stats` tool always reports the edge confidence breakdown, so the
-assistant knows what it's working with.
+**What it gives the AI agent:**
+- **Symbol Inventory Diff:** Detects exactly which symbols were added,
+  removed, renamed, or moved across communities.
+- **Downstream Impact (Blast Radius):** Uses directed reverse reachability to
+  identify every caller or consumer affected by the modified symbols.
+- **Automated Review Order:** Generates a recommended, risk-sorted review
+  order (Removed Symbols first, then Community Moves, then Additions)
+  weighted by downstream dependency counts.
+
+---
+
+## Three-Tier Repository Model
+
+Graphenium offers three progressive layers of analysis. Run in the mode that
+matches your performance and budget needs:
+
+| Layer | What you get | Best for | Cost / API Key |
+|---|---|---|---|
+| **1. AST + Stack Graphs** (Terrain) | Deterministic imports, resolved calls, methods, inheritance, and communities. | Syntax-accurate architectural mapping, basic navigation. | Free (Local) |
+| **2. Semantic Pass** (Road Network) | Inferred conceptual dependencies, docstring rationale, and cross-file relationships. | Behavioural tracing, richer agent reasoning. | Paid (LLM Key) |
+| **3. Telemetry Overlay** (Live Traffic) | OTEL trace integration, P50/P95/P99 latency percentiles, and hot-path mapping. | Runtime-aware optimization, production-safe refactoring. | Free (Local JSON) |
+
+```sh
+# Tier 1: AST-only with deterministic import resolution (default)
+gm run . --no-semantic --no-viz
+
+# Tier 2: Add LLM-inferred relationships
+gm run . --provider anthropic
+
+# Tier 3: Ingest OpenTelemetry traces to weight the graph with runtime behaviour
+# (enables hot-path routing and latency-sensitive traversal via the telemetry module)
+```
+
+The `graph_stats` tool always reports the edge confidence breakdown and
+provenance, so the assistant knows what it is working with.
 
 ---
 
@@ -296,15 +319,27 @@ details.
 
 ---
 
-## Trust model
+## Trust & Provenance Model
 
-Every edge carries a confidence level.
+To prevent the AI from treating guesswork as ground truth, Graphenium enforces
+a strict, multi-dimensional trust model. Every node and edge is labeled with
+its **Confidence** and **Provenance**.
 
-| Level | Source | How to treat it |
-|---|---|---|
-| `EXTRACTED` | Deterministic static extraction | Ground truth, directly present in source |
-| `INFERRED` | LLM or heuristic reasoning | Strong hint, useful for navigation; verify before risky changes |
-| `AMBIGUOUS` | LLM-flagged uncertainty | Question to investigate, not a fact |
+### 1. Confidence Tiers
+- **EXTRACTED**: Tree-sitter AST, Stack Graphs, or AI-confirmed inspection. Ground truth.
+- **INFERRED**: LLM or behavioural heuristic reasoning. High-probability hints.
+- **AMBIGUOUS**: Heuristic uncertainties. Leads to investigate, not facts.
+
+### 2. Provenance Metadata
+Every connection in the graph carries metadata tracking how it was resolved:
+- `extractor`: Identifies the system that produced the edge (e.g. `tree-sitter`, `resolver`, `llm`, `manual-mcp-write`, `runtime-otel`).
+- `resolution_status`: Discloses how the target was bound (e.g. `resolved`, `unresolved`, `heuristic`, `inferred`).
+
+AI assistants use this metadata to weigh their conclusions:
+```text
+[Graphenium] Connection: require_session  calls  validate_token [resolver:resolved] -> High Trust
+[Graphenium] Connection: auth_service  uses  db_client [llm:inferred] -> Low Trust (Inspect)
+```
 
 A good assistant workflow:
 1. Trust `EXTRACTED` edges as fact.
@@ -312,12 +347,8 @@ A good assistant workflow:
 3. Treat `AMBIGUOUS` edges as leads to inspect.
 4. Read source code before making implementation changes.
 
-Every edge also carries provenance metadata: `extractor` (which system produced
-the edge: `tree-sitter`, `llm`, `resolver`, etc.) and `resolution_status`
-(whether the edge target was successfully resolved: `resolved`, `unresolved`,
-`heuristic`, `inferred`). The `graph_stats` tool reports both the confidence
-breakdown and the provenance breakdown so you know exactly what kind of graph
-you are working with.
+`graph_stats` reports both the confidence and provenance breakdowns so you know
+exactly what kind of graph you are working with.
 
 ---
 
@@ -382,7 +413,7 @@ gm run . --update                    # Incremental after editing files
 
 ### `gm query`
 
-Query an existing graph with keywords.
+Query an existing graph using multiple retrieval models.
 
 ```
 gm query "<keywords>" [OPTIONS]
@@ -392,13 +423,13 @@ gm query "<keywords>" [OPTIONS]
 |---|---|---|
 | `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
 | `--budget N` | `2000` | Output token budget |
-| `--mode MODE` | `lexical` | Query mode: `lexical` (keyword), `structural` (graph distance), or `hybrid` |
+| `--mode MODE` | `lexical` | Retrieval model: `lexical` (TF-cosine keyword), `structural` (graph-distance proximity), or `hybrid` |
 | `--dfs` | off | Use depth-first search |
 
 ```sh
-gm query "authentication login session"
-gm query "parser ast walker" --dfs --budget 4000
-gm query "database connection" --mode structural
+gm query "authentication login" --mode lexical     # TF-cosine keyword scoring
+gm query "database connection" --mode structural  # Topological neighbor clusters
+gm query "parser ast walker" --mode hybrid        # Keyword + structural proximity
 ```
 
 ### `gm serve`
@@ -493,14 +524,16 @@ Graphenium writes outputs to `graphenium-out/` inside the analysed directory.
 
 ```
 src/
-  extract/     tree-sitter extraction for 9 languages
-  model/       graph, node, edge, hyperedge types
-  build/       graph construction from extraction results
-  cluster/     Louvain community detection, cohesion, split/focus
-  detect/      file classification, sensitive-file skipping, corpus warnings
-  analyze/     god nodes, surprising connections, architectural questions
-  serve/       MCP server (rmcp), tool handlers, graph traversal
-  semantic/    LLM client, prompt builder, response parser
+  extract/     tree-sitter syntax extraction for 9 languages
+  model/       graph, node, edge, and hyperedge schemas + graph metadata
+  resolver/    cross-file import binding and target resolution
+  embed/       TF-based cosine similarities and Node2Vec structural embeddings
+  cluster/     Louvain community detection, split/focus clustering, and cohesion scoring
+  detect/      file classification, sensitive skipping, and corpus health checks
+  analyze/     PageRank, chokepoint reporting, dominators, reverse reachability, and surprise edges
+  serve/       MCP server, tool handlers, and mode-aware query traversal
+  semantic/    async LLM batch extraction client and response parser
+  telemetry/   OpenTelemetry JSON trace ingestion, EMA percentile estimation, and hot paths
   export/      JSON export, HTML visualisation
   cache/       mtime manifest, semantic extraction cache
   watch/       file-system watcher with incremental patching
