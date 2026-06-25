@@ -385,6 +385,75 @@ async fn cmd_run(
     eprintln!("[graphenium] Building graph...");
     let (mut graph, build_stats) = build::build_merged([ast_result, semantic_result]);
     graph.set_ast_only(ast_only_graph);
+
+    // Populate graph metadata.
+    graph.metadata.schema_version = Some("0.2.0".to_string());
+    let now: String = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| {
+            let secs = d.as_secs();
+            // ISO 8601 approximation: YYYY-MM-DDTHH:MM:SSZ
+            let days = secs / 86400;
+            let time_secs = secs % 86400;
+            let h = time_secs / 3600;
+            let m = (time_secs % 3600) / 60;
+            let s = time_secs % 60;
+            // Simple date calculation from Unix epoch (1970-01-01)
+            // Works for dates up to ~2100
+            let mut y = 1970i64;
+            let mut remaining = days as i64;
+            loop {
+                let days_in_year = if is_leap(y) { 366 } else { 365 };
+                if remaining < days_in_year {
+                    break;
+                }
+                remaining -= days_in_year;
+                y += 1;
+            }
+            let leap = is_leap(y);
+            let month_days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30,
+                             31, 31, 30, 31, 30, 31];
+            let mut mo = 1usize;
+            for &md in month_days.iter() {
+                if remaining < md {
+                    break;
+                }
+                remaining -= md;
+                mo += 1;
+            }
+            let day = remaining + 1;
+            format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, mo, day, h, m, s)
+        })
+        .unwrap_or_else(|_| String::new());
+    graph.metadata.created_at = Some(now);
+    graph.metadata.project_root = Some(root.display().to_string());
+    graph.metadata.extraction_modes = Some(if no_semantic || ast_only_graph {
+        vec!["ast".to_string()]
+    } else {
+        vec!["ast".to_string(), "semantic".to_string()]
+    });
+    // Collect detected languages from the files.
+    let mut lang_set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for file in &all_files {
+        if let Some(ext) = file.path.extension().and_then(|e| e.to_str()) {
+            let lang = match ext {
+                "rs" => "rust",
+                "py" => "python",
+                "go" => "go",
+                "js" | "mjs" | "cjs" => "javascript",
+                "ts" | "tsx" => "typescript",
+                "c" | "h" => "c",
+                "cpp" | "cc" | "cxx" | "hpp" => "cpp",
+                "java" => "java",
+                "cs" => "csharp",
+                _ => continue,
+            };
+            lang_set.insert(lang.to_string());
+        }
+    }
+    if !lang_set.is_empty() {
+        graph.metadata.languages = Some(lang_set.into_iter().collect());
+    }
     eprintln!(
         "[graphenium] Graph: {} nodes, {} edges ({} dangling, {} hyperedges)",
         graph.node_count(),
@@ -613,6 +682,12 @@ fn cmd_setup(target: &str, gm_path: Option<PathBuf>, graph: &Path) -> graphenium
     println!();
     println!("After updating the config, restart your AI tool completely (Cmd+Q on macOS).");
     Ok(())
+}
+
+/// Check if a year is a leap year (ISO 8601 / Gregorian).
+/// Used to compute ISO 8601 timestamps without external dependencies.
+fn is_leap(year: i64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
 }
 
 /// Build a one-line label-collision summary for the pipeline log.

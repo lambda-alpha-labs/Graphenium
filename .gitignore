@@ -4,6 +4,10 @@
 # Local Rust toolchain (sandbox artifacts)
 /.rust-toolchain/
 
+# Node.js dependencies
+/node_modules/
+package-lock.json
+
 # Graphenium generated output
 /graphenium-out/
 

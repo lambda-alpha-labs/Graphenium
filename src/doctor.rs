@@ -17,13 +17,18 @@ pub fn run_doctor(graph_path: Option<&Path>) {
     // 2. Graph file
     let graph = check_graph(graph_path);
 
-    // 3. Tree-sitter languages
+    // 3. Graph metadata (schema, modes, languages)
+    if let Some(ref g) = graph {
+        check_graph_metadata(g);
+    }
+
+    // 4. Tree-sitter languages
     check_tree_sitter_langs();
 
-    // 4. API keys
+    // 5. API keys
     check_api_keys();
 
-    // 5. Graph quality (if loaded)
+    // 6. Graph quality (if loaded)
     if let Some(ref g) = graph {
         check_graph_quality(g);
     }
@@ -120,6 +125,29 @@ fn check_api_keys() {
         println!("NONE — semantic extraction unavailable");
     } else {
         println!("{} found ({})", found.len(), found.join(", "));
+    }
+}
+
+fn check_graph_metadata(graph: &GrapheniumGraph) {
+    if let Some(ref v) = graph.metadata.schema_version {
+        print!("  graph schema .................. ");
+        println!("{v}");
+    }
+    if let Some(ref v) = graph.metadata.graphenium_version {
+        print!("  built by ...................... ");
+        println!("gm {v}");
+    }
+    if let Some(ref v) = graph.metadata.created_at {
+        print!("  created at .................... ");
+        println!("{v}");
+    }
+    if let Some(ref modes) = graph.metadata.extraction_modes {
+        print!("  extraction modes ............. ");
+        println!("{}", modes.join(", "));
+    }
+    if let Some(ref langs) = graph.metadata.languages {
+        print!("  detected languages ........... ");
+        println!("{}", langs.join(", "));
     }
 }
 

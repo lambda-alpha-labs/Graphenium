@@ -10,10 +10,42 @@ use crate::model::{Edge, HyperEdge, Node};
 /// Type alias for the underlying petgraph structure.
 pub type PetGraph = Graph<Node, Edge, Undirected>;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphMetadata {
     #[serde(default)]
     pub ast_only: bool,
+    /// Schema version of the graph.json format (e.g. "0.2.0").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<String>,
+    /// Version of Graphenium that produced this graph.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graphenium_version: Option<String>,
+    /// ISO 8601 timestamp of when the graph was built.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
+    /// Absolute path to the project root that was analyzed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_root: Option<String>,
+    /// Extraction modes used: "ast", "semantic", etc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extraction_modes: Option<Vec<String>>,
+    /// Languages detected in the source tree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub languages: Option<Vec<String>>,
+}
+
+impl Default for GraphMetadata {
+    fn default() -> Self {
+        Self {
+            ast_only: false,
+            schema_version: None,
+            graphenium_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+            created_at: None,
+            project_root: None,
+            extraction_modes: None,
+            languages: None,
+        }
+    }
 }
 
 /// The central knowledge graph structure.

@@ -65,11 +65,34 @@ pub fn graph_to_value(graph: &GrapheniumGraph) -> Value {
         })
         .collect();
 
+    // Build metadata object: start with the required fields, then add optional ones.
+    let mut meta = json!({
+        "ast_only": graph.is_ast_only(),
+    });
+    if let Some(ref v) = graph.metadata.schema_version {
+        meta["schema_version"] = json!(v);
+    }
+    if let Some(ref v) = graph.metadata.graphenium_version {
+        meta["graphenium_version"] = json!(v);
+    }
+    if let Some(ref v) = graph.metadata.created_at {
+        meta["created_at"] = json!(v);
+    }
+    if let Some(ref v) = graph.metadata.project_root {
+        meta["project_root"] = json!(v);
+    }
+    if let Some(ref v) = graph.metadata.extraction_modes {
+        meta["extraction_modes"] = json!(v);
+    }
+    if let Some(ref v) = graph.metadata.languages {
+        meta["languages"] = json!(v);
+    }
+
     json!({
         "nodes":      nodes,
         "links":      links,
         "hyperedges": hyperedges,
-        "metadata":   { "ast_only": graph.is_ast_only() },
+        "metadata":   meta,
     })
 }
 
