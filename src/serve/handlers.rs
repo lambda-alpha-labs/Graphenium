@@ -1782,6 +1782,257 @@ impl GrapheniumServer {
             e
         )
     }
+
+    // ── v3 MCP tools ────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Return a resolution-quality report for the loaded graph. \
+        Shows import resolution, call resolution, ambiguous edges, and unresolved \
+        references. Useful for checking graph trust quality before acting on results."
+    )]
+    fn resolution_report(&self) -> String {
+        let graph = self.graph_store.load();
+        let mut report = crate::trust::ResolutionReport::default();
+
+        for edge in graph.edges_iter() {
+            match edge.relation.as_str() {
+                "imports" => {
+                    report.total_import_edges += 1;
+                    if edge.resolution_status.as_deref() == Some("resolved") {
+                        report.resolved_imports += 1;
+                    }
+                    if edge.resolution_status.as_deref() == Some("unresolved") {
+                        report.unresolved_refs += 1;
+                    }
+                }
+                "calls" => {
+                    report.total_call_edges += 1;
+                    if edge.resolution_status.as_deref() == Some("resolved") {
+                        report.resolved_calls += 1;
+                    }
+                }
+                _ => {
+                    if edge.relation != "contains" && edge.relation != "method" {
+                        report.total_method_edges += 1;
+                        if edge.resolution_status.as_deref() == Some("resolved") {
+                            report.resolved_methods += 1;
+                        }
+                    }
+                }
+            }
+            match edge.confidence {
+                crate::model::Confidence::Extracted => {}
+                crate::model::Confidence::Inferred => report.heuristic_edges += 1,
+                crate::model::Confidence::Ambiguous => report.ambiguous_edges += 1,
+            }
+        }
+
+        report.format()
+    }
+
+    #[tool(description = "List all ambiguous edges in the graph. \
+        Ambiguous edges have low confidence and should be verified manually \
+        before being used as evidence for decisions.")]
+    fn ambiguous_symbols(&self) -> String {
+        let graph = self.graph_store.load();
+        let ambiguous: Vec<_> = graph
+            .edges_iter()
+            .filter(|e| e.confidence == crate::model::Confidence::Ambiguous)
+            .collect();
+
+        if ambiguous.is_empty() {
+            return "No ambiguous symbols found.".to_string();
+        }
+
+        let mut output = format!("## Ambiguous Edges ({})\n\n", ambiguous.len());
+        for e in &ambiguous {
+            let src_label = graph
+                .node_data(&e.source)
+                .map(|n| n.label.as_str())
+                .unwrap_or(e.source.as_str());
+            let tgt_label = graph
+                .node_data(&e.target)
+                .map(|n| n.label.as_str())
+                .unwrap_or(e.target.as_str());
+            output.push_str(&format!(
+                "- {} `{}` {} [{}]\n",
+                src_label, e.relation, tgt_label, e.source_file
+            ));
+        }
+        output
+    }
+
+    #[tool(
+        description = "List all unresolved references (import edges where the \
+        target symbol was not found in the graph). These represent potentially \
+        missing dependencies or incorrect import paths."
+    )]
+    fn unresolved_references(&self) -> String {
+        let graph = self.graph_store.load();
+        let unresolved: Vec<_> = graph
+            .edges_iter()
+            .filter(|e| {
+                e.relation == "imports" && e.resolution_status.as_deref() == Some("unresolved")
+            })
+            .collect();
+
+        if unresolved.is_empty() {
+            return "No unresolved references found.".to_string();
+        }
+
+        let mut output = format!("## Unresolved References ({})\n\n", unresolved.len());
+        for e in &unresolved {
+            let src_label = graph
+                .node_data(&e.source)
+                .map(|n| n.label.as_str())
+                .unwrap_or(e.source.as_str());
+            output.push_str(&format!(
+                "- {} imports `{}` (not found)\n",
+                src_label, e.target
+            ));
+        }
+        output
+    }
+
+    #[tool(description = "Find the safest path between two nodes. \
+        Prefers edges with highest confidence and resolution status over \
+        shortest hop count. Returns both the path and a safety score (0.0–1.0).")]
+    fn safest_path(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Starting node ID or label")]
+        from: String,
+        #[tool(param)]
+        #[schemars(description = "Destination node ID or label")]
+        to: String,
+    ) -> String {
+        let graph = self.graph_store.load();
+
+        let from_id = self.resolve_id(&from);
+        let to_id = self.resolve_id(&to);
+
+        let (from, to) = match (from_id, to_id) {
+            (Some(f), Some(t)) => (f, t),
+            _ => {
+                return format!(
+                    "Could not resolve one or both node identifiers: '{}' and '{}'",
+                    from, to
+                );
+            }
+        };
+
+        match crate::serve::traversal::safest_path_with_filters(&graph, &from, &to, None, &[], &[])
+        {
+            Some((path, safety)) => {
+                let mut output = format!("## Safest Path (safety score: {:.2})\n\n", safety);
+                for (i, node_id) in path.iter().enumerate() {
+                    let label = graph
+                        .node_data(node_id)
+                        .map(|n| n.label.as_str())
+                        .unwrap_or(node_id);
+                    output.push_str(&format!("  {}. {}\n", i + 1, label));
+                }
+                output
+            }
+            None => format!("No path found between '{}' and '{}'.", from, to),
+        }
+    }
+
+    #[tool(description = "Build a verification plan for a set of changed nodes. \
+        Given node IDs for symbols that have changed, returns a prioritized plan: \
+        must-read files, tests to run, ambiguous edges to inspect, and risk gates. \
+        Provide node IDs or labels separated by commas.")]
+    fn verification_plan(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Comma-separated list of changed node IDs or labels")]
+        changed_nodes: String,
+    ) -> String {
+        let graph = self.graph_store.load();
+        let ids: Vec<String> = changed_nodes
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+
+        let plan = crate::analyze::verifier::plan_verification(&graph, &ids, None);
+        crate::analyze::verifier::format_plan(&plan)
+    }
+
+    #[tool(
+        description = "Compute the blast radius (downstream impact) for a set \
+        of changed symbols. Shows affected files, communities, and edge confidence \
+        distribution. Provide node IDs or labels separated by commas."
+    )]
+    fn blast_radius(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Comma-separated list of changed node IDs or labels")]
+        changed_nodes: String,
+    ) -> String {
+        let graph = self.graph_store.load();
+        let ids: Vec<String> = changed_nodes
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+
+        let mut output = String::new();
+
+        if ids.is_empty() {
+            return "No changed nodes provided.".to_string();
+        }
+
+        // Count direct affected neighbors
+        let mut affected_files: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        let mut affected_communities: std::collections::BTreeSet<usize> =
+            std::collections::BTreeSet::new();
+        let mut extracted = 0usize;
+        let mut inferred = 0usize;
+        let mut ambiguous = 0usize;
+
+        for id in &ids {
+            for edge in graph.edges_iter() {
+                if edge.source == *id || edge.target == *id {
+                    let other = if edge.source == *id {
+                        &edge.target
+                    } else {
+                        &edge.source
+                    };
+                    if let Some(node) = graph.node_data(other) {
+                        affected_files.insert(node.source_file.clone());
+                        if let Some(c) = node.community {
+                            affected_communities.insert(c);
+                        }
+                    }
+                    match edge.confidence {
+                        crate::model::Confidence::Extracted => extracted += 1,
+                        crate::model::Confidence::Inferred => inferred += 1,
+                        crate::model::Confidence::Ambiguous => ambiguous += 1,
+                    }
+                }
+            }
+        }
+
+        output.push_str(&format!("## Blast Radius\n\n"));
+        output.push_str(&format!("- Changed nodes: {}\n", ids.len()));
+        output.push_str(&format!("- Affected files: {}\n", affected_files.len()));
+        output.push_str(&format!(
+            "- Affected communities: {}\n",
+            affected_communities.len()
+        ));
+        output.push_str(&format!("- Extracted edges: {}\n", extracted));
+        output.push_str(&format!("- Inferred edges: {}\n", inferred));
+        output.push_str(&format!("- Ambiguous edges: {}\n", ambiguous));
+
+        if !affected_files.is_empty() {
+            output.push_str("\n### Affected Files\n");
+            for f in &affected_files {
+                output.push_str(&format!("- {}\n", f));
+            }
+        }
+
+        output
+    }
 }
 
 // ── ServerHandler ─────────────────────────────────────────────────────────────

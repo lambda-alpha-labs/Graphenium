@@ -174,3 +174,57 @@ fn check_graph_quality(graph: &GrapheniumGraph) {
         (ambiguous as f64 / total as f64) * 100.0,
     );
 }
+
+// ── Sub-commands ──────────────────────────────────────────────────────────────
+
+/// Show graph schema information (--schema flag).
+pub fn show_schema(graph_path: Option<&Path>) {
+    if let Some(graph) = check_graph(graph_path) {
+        check_graph_metadata(&graph);
+    }
+}
+
+/// Show resolution quality report (--resolution flag).
+pub fn show_resolution(graph_path: Option<&Path>) {
+    let graph = match check_graph(graph_path) {
+        Some(g) => g,
+        None => return,
+    };
+
+    let mut report = crate::trust::ResolutionReport::default();
+
+    for edge in graph.edges_iter() {
+        match edge.relation.as_str() {
+            "imports" => {
+                report.total_import_edges += 1;
+                if edge.resolution_status.as_deref() == Some("resolved") {
+                    report.resolved_imports += 1;
+                }
+                if edge.resolution_status.as_deref() == Some("unresolved") {
+                    report.unresolved_refs += 1;
+                }
+            }
+            "calls" => {
+                report.total_call_edges += 1;
+                if edge.resolution_status.as_deref() == Some("resolved") {
+                    report.resolved_calls += 1;
+                }
+            }
+            _ => {
+                if edge.relation != "contains" && edge.relation != "method" {
+                    report.total_method_edges += 1;
+                    if edge.resolution_status.as_deref() == Some("resolved") {
+                        report.resolved_methods += 1;
+                    }
+                }
+            }
+        }
+        match edge.confidence {
+            crate::model::Confidence::Extracted => {}
+            crate::model::Confidence::Inferred => report.heuristic_edges += 1,
+            crate::model::Confidence::Ambiguous => report.ambiguous_edges += 1,
+        }
+    }
+
+    println!("{}", report.format());
+}

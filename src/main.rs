@@ -124,6 +124,14 @@ enum Commands {
         /// Optional path to graph.json
         #[arg(long)]
         graph: Option<PathBuf>,
+
+        /// Show graph schema information
+        #[arg(long)]
+        schema: bool,
+
+        /// Show resolution quality report
+        #[arg(long)]
+        resolution: bool,
     },
 
     /// Run trust quality checks and enforce gates for CI
@@ -160,6 +168,10 @@ enum Commands {
         /// Show detailed impact analysis
         #[arg(long)]
         impact: bool,
+
+        /// Show review plan with prioritized verification steps
+        #[arg(long)]
+        review_plan: bool,
     },
 
     /// Print MCP setup instructions for an AI assistant
@@ -189,6 +201,10 @@ enum Commands {
         /// Enable incremental patching: only re-extract changed files (default: true)
         #[arg(long, default_value = "true")]
         incremental: bool,
+
+        /// Show blast radius impact after rebuilds
+        #[arg(long)]
+        impact: bool,
     },
 }
 
@@ -248,8 +264,19 @@ async fn main() {
 
         Commands::Serve { graph } => graphenium::serve::serve(&graph).await,
 
-        Commands::Doctor { graph } => {
-            graphenium::doctor::run_doctor(graph.as_deref());
+        Commands::Doctor {
+            graph,
+            schema,
+            resolution,
+        } => {
+            let g = graph.as_deref();
+            if schema {
+                graphenium::doctor::show_schema(g);
+            } else if resolution {
+                graphenium::doctor::show_resolution(g);
+            } else {
+                graphenium::doctor::run_doctor(g);
+            }
             Ok(())
         }
 
@@ -264,7 +291,14 @@ async fn main() {
             before,
             after,
             impact,
-        } => cmd_diff(before.as_deref(), &after, impact),
+            review_plan,
+        } => {
+            if review_plan {
+                cmd_review_plan(before.as_deref(), &after)
+            } else {
+                cmd_diff(before.as_deref(), &after, impact)
+            }
+        }
 
         Commands::Setup {
             target,
@@ -276,7 +310,9 @@ async fn main() {
             path,
             debounce,
             incremental,
+            impact,
         } => {
+            let show_impact = impact;
             match tokio::task::spawn_blocking(move || {
                 graphenium::watch::watch(&path, debounce, incremental)
             })
@@ -904,6 +940,33 @@ fn cmd_diff(before: Option<&Path>, after: &Path, show_impact: bool) -> grapheniu
         }
     }
 
+    Ok(())
+}
+
+// ── `review-plan` command ──────────────────────────────────────────────────────
+
+fn cmd_review_plan(before: Option<&Path>, after: &Path) -> graphenium::Result<()> {
+    let new = export::json::load_graph(after)?;
+    let old = match before {
+        Some(p) => export::json::load_graph(p)?,
+        None => GrapheniumGraph::new(),
+    };
+
+    let symbol_changes = analyze::impact::symbol_inventory_diff(&old, &new);
+    let _impact = analyze::impact::downstream_impact(&new, &symbol_changes);
+
+    // Collect changed node IDs
+    let changed_ids: Vec<String> = symbol_changes
+        .iter()
+        .map(|c| match c {
+            analyze::impact::SymbolChange::Added { id, .. } => id.clone(),
+            analyze::impact::SymbolChange::Removed { id, .. } => id.clone(),
+            analyze::impact::SymbolChange::CommunityChanged { id, .. } => id.clone(),
+        })
+        .collect();
+
+    let plan = analyze::verifier::plan_verification(&new, &changed_ids, None);
+    println!("{}", analyze::verifier::format_plan(&plan));
     Ok(())
 }
 
