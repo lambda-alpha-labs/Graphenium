@@ -159,6 +159,241 @@ pub fn page_rank(proj: &DirectedProjection, d: f64, max_iter: usize) -> HashMap<
     ranks
 }
 
+/// Compute community boundary crossing scores.
+///
+/// For each edge that crosses a community boundary, compute a weighted score.
+/// Returns a list of (source_id, target_id, score) tuples sorted by score descending.
+pub fn community_boundary_crossings(
+    graph: &GrapheniumGraph,
+    min_confidence: Option<&[crate::model::Confidence]>,
+) -> Vec<(String, String, f64)> {
+    let mut scores: Vec<(String, String, f64)> = Vec::new();
+
+    for edge in graph.edges_iter() {
+        // Filter by confidence if requested
+        if let Some(confs) = min_confidence {
+            if !confs.contains(&edge.confidence) {
+                continue;
+            }
+        }
+
+        // Get source and target nodes
+        let src_node = graph.node_data(&edge.source);
+        let tgt_node = graph.node_data(&edge.target);
+
+        if let (Some(src), Some(tgt)) = (src_node, tgt_node) {
+            // Check if they are in different communities
+            if let (Some(sc), Some(tc)) = (src.community, tgt.community) {
+                if sc != tc {
+                    // Score: edge weight * confidence score
+                    let score = edge.weight * edge.confidence_score;
+                    scores.push((
+                        edge.source.clone(),
+                        edge.target.clone(),
+                        score,
+                    ));
+                }
+            }
+        }
+    }
+
+    // Sort by score descending
+    scores.sort_unstable_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+    scores
+}
+
+/// Compute rooted dominators for a directed projection from a given root node.
+///
+/// Returns a map from node ID to its immediate dominator ID (the node that
+/// must be passed through to reach this node from the root). Uses a simple
+/// iterative algorithm suitable for small to medium graphs.
+///
+/// The root node maps to itself as its own dominator.
+pub fn rooted_dominators(
+    proj: &DirectedProjection,
+    root: &str,
+) -> HashMap<String, Option<String>> {
+    use std::collections::BTreeSet;
+
+    // Topological order via BFS from root
+    let reachable = reverse_reachable_inverse(proj, root);
+    let mut order: Vec<&str> = Vec::new();
+    let mut visited = BTreeSet::new();
+    let mut queue = std::collections::VecDeque::new();
+
+    if reachable.iter().any(|s| s == root) || root == proj.nodes.first().map_or("", |s| s) {
+        // root may not be in reachable if graph is disconnected
+    }
+
+    if proj.outgoing.contains_key(root) {
+        queue.push_back(root);
+        visited.insert(root);
+    }
+
+    while let Some(current) = queue.pop_front() {
+        order.push(current);
+        if let Some(edges) = proj.outgoing.get(current) {
+            for (tgt, _) in edges {
+                if visited.insert(tgt.as_str()) {
+                    queue.push_back(tgt);
+                }
+            }
+        }
+    }
+
+    // If root isn't reachable through BFS, try adding it directly
+    if !visited.contains(root) {
+        order.insert(0, root);
+        visited.insert(root);
+    }
+
+    // Initialize dominators: root dominates itself, others dominated by all
+    let mut dom: HashMap<String, Option<String>> = HashMap::new();
+    dom.insert(root.to_string(), Some(root.to_string()));
+
+    for node in &proj.nodes {
+        if node != root && visited.contains(node.as_str()) {
+            // Initialize with None (will be set in iteration)
+            dom.insert(node.clone(), None);
+        }
+    }
+
+    // Iterative dominator computation
+    for _iter in 0..10 {
+        let mut changed = false;
+        for node in &order {
+            if *node == root {
+                continue;
+            }
+            // Get all predecessors
+            let preds: Vec<&String> = proj
+                .incoming
+                .get(*node)
+                .map(|edges| edges.iter().map(|(s, _)| s).collect())
+                .unwrap_or_default();
+
+            if preds.is_empty() {
+                continue;
+            }
+
+            // Intersect dominators of all predecessors
+            let mut idom: Option<String> = None;
+            for pred in preds {
+                if let Some(Some(_)) = dom.get(pred) {
+                    if idom.is_none() {
+                        idom = dom.get(pred).cloned().flatten();
+                    } else {
+                        // Intersect: find LCA
+                        idom = intersect(&dom, pred, &idom.unwrap());
+                    }
+                }
+            }
+            let current = dom.get(*node).cloned().flatten();
+            if idom != current {
+                dom.insert((node).to_string(), idom);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    dom
+}
+
+/// Helper for dominator intersection.
+fn intersect(
+    dom: &HashMap<String, Option<String>>,
+    finger1: &str,
+    finger2: &str,
+) -> Option<String> {
+    // Simple approach: walk up dominator tree from both fingers
+    use std::collections::BTreeSet;
+    let mut f1 = finger1.to_string();
+    let mut f2 = finger2.to_string();
+
+    let mut ancestors1 = BTreeSet::new();
+    while let Some(parent) = dom.get(&f1).cloned().flatten() {
+        if !ancestors1.insert(f1.clone()) {
+            break;
+        }
+        f1 = parent;
+    }
+    ancestors1.insert(f1);
+
+    while !ancestors1.contains(&f2) {
+        if let Some(parent) = dom.get(&f2).cloned().flatten() {
+            f2 = parent;
+        } else {
+            return Some(finger1.to_string());
+        }
+    }
+    Some(f2)
+}
+
+/// BFS from root following outgoing edges (inverse of reverse_reachable).
+fn reverse_reachable_inverse(proj: &DirectedProjection, root: &str) -> Vec<String> {
+    let mut visited = std::collections::BTreeSet::<&str>::new();
+    let mut queue = std::collections::VecDeque::new();
+    queue.push_back(root);
+    visited.insert(root);
+
+    while let Some(current) = queue.pop_front() {
+        if let Some(edges) = proj.outgoing.get(current) {
+            for (tgt, _) in edges {
+                if visited.insert(tgt) {
+                    queue.push_back(tgt);
+                }
+            }
+        }
+    }
+
+    visited.into_iter().map(|s| s.to_string()).collect()
+}
+
+/// Generate a chokepoints report combining multiple ranking signals.
+///
+/// Returns a ranked list of nodes with scores for each signal.
+pub fn chokepoint_report(
+    proj: &DirectedProjection,
+    graph: &GrapheniumGraph,
+    page_rank_ranks: &HashMap<String, f64>,
+) -> Vec<ChokepointEntry> {
+    let mut entries: Vec<ChokepointEntry> = Vec::new();
+
+    for node in &proj.nodes {
+        let pr = page_rank_ranks.get(node).copied().unwrap_or(0.0);
+        let out_degree = proj.outgoing.get(node).map(|e| e.len()).unwrap_or(0);
+        let in_degree = proj.incoming.get(node).map(|e| e.len()).unwrap_or(0);
+
+        entries.push(ChokepointEntry {
+            node_id: node.clone(),
+            page_rank: pr,
+            out_degree,
+            in_degree,
+            combined_score: pr * (1.0 + (out_degree + in_degree) as f64 * 0.1),
+        });
+    }
+
+    entries.sort_unstable_by(|a, b| {
+        b.combined_score
+            .partial_cmp(&a.combined_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    entries
+}
+
+/// A single entry in the chokepoint report.
+#[derive(Debug, Clone)]
+pub struct ChokepointEntry {
+    pub node_id: String,
+    pub page_rank: f64,
+    pub out_degree: usize,
+    pub in_degree: usize,
+    pub combined_score: f64,
+}
+
 /// Compute reverse reachability: all nodes that can reach `target`.
 ///
 /// Uses BFS over the reverse graph (following incoming edges).
