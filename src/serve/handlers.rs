@@ -1025,6 +1025,22 @@ impl GrapheniumServer {
             .filter(|h| h.nodes.iter().all(|id| in_scope(id)))
             .count();
 
+        // Count extractors for provenance breakdown.
+        let extractor_counts: std::collections::BTreeMap<&str, usize> = {
+            let mut m: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+            for e in g.edges_iter() {
+                if let Some(ref ext) = e.extractor {
+                    *m.entry(ext.as_str()).or_default() += 1;
+                }
+            }
+            m
+        };
+        let extractor_rows: String = extractor_counts
+            .iter()
+            .map(|(k, v)| format!("  {k}: {v}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
         let type_rows: String = ["code", "document", "paper", "image", "rationale"]
             .iter()
             .filter_map(|t| {
@@ -1048,6 +1064,27 @@ impl GrapheniumServer {
         if let Some(header) = Self::generated_mode_header(generated_code_mode) {
             out.push_str(header);
         }
+
+        // Graph metadata lines.
+        let meta_lines: Vec<String> = {
+            let mut lines = Vec::new();
+            if let Some(ref v) = g.metadata.schema_version {
+                lines.push(format!("  Schema version: {v}"));
+            }
+            if let Some(ref modes) = g.metadata.extraction_modes {
+                lines.push(format!("  Extraction modes: {}", modes.join(", ")));
+            }
+            if let Some(ref langs) = g.metadata.languages {
+                lines.push(format!("  Languages: {}", langs.join(", ")));
+            }
+            lines
+        };
+        let meta_block = if meta_lines.is_empty() {
+            String::new()
+        } else {
+            format!("# Graph Metadata\n{}\n\n", meta_lines.join("\n"))
+        };
+
         out.push_str(&format!(
             "# Graph Statistics\n\n\
              - Nodes: {n}\n\
@@ -1058,12 +1095,15 @@ impl GrapheniumServer {
              ## Edge Confidence\n\
              - EXTRACTED: {extracted}\n\
              - INFERRED: {inferred}\n\
-             - AMBIGUOUS: {ambiguous}",
+             - AMBIGUOUS: {ambiguous}\n\
+             \n## Edge Provenance\n\
+             {extractor_rows}",
             n = nodes.len(),
             e = edge_count,
             h = hyperedge_count,
             c = communities.len(),
         ));
+        out = meta_block + &out;
         out
     }
 

@@ -23,21 +23,28 @@ pub fn graph_to_value(graph: &GrapheniumGraph) -> Value {
     let nodes: Vec<Value> = graph
         .nodes()
         .map(|n| {
-            json!({
+            let mut obj = json!({
                 "id":              n.id,
                 "label":           n.label,
                 "file_type":       n.file_type.to_string(),
                 "source_file":     n.source_file,
                 "source_location": n.source_location,
                 "community":       n.community,
-            })
+            });
+            if let Some(ref v) = n.extractor {
+                obj["extractor"] = json!(v);
+            }
+            if let Some(ref v) = n.resolution_status {
+                obj["resolution_status"] = json!(v);
+            }
+            obj
         })
         .collect();
 
     let links: Vec<Value> = graph
         .edges_iter()
         .map(|e| {
-            json!({
+            let mut obj = json!({
                 "source":           e.source,
                 "target":           e.target,
                 "relation":         e.relation,
@@ -45,7 +52,14 @@ pub fn graph_to_value(graph: &GrapheniumGraph) -> Value {
                 "confidence_score": e.confidence_score,
                 "weight":           e.weight,
                 "source_file":      e.source_file,
-            })
+            });
+            if let Some(ref v) = e.extractor {
+                obj["extractor"] = json!(v);
+            }
+            if let Some(ref v) = e.resolution_status {
+                obj["resolution_status"] = json!(v);
+            }
+            obj
         })
         .collect();
 

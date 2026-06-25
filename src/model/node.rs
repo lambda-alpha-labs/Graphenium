@@ -68,6 +68,15 @@ pub struct Node {
     /// to `label` otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub qualified_label: Option<String>,
+
+    /// Which extractor produced this node: "tree-sitter", "tree-sitter-stack-graphs",
+    /// "llm-anthropic", etc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extractor: Option<String>,
+
+    /// Resolution status: "resolved", "unresolved", "ambiguous", "heuristic", "inferred".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolution_status: Option<String>,
 }
 
 impl Node {
@@ -87,6 +96,8 @@ impl Node {
             source_location: String::new(),
             community: None,
             qualified_label: None,
+            extractor: None,
+            resolution_status: None,
         }
     }
 

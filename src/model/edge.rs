@@ -95,6 +95,15 @@ pub struct Edge {
     /// Optional source location hint, e.g. `"L72"`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_location: Option<String>,
+
+    /// Which extractor produced this edge: "tree-sitter", "tree-sitter-stack-graphs",
+    /// "llm-anthropic", "llm-openai", "heuristic-string-match", "manual-mcp-write", etc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extractor: Option<String>,
+
+    /// Resolution status: "resolved", "unresolved", "ambiguous", "heuristic", "inferred".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolution_status: Option<String>,
 }
 
 fn default_weight() -> f64 {
@@ -125,20 +134,27 @@ impl Edge {
             source_file: source_file.into(),
             weight: default_weight(),
             source_location: None,
+            extractor: None,
+            resolution_status: None,
         }
     }
 
     /// Construct an EXTRACTED edge (weight 1.0, score 1.0).
+    /// Sets extractor to "tree-sitter" and resolution_status to "resolved".
     pub fn extracted(
         source: impl Into<String>,
         target: impl Into<String>,
         relation: impl Into<String>,
         source_file: impl Into<String>,
     ) -> Self {
-        Self::new(source, target, relation, Confidence::Extracted, source_file)
+        let mut e = Self::new(source, target, relation, Confidence::Extracted, source_file);
+        e.extractor = Some("tree-sitter".to_string());
+        e.resolution_status = Some("resolved".to_string());
+        e
     }
 
     /// Construct an INFERRED call-graph edge (weight 0.8, score 0.5).
+    /// Resolution is considered "heuristic" since the AST makes a best guess.
     pub fn inferred_call(
         caller: impl Into<String>,
         callee: impl Into<String>,
@@ -146,6 +162,8 @@ impl Edge {
     ) -> Self {
         let mut e = Self::new(caller, callee, "calls", Confidence::Inferred, source_file);
         e.weight = 0.8;
+        e.extractor = Some("tree-sitter".to_string());
+        e.resolution_status = Some("heuristic".to_string());
         e
     }
 }
