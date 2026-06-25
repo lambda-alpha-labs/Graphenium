@@ -2033,6 +2033,351 @@ impl GrapheniumServer {
 
         output
     }
+
+    // ── New MCP tools (agent_change_gate, diff_graph, next_files_to_read, review_plan) ──
+
+    #[tool(
+        description = "Evaluate policy gates for a set of changed nodes. \
+        Builds a resolution report from the current graph, evaluates default \
+        policies (MinResolution, MaxAmbiguous, etc.) with optional threshold \
+        overrides, and returns a markdown table of pass/fail for each gate."
+    )]
+    fn agent_change_gate(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Comma-separated list of changed node IDs or labels")]
+        changed_nodes: String,
+        #[tool(param)]
+        #[schemars(description = "Override: minimum import resolution percentage (default 80.0)")]
+        min_resolution: Option<f64>,
+        #[tool(param)]
+        #[schemars(description = "Override: maximum allowed ambiguous edges (default 10)")]
+        max_ambiguous: Option<usize>,
+    ) -> String {
+        let graph = self.graph_store.load();
+        let ids: Vec<String> = changed_nodes
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+
+        // Build a resolution report (same logic as resolution_report tool)
+        let mut report = crate::trust::ResolutionReport::default();
+        for edge in graph.edges_iter() {
+            match edge.relation.as_str() {
+                "imports" => {
+                    report.total_import_edges += 1;
+                    if edge.resolution_status.as_deref() == Some("resolved") {
+                        report.resolved_imports += 1;
+                    }
+                    if edge.resolution_status.as_deref() == Some("unresolved") {
+                        report.unresolved_refs += 1;
+                    }
+                }
+                "calls" => {
+                    report.total_call_edges += 1;
+                    if edge.resolution_status.as_deref() == Some("resolved") {
+                        report.resolved_calls += 1;
+                    }
+                }
+                _ => {
+                    if edge.relation != "contains" && edge.relation != "method" {
+                        report.total_method_edges += 1;
+                        if edge.resolution_status.as_deref() == Some("resolved") {
+                            report.resolved_methods += 1;
+                        }
+                    }
+                }
+            }
+            match edge.confidence {
+                crate::model::Confidence::Extracted => {}
+                crate::model::Confidence::Inferred => report.heuristic_edges += 1,
+                crate::model::Confidence::Ambiguous => report.ambiguous_edges += 1,
+            }
+        }
+
+        // Build policy list: start from defaults, override thresholds if provided
+        let mut policies = crate::policy::default_policies();
+        if let Some(res) = min_resolution {
+            // Replace existing MinResolution or append
+            let replaced = policies.iter_mut().any(|p| {
+                if matches!(p, crate::policy::Policy::MinResolution(_)) {
+                    *p = crate::policy::Policy::MinResolution(res);
+                    true
+                } else {
+                    false
+                }
+            });
+            if !replaced {
+                policies.push(crate::policy::Policy::MinResolution(res));
+            }
+        }
+        if let Some(amb) = max_ambiguous {
+            let replaced = policies.iter_mut().any(|p| {
+                if matches!(p, crate::policy::Policy::MaxAmbiguous(_)) {
+                    *p = crate::policy::Policy::MaxAmbiguous(amb);
+                    true
+                } else {
+                    false
+                }
+            });
+            if !replaced {
+                policies.push(crate::policy::Policy::MaxAmbiguous(amb));
+            }
+        }
+
+        let results = crate::policy::evaluate_policies(&graph, &report, &policies);
+
+        let import_pct = if report.total_import_edges > 0 {
+            (report.resolved_imports as f64 / report.total_import_edges as f64) * 100.0
+        } else {
+            100.0
+        };
+
+        let mut output = String::new();
+        output.push_str("## Agent Change Gate\n\n");
+        output.push_str(&format!("- Changed nodes: {}\n", ids.len()));
+        output.push_str(&format!("- Resolution score: {:.1}%\n", import_pct));
+        output.push_str(&format!("- Ambiguous edges: {}\n", report.ambiguous_edges));
+        output.push('\n');
+
+        output.push_str("| Gate | Actual | Threshold | Status |\n");
+        output.push_str("|------|--------|-----------|--------|\n");
+        for r in &results {
+            let gate_name = r.message.split(" — ").next().unwrap_or(&r.message);
+            output.push_str(&format!(
+                "| {} | {:.1} | {:.1} | {} |\n",
+                gate_name,
+                r.actual,
+                r.threshold,
+                if r.passed { "✅ PASS" } else { "❌ FAIL" },
+            ));
+        }
+
+        output
+    }
+
+    #[tool(
+        description = "Compare two graph JSON files and show added/removed nodes and edges. \
+        Both paths must point to valid graph.json files exported by Graphenium. \
+        Returns a summary with counts and detailed listings."
+    )]
+    fn diff_graph(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Filesystem path to the 'before' graph.json file")]
+        before_graph: String,
+        #[tool(param)]
+        #[schemars(description = "Filesystem path to the 'after' graph.json file")]
+        after_graph: String,
+    ) -> String {
+        use std::path::Path;
+
+        let old = match crate::export::json::load_graph(Path::new(&before_graph)) {
+            Ok(g) => g,
+            Err(e) => {
+                return format!(
+                    "Failed to load 'before' graph from '{}': {}",
+                    before_graph, e
+                );
+            }
+        };
+        let new = match crate::export::json::load_graph(Path::new(&after_graph)) {
+            Ok(g) => g,
+            Err(e) => {
+                return format!(
+                    "Failed to load 'after' graph from '{}': {}",
+                    after_graph, e
+                );
+            }
+        };
+
+        let d = crate::analyze::diff::diff(&old, &new);
+
+        let mut output = String::new();
+        output.push_str("## Graph Diff\n\n");
+        output.push_str(&format!(
+            "- Nodes added: {}  |  removed: {}\n",
+            d.added_nodes.len(),
+            d.removed_nodes.len(),
+        ));
+        output.push_str(&format!(
+            "- Edges added: {}  |  removed: {}\n\n",
+            d.added_edges.len(),
+            d.removed_edges.len(),
+        ));
+
+        if !d.added_nodes.is_empty() {
+            output.push_str("### Added Nodes\n");
+            for n in &d.added_nodes {
+                output.push_str(&format!("- {}\n", n));
+            }
+            output.push('\n');
+        }
+
+        if !d.removed_nodes.is_empty() {
+            output.push_str("### Removed Nodes\n");
+            for n in &d.removed_nodes {
+                output.push_str(&format!("- {}\n", n));
+            }
+            output.push('\n');
+        }
+
+        if !d.added_edges.is_empty() {
+            output.push_str("### Added Edges\n");
+            for (s, t, r) in &d.added_edges {
+                output.push_str(&format!("- {} {} {}\n", s, r, t));
+            }
+            output.push('\n');
+        }
+
+        if !d.removed_edges.is_empty() {
+            output.push_str("### Removed Edges\n");
+            for (s, t, r) in &d.removed_edges {
+                output.push_str(&format!("- {} {} {}\n", s, r, t));
+            }
+            output.push('\n');
+        }
+
+        output
+    }
+
+    #[tool(
+        description = "Return the 'must-read' files from a verification plan \
+        for a set of changed nodes. Each entry lists a file path and the reason \
+        it needs to be reviewed. Useful for quickly seeing what files an agent \
+        should read next."
+    )]
+    fn next_files_to_read(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Comma-separated list of changed node IDs or labels")]
+        changed_nodes: String,
+    ) -> String {
+        let graph = self.graph_store.load();
+        let ids: Vec<String> = changed_nodes
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+
+        let plan = crate::analyze::verifier::plan_verification(&graph, &ids, None);
+
+        if plan.must_read.is_empty() {
+            return "No files to read — no changed nodes found or graph is empty."
+                .to_string();
+        }
+
+        let mut output = String::new();
+        output.push_str(&format!(
+            "## Files to Read ({} changed nodes)\n\n",
+            plan.changed_nodes.len()
+        ));
+        for step in &plan.must_read {
+            output.push_str(&format!("- `{}` — {}\n", step.file, step.reason));
+        }
+        output
+    }
+
+    #[tool(
+        description = "Generate a complete review plan by diffing two graph snapshots \
+        (before and after) and producing a verification plan. If before_graph_path is \
+        None, uses an empty graph as the baseline. If after_graph_path is None, uses \
+        the currently loaded graph. The result includes symbol inventory changes and \
+        the full verification plan (must-read files, tests, edges to inspect, risk gates)."
+    )]
+    fn review_plan(
+        &self,
+        #[tool(param)]
+        #[schemars(
+            description = "Optional path to the 'before' graph.json file (defaults to empty graph)"
+        )]
+        before_graph_path: Option<String>,
+        #[tool(param)]
+        #[schemars(
+            description = "Optional path to the 'after' graph.json file (defaults to currently loaded graph)"
+        )]
+        after_graph_path: Option<String>,
+    ) -> String {
+        use std::path::Path;
+
+        let before = match before_graph_path {
+            Some(ref p) => match crate::export::json::load_graph(Path::new(p)) {
+                Ok(g) => g,
+                Err(e) => {
+                    return format!(
+                        "Failed to load 'before' graph from '{}': {}",
+                        p, e
+                    );
+                }
+            },
+            None => crate::model::GrapheniumGraph::new(),
+        };
+
+        let after = match after_graph_path {
+            Some(ref p) => match crate::export::json::load_graph(Path::new(p)) {
+                Ok(g) => g,
+                Err(e) => {
+                    return format!(
+                        "Failed to load 'after' graph from '{}': {}",
+                        p, e
+                    );
+                }
+            },
+            None => {
+                let arc = self.graph_store.load();
+                crate::model::GrapheniumGraph::clone(&arc)
+            }
+        };
+
+        let changes = crate::analyze::impact::symbol_inventory_diff(&before, &after);
+
+        // Extract changed node IDs from the symbol inventory diff
+        let changed_ids: Vec<String> = changes
+            .iter()
+            .map(|c| match c {
+                crate::analyze::impact::SymbolChange::Added { id, .. }
+                | crate::analyze::impact::SymbolChange::Removed { id, .. }
+                | crate::analyze::impact::SymbolChange::CommunityChanged { id, .. } => id.clone(),
+            })
+            .collect();
+
+        let plan =
+            crate::analyze::verifier::plan_verification(&after, &changed_ids, None);
+
+        let mut output = String::new();
+        output.push_str("## Review Plan\n\n");
+        output.push_str(&format!("- Changes detected: {}\n\n", changes.len()));
+
+        if !changes.is_empty() {
+            output.push_str("### Symbol Changes\n\n");
+            output.push_str("| Change | ID | File |\n");
+            output.push_str("|--------|----|------|\n");
+            for change in &changes {
+                match change {
+                    crate::analyze::impact::SymbolChange::Added { id, file, .. } => {
+                        output.push_str(&format!("| ➕ Added | `{}` | `{}` |\n", id, file));
+                    }
+                    crate::analyze::impact::SymbolChange::Removed { id, file, .. } => {
+                        output.push_str(&format!("| ➖ Removed | `{}` | `{}` |\n", id, file));
+                    }
+                    crate::analyze::impact::SymbolChange::CommunityChanged {
+                        id,
+                        old_community,
+                        new_community,
+                        ..
+                    } => {
+                        output.push_str(&format!(
+                            "| 🔄 Community | `{}` | {:?} → {:?} |\n",
+                            id, old_community, new_community
+                        ));
+                    }
+                }
+            }
+            output.push('\n');
+        }
+
+        output.push_str(&crate::analyze::verifier::format_plan(&plan));
+        output
+    }
 }
 
 // ── ServerHandler ─────────────────────────────────────────────────────────────

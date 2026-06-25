@@ -19,6 +19,7 @@ use graphenium::report::{self, ReportInput};
 use graphenium::semantic::{self, AiProvider, SemanticOptions};
 use graphenium::serve::traversal as serve_traversal;
 use graphenium::trust;
+use graphenium::extract::ci;
 
 // ── CLI definition ─────────────────────────────────────────────────────────────
 
@@ -32,6 +33,51 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
+
+// ── Graph sub-commands ──────────────────────────────────────────────────────────
+
+#[derive(Subcommand)]
+enum GraphCommands {
+    /// Migrate a graph from an older schema version
+    Migrate {
+        /// Path to the graph.json file
+        graph: PathBuf,
+    },
+    /// Load and print graph metadata / schema
+    Schema {
+        /// Path to graph.json (default: graphenium-out/graph.json)
+        #[arg(default_value = "graphenium-out/graph.json")]
+        graph: PathBuf,
+    },
+    /// Print build targets from CI extraction
+    BuildMap {
+        /// Path to graph.json (default: graphenium-out/graph.json)
+        #[arg(default_value = "graphenium-out/graph.json")]
+        graph: PathBuf,
+    },
+    /// Print test targets from CI extraction
+    TestMap {
+        /// Path to graph.json (default: graphenium-out/graph.json)
+        #[arg(default_value = "graphenium-out/graph.json")]
+        graph: PathBuf,
+    },
+}
+
+// ── Snapshot sub-commands ───────────────────────────────────────────────────────
+
+#[derive(Subcommand)]
+enum SnapshotCommands {
+    /// Create a new snapshot
+    Create {
+        /// Name for the snapshot
+        #[arg(long)]
+        name: String,
+    },
+    /// List available snapshots
+    List,
+}
+
+// ── Top-level commands ──────────────────────────────────────────────────────────
 
 #[derive(Subcommand)]
 enum Commands {
@@ -83,6 +129,10 @@ enum Commands {
         #[arg(long)]
         dfs: bool,
 
+        /// Safe mode: use structural query mode for safer results
+        #[arg(long)]
+        safe: bool,
+
         /// Maximum output token budget (rough estimate)
         #[arg(long, default_value = "2000")]
         budget: usize,
@@ -132,6 +182,10 @@ enum Commands {
         /// Show resolution quality report
         #[arg(long)]
         resolution: bool,
+
+        /// Show repository info from graph metadata
+        #[arg(long)]
+        repository: bool,
     },
 
     /// Run trust quality checks and enforce gates for CI
@@ -206,6 +260,25 @@ enum Commands {
         #[arg(long)]
         impact: bool,
     },
+
+    /// Inspect and manage the knowledge graph
+    Graph {
+        #[command(subcommand)]
+        command: GraphCommands,
+    },
+
+    /// Create and manage graph snapshots
+    Snapshot {
+        #[command(subcommand)]
+        command: SnapshotCommands,
+    },
+
+    /// Run gate checks and quality gates for CI
+    Gate {
+        /// Diff two graph snapshots: --diff <before> <after>
+        #[arg(long, num_args = 2, value_names = ["before", "after"])]
+        diff: Option<Vec<PathBuf>>,
+    },
 }
 
 // ── Entry point ────────────────────────────────────────────────────────────────
@@ -243,6 +316,7 @@ async fn main() {
         Commands::Query {
             question,
             dfs,
+            safe,
             budget,
             graph,
             mode,
@@ -253,6 +327,7 @@ async fn main() {
         } => cmd_query(
             question,
             dfs,
+            safe,
             budget,
             graph,
             &mode,
@@ -268,12 +343,15 @@ async fn main() {
             graph,
             schema,
             resolution,
+            repository,
         } => {
             let g = graph.as_deref();
             if schema {
                 graphenium::doctor::show_schema(g);
             } else if resolution {
                 graphenium::doctor::show_resolution(g);
+            } else if repository {
+                cmd_doctor_repository(g);
             } else {
                 graphenium::doctor::run_doctor(g);
             }
@@ -321,6 +399,40 @@ async fn main() {
                 Ok(result) => result,
                 Err(e) => Err(graphenium::GrapheniumError::Watch(format!("{e}"))),
             }
+        }
+
+        Commands::Graph { command } => match command {
+            GraphCommands::Migrate { graph } => {
+                eprintln!("not yet implemented: migrate {}", graph.display());
+                Ok(())
+            }
+            GraphCommands::Schema { graph } => cmd_graph_schema(&graph),
+            GraphCommands::BuildMap { graph } => cmd_graph_build_map(&graph),
+            GraphCommands::TestMap { graph } => cmd_graph_test_map(&graph),
+        },
+
+        Commands::Snapshot { command } => match command {
+            SnapshotCommands::Create { name } => {
+                eprintln!("not yet implemented: snapshot create --name {name}");
+                Ok(())
+            }
+            SnapshotCommands::List => {
+                eprintln!("not yet implemented: snapshot list");
+                Ok(())
+            }
+        },
+
+        Commands::Gate { diff } => {
+            if let Some(paths) = diff {
+                eprintln!(
+                    "not yet implemented: gate --diff {} {}",
+                    paths[0].display(),
+                    paths[1].display()
+                );
+            } else {
+                eprintln!("not yet implemented: gate");
+            }
+            Ok(())
         }
     };
 
@@ -633,6 +745,7 @@ async fn cmd_run(
 fn cmd_query(
     question: String,
     dfs: bool,
+    safe: bool,
     budget: usize,
     graph_path: PathBuf,
     mode: &str,
@@ -680,7 +793,11 @@ fn cmd_query(
         None,
         generated_code_mode,
     );
-    let qmode = ranking::QueryMode::from_str(mode);
+    let qmode = if safe {
+        ranking::QueryMode::Structural
+    } else {
+        ranking::QueryMode::from_str(mode)
+    };
     let ranked = ranking::score_query_nodes_with_mode(&graph, &question, qmode, scoped.as_ref());
     let seeds: Vec<String> = ranked.iter().take(5).map(|node| node.id.clone()).collect();
     let exclude_relations = if ast_only_tuning {
@@ -1055,4 +1172,204 @@ fn label_collision_report(graph: &graphenium::model::GrapheniumGraph) -> Option<
         affected = colliding_nodes,
         total = total_nodes,
     ))
+}
+
+// ── `graph` sub-commands ────────────────────────────────────────────────────────
+
+/// Load and print graph schema / metadata (`graph schema`).
+fn cmd_graph_schema(graph_path: &Path) -> graphenium::Result<()> {
+    let graph = load_graph(graph_path)?;
+    println!("Graph Metadata:");
+    if let Some(ref v) = graph.metadata.schema_version {
+        println!("  schema_version: {v}");
+    }
+    if let Some(ref v) = graph.metadata.graphenium_version {
+        println!("  graphenium_version: {v}");
+    }
+    if let Some(ref v) = graph.metadata.created_at {
+        println!("  created_at: {v}");
+    }
+    if let Some(ref v) = graph.metadata.project_root {
+        println!("  project_root: {v}");
+    }
+    if let Some(ref modes) = graph.metadata.extraction_modes {
+        println!("  extraction_modes: {}", modes.join(", "));
+    }
+    if let Some(ref langs) = graph.metadata.languages {
+        println!("  languages: {}", langs.join(", "));
+    }
+    println!("  ast_only: {}", graph.metadata.ast_only);
+    println!("  node_count: {}", graph.node_count());
+    println!("  edge_count: {}", graph.edge_count());
+    Ok(())
+}
+
+/// Load graph and print build targets from CI extraction (`graph build-map`).
+fn cmd_graph_build_map(graph_path: &Path) -> graphenium::Result<()> {
+    let graph = load_graph(graph_path)?;
+    let root = graph
+        .metadata
+        .project_root
+        .as_deref()
+        .map(Path::new)
+        .unwrap_or_else(|| Path::new("."));
+
+    let ci_files = discover_ci_configs(root);
+    if ci_files.is_empty() {
+        println!("No CI configuration files found under {}", root.display());
+        return Ok(());
+    }
+    for file in &ci_files {
+        let content = match std::fs::read_to_string(file) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("warn: could not read {}: {e}", file.display());
+                continue;
+            }
+        };
+        let targets = ci::parse_ci_config(&file.to_string_lossy(), &content);
+        for t in &targets {
+            if !t.built_files.is_empty() {
+                println!("[build] {} ({:?})", t.name, t.kind);
+                for bf in &t.built_files {
+                    println!("  -> {bf}");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Load graph and print test targets from CI extraction (`graph test-map`).
+fn cmd_graph_test_map(graph_path: &Path) -> graphenium::Result<()> {
+    let graph = load_graph(graph_path)?;
+    let root = graph
+        .metadata
+        .project_root
+        .as_deref()
+        .map(Path::new)
+        .unwrap_or_else(|| Path::new("."));
+
+    let ci_files = discover_ci_configs(root);
+    if ci_files.is_empty() {
+        println!("No CI configuration files found under {}", root.display());
+        return Ok(());
+    }
+    for file in &ci_files {
+        let content = match std::fs::read_to_string(file) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("warn: could not read {}: {e}", file.display());
+                continue;
+            }
+        };
+        let targets = ci::parse_ci_config(&file.to_string_lossy(), &content);
+        for t in &targets {
+            if !t.tested_files.is_empty() {
+                println!("[test] {} ({:?})", t.name, t.kind);
+                for tf in &t.tested_files {
+                    println!("  tests {tf}");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Helper: find known CI configuration files under a root directory.
+fn discover_ci_configs(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+
+    // Cargo.toml
+    let cargo = root.join("Cargo.toml");
+    if cargo.exists() {
+        files.push(cargo);
+    }
+    // package.json
+    let pkg = root.join("package.json");
+    if pkg.exists() {
+        files.push(pkg);
+    }
+    // Makefile
+    let makefile = root.join("Makefile");
+    if makefile.exists() {
+        files.push(makefile);
+    }
+    // GitHub Actions workflow files
+    let workflows = root.join(".github/workflows");
+    if workflows.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&workflows) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map_or(false, |e| e == "yml" || e == "yaml") {
+                    files.push(path);
+                }
+            }
+        }
+    }
+
+    files
+}
+
+/// Print repository info from graph metadata (`doctor --repository`).
+fn cmd_doctor_repository(graph_path: Option<&Path>) {
+    let load_path = graph_path.unwrap_or_else(|| Path::new("graphenium-out/graph.json"));
+    match load_graph(load_path) {
+        Ok(graph) => {
+            println!("Repository Information");
+            println!("======================");
+            println!(
+                "  Project root ........... {}",
+                graph
+                    .metadata
+                    .project_root
+                    .as_deref()
+                    .unwrap_or("(unknown)")
+            );
+            println!(
+                "  Schema version ......... {}",
+                graph
+                    .metadata
+                    .schema_version
+                    .as_deref()
+                    .unwrap_or("(unknown)")
+            );
+            println!(
+                "  Graphenium version ..... {}",
+                graph
+                    .metadata
+                    .graphenium_version
+                    .as_deref()
+                    .unwrap_or("(unknown)")
+            );
+            println!(
+                "  Created at ............. {}",
+                graph
+                    .metadata
+                    .created_at
+                    .as_deref()
+                    .unwrap_or("(unknown)")
+            );
+            let modes = graph
+                .metadata
+                .extraction_modes
+                .as_deref()
+                .map(|m| m.join(", "))
+                .unwrap_or_else(|| "(none)".to_string());
+            println!("  Extraction modes ....... {modes}");
+            let langs = graph
+                .metadata
+                .languages
+                .as_deref()
+                .map(|l| l.join(", "))
+                .unwrap_or_else(|| "(none)".to_string());
+            println!("  Languages .............. {langs}");
+            println!("  AST only ............... {}", graph.metadata.ast_only);
+            println!("  Nodes .................. {}", graph.node_count());
+            println!("  Edges .................. {}", graph.edge_count());
+        }
+        Err(e) => {
+            eprintln!("[graphenium] Could not load graph at {}: {e}", load_path.display());
+        }
+    }
 }

@@ -64,6 +64,42 @@ impl ExtractionResult {
     }
 }
 
+/// A software package or crate in the repository.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Package {
+    pub name: String,
+    pub version: Option<String>,
+    pub path: String,
+}
+
+/// A build target (binary, library, workspace member).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildTarget {
+    pub name: String,
+    pub kind: String,
+    pub path: String,
+}
+
+/// A test target (unit test, integration test, benchmark).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestTarget {
+    pub name: String,
+    pub test_type: String,
+    pub path: String,
+    pub command: String,
+}
+
+/// A CI job parsed from CI configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CIJob {
+    pub name: String,
+    #[serde(default)]
+    pub commands: Vec<String>,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
+    pub yaml_path: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
