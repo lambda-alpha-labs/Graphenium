@@ -104,6 +104,9 @@ once_cell = "1"
 # Hex encoding for SHA256 digests
 hex = "0.4"
 
+# Random number generation (used in Node2Vec random walks)
+rand = "0.8"
+
 # Lock-free atomic Arc swaps for the MCP server's hot-reloadable graph state.
 arc-swap = "1"
 

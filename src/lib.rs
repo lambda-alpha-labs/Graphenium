@@ -36,6 +36,7 @@ pub mod cache;
 pub mod cluster;
 pub mod detect;
 pub mod doctor;
+pub mod embed;
 pub mod error;
 pub mod export;
 pub mod extract;
