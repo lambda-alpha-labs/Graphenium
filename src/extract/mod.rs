@@ -1,3 +1,4 @@
+pub mod ci;
 pub mod config;
 pub mod cross_file;
 pub mod go;
