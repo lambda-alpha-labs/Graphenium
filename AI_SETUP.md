@@ -241,6 +241,14 @@ Report a summary:
 - Run `gm run . --api-key sk-ant-...` to add LLM-inferred edges
 - Run `gm watch .` in a terminal for automatic rebuilds on file changes
 
+## Trust Gates (v3)
+
+For CI integration, run `gm check` to enforce trust quality gates:
+
+```sh
+gm check --min-resolution 80 --max-ambiguous 10
+```
+
 ## Error recovery
 
 | Symptom | Likely cause | Action |

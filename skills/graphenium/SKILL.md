@@ -33,6 +33,13 @@ below.
 | "Give me an overview of the repo" | `graph_stats` + `architecture_summary` |
 | "Summarize file X" | `summarize_file(path=X)` |
 | General structural exploration | `query_graph(question="...", budget=2000)` |
+| "What's the safest path from A to B?" | `mcp_graphenium_shortest_path(source=A, target=B, mode=semantic)` — prefers high-trust edges |
+| "What's the blast radius of changing X?" | `blast_radius(symbol=X)` — shows downstream impact |
+| "What symbols are unresolved?" | `unresolved_references()` — lists dangling references |
+| "What symbols are ambiguous?" | `ambiguous_symbols()` — lists symbols with multiple definitions |
+| "How trustworthy is this graph?" | `resolution_report()` — confidence breakdown, trust quality |
+| "How should I verify these changes?" | `verification_plan()` — prioritized verification plan |
+| "What files should I read next?" | `next_files_to_read(symbol=X)` — review order by risk |
 
 `get_neighbors` output is ranked: behavioural edges (`calls`, `uses`,
 `inherits`) appear first, structural edges (`contains`, `imports`) appear
@@ -96,6 +103,23 @@ Example from `query_graph` or `get_neighbors` output:
 that stay on `resolved` edges. Disclose provenance when recommending actions
 based on graph evidence.
 
+## v3 trust tools
+
+The following MCP tools provide trust, verification, and impact analysis:
+
+| Tool | Purpose |
+|------|---------|
+| `resolution_report` | Confidence breakdown, unresolved/ambiguous ratios, trust quality summary |
+| `ambiguous_symbols` | Lists symbols with multiple conflicting definitions |
+| `unresolved_references` | Lists dangling references that could not be resolved |
+| `safest_path` | Pathfinding that prefers high-trust (`resolved`/`EXTRACTED`) edges |
+| `verification_plan` | 7-tier prioritized verification plan from a graph diff |
+| `blast_radius` | Downstream impact analysis via reverse reachability |
+
+Use these when the user asks about trust quality, change safety, or
+verification — especially in CI or review contexts. For CI integration,
+`gm check` enforces trust quality gates from the CLI (see AI_SETUP.md).
+
 ## CLI fallback (`gm query`)
 
 When MCP tools are not available, use `gm query` via `exec_shell`. This
@@ -117,6 +141,7 @@ gm query "<keywords or question>" [flags]
 | `--dfs` | Depth-first instead of default BFS (deeper but narrower). |
 | `--generated-code-mode exclude` | Skip generated/template/vendor paths when they add noise. |
 | `--graph path/to/graph.json` | Point to a non-default graph file. |
+| `--safe` | Confidence-aware search: prefers paths on `resolved`/`EXTRACTED` edges, excludes `AMBIGUOUS` connections. |
 
 **Examples:**
 
@@ -141,13 +166,15 @@ When the user asks about the impact of changes, use `gm diff` to compare
 two graph snapshots.
 
 ```
-gm diff --before old-graph.json --after new-graph.json [--impact]
+gm diff --before old-graph.json --after new-graph.json [--impact] [--review-plan]
 ```
 
 - Without `--impact`: shows added/removed nodes and edges.
 - With `--impact`: also shows downstream impact (reverse reachability),
   affected communities, edge confidence breakdown, and a recommended
   review order.
+- With `--review-plan`: shows a 7-tier prioritized verification plan for
+  the changes detected in the diff.
 
 If no `--before` snapshot is available, suggest the user save a copy of
 `graphenium-out/graph.json` before making changes so they can diff later.

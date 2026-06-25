@@ -212,6 +212,7 @@ Example agent-facing output:
 ```text
 [Graphenium] Connection: require_session  calls  validate_token [resolver:resolved] -> High trust
 [Graphenium] Connection: auth_service  uses  db_client [llm:inferred] -> Inspect before relying on it
+[Graphenium] Connection: unknown_fn  calls  missing_module::do_thing [resolver:unresolved] -> Investigate before using
 ```
 
 This is Graphenium's main design principle: **do not make the agent guess how
@@ -264,6 +265,20 @@ Write tools:
 | `remove_edge` | Correct false positives or stale relationships |
 
 All writes persist to disk immediately.
+
+v3 read tools (confidence-aware and policy-driven):
+
+| Tool | Purpose |
+|---|---|
+| `resolution_report` | Resolution quality statistics: resolved vs unresolved reference counts and ratios |
+| `ambiguous_symbols` | List low-trust edges with `AMBIGUOUS` confidence for manual review |
+| `unresolved_references` | Missing dependencies the resolver could not bind |
+| `safest_path` | Confidence-aware pathfinding between two nodes, preferring `EXTRACTED` edges |
+| `verification_plan` | Prioritized verification plan based on impact and risk |
+| `blast_radius` | Downstream impact analysis — files and symbols affected by a change |
+| `agent_change_gate` | Policy-based gate checks for CI pipelines |
+| `diff_graph` | Snapshot comparison — symbol-level diff between two graph versions |
+| `next_files_to_read` | Reading order recommendation derived from a verification plan |
 
 ### 5. Multi-mode retrieval
 
@@ -508,8 +523,10 @@ gm query "<keywords>" [OPTIONS]
 | `--budget N` | `2000` | Output token budget |
 | `--mode MODE` | `lexical` | Retrieval model: `lexical` for TF-cosine keyword scoring, `structural` for graph-distance proximity, or `hybrid` |
 | `--dfs` | off | Use depth-first search |
+| `--safe` | off | Confidence-aware pathfinding: only traverse edges with `EXTRACTED` or `INFERRED` confidence, skip `AMBIGUOUS` |
 
 ```sh
+gm query "parser ast walker" --safe                         # Confidence-aware pathfinding
 gm query "authentication login" --mode lexical     # TF-cosine keyword scoring
 gm query "database connection" --mode structural  # Topological neighbor clusters
 gm query "parser ast walker" --mode hybrid        # Keyword plus structural proximity
@@ -550,8 +567,14 @@ gm watch . --debounce 2.0
 Run diagnostic checks on your Graphenium installation: binary location, graph
 file health, tree-sitter languages, API keys, and graph quality.
 
+Use `--schema` to dump the full graph schema (node kinds, edge kinds, confidence
+levels, and provenance metadata). Use `--resolution` to generate a detailed
+resolution-quality report covering resolved vs unresolved references.
+
 ```text
 gm doctor [--graph PATH]
+gm doctor --schema              # Dump graph schema
+gm doctor --resolution          # Resolution quality diagnostics
 ```
 
 ### `gm setup`
@@ -581,10 +604,33 @@ gm diff [OPTIONS]
 | `--before PATH` | empty graph | Path to the old `graph.json` |
 | `--after PATH` | `graphenium-out/graph.json` | Path to the new `graph.json` |
 | `--impact` | off | Show downstream impact analysis and review order |
+| `--review-plan` | off | Generates a prioritized verification plan based on symbol-level changes and community impact |
 
 ```sh
 gm diff --before old-graph.json --after new-graph.json
 gm diff --after new-graph.json --impact
+gm diff --before old-graph.json --after new-graph.json --review-plan
+```
+
+### `gm check`
+
+Run trust quality gates for CI. Evaluates the current graph against configurable
+policies and reports confidence thresholds, unresolved-reference ratios, and
+architectural drift.
+
+```text
+gm check [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
+| `--policy PATH` | – | Path to policy configuration file |
+| `--ci` | off | Machine-readable JSON output for CI pipelines |
+
+```sh
+gm check                                                    # Default quality gates
+gm check --policy ci-policy.toml --ci                       # CI mode with custom policy
 ```
 
 ---
@@ -621,6 +667,35 @@ src/
   cache/       mtime manifest and semantic extraction cache
   watch/       file-system watcher with incremental patching
 ```
+
+---
+
+## v3 Features
+
+### 1. CI extraction
+
+Graphenium now auto-detects `Cargo.toml`, `package.json`, and GitHub Actions
+workflows during extraction, creating graph nodes for build targets, external
+dependencies, and CI pipeline stages. This enables drift detection between
+declared dependencies and actual import usage.
+
+### 2. Architecture drift detection
+
+Compare the declared architecture (via policy files or external docs) against
+the extracted graph. Drift is reported as mismatches between expected and actual
+module boundaries, dependency directions, and community clusters.
+
+### 3. Policy-based gates
+
+Define policies in TOML files (confidence thresholds, allowed dependency
+directions, module ownership, naming conventions) and enforce them via
+`gm check`. Gates can block CI pipelines when the graph violates policy.
+
+### 4. Watch-mode blast radius display
+
+In watch mode (`gm watch`), the blast radius of detected changes is displayed
+in real time. As files are modified, the watcher highlights which symbols are
+affected, which dependents may need attention, and the risk-sorted review order.
 
 ---
 

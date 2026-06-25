@@ -35,6 +35,17 @@ gm query "test" --budget 100
 - **Fixtures**: small, well-understood test repos that exercise
   specific extraction or clustering behaviour.
 
+## Module reference
+
+Key modules and their primary types:
+
+- `src/trust.rs` — EvidenceSpan, Claim, ResolutionReport
+- `src/harness.rs` — TrustCheckResult, check_resolution_quality
+- `src/policy.rs` — Policy enum, evaluate_policies
+- `src/analyze/verifier.rs` — VerificationPlan, plan_verification
+- `src/cluster/drift.rs` — DriftEvent, detect_drift
+- `src/extract/ci.rs` — CI config parsing, CiTarget
+
 ## Adding a language extractor
 
 1. Add the tree-sitter grammar crate to `Cargo.toml`.

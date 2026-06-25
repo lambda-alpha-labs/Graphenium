@@ -2,6 +2,27 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.3.0 (unreleased) — Trust Core, Repository Verification, Change Safety
+
+### Added
+- **Trust Foundation**: EvidenceSpan with SHA256 hashing, stale detection, Claim model
+- **Trust Harness**: `check_resolution_quality()` for CI gate, `gm check` CLI command
+- **CI Config Extraction**: Parse Cargo.toml, package.json, GitHub Actions, Makefile
+- **Verification Planner**: 7-tier prioritized verification plans from graph diffs
+- **Policy Engine**: 6 configurable trust gates (MinResolution, MaxAmbiguous, MinCallResolution, etc.)
+- **Architecture Drift Detection**: Community changes, boundary crossings, hub migration over time
+- **Watch-mode Blast Radius**: Live symbol diff display on file changes
+- **Confidence-aware Pathfinding**: `safest_path()` preferring high-trust edges
+- **Graph Node Types**: Package, BuildTarget, TestTarget, CIJob for CI/repository mapping
+- **MCP Tools**: `resolution_report`, `ambiguous_symbols`, `unresolved_references`, `safest_path`, `verification_plan`, `blast_radius`, `agent_change_gate`, `diff_graph`, `next_files_to_read`, `review_plan`
+- **CLI Flags**: `gm doctor --schema/--resolution/--repository`, `gm diff --review-plan`, `gm query --safe`, `gm watch --impact`, `gm snapshot create/list`, `gm gate --diff`, `gm graph schema/build-map/test-map/migrate`
+
+### Changed
+- CI workflow now includes trust check step
+
+### Performance
+- 339 tests across all modules
+
 ## v2 (unreleased)
 
 ### Added
