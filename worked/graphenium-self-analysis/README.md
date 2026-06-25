@@ -3,9 +3,11 @@
 **Repo:** [lambda-alpha-labs/Graphenium](https://github.com/lambda-alpha-labs/Graphenium)  
 **Language:** Rust  
 **Graphenium mode:** AST-only  
-**Nodes:** 868  
-**Edges:** 1,766  
-**Communities:** 19  
+**Schema version:** 0.2.0  
+**Nodes:** 957  
+**Edges:** 1,941  
+**Communities:** 22  
+**Generated:** 2026-06-25  
 
 ## What Graphenium got right
 
@@ -96,3 +98,10 @@ Yes. For any Rust project >500 files, the architectural map alone saves
 10+ minutes of orientation per session. The graph is most useful before
 reading any source. It guides you to the right files. It doesn't replace
 reading them.
+
+This graph was regenerated with Graphenium v2 and carries provenance
+metadata on every edge. The `graph_stats` MCP tool reports extractor and
+resolution status breakdowns, and `graph.json` includes schema versioning
+with build timestamps. Try `gm diff --before graph.json --after graph.json
+--impact` to see the empty diff output, or `gm query "authentication" --mode
+hybrid` for combined lexical and structural retrieval.

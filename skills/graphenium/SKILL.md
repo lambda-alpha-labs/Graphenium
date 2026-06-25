@@ -59,17 +59,42 @@ restarts and `reload_graph`.
 
 ## Trust model (critical)
 
-Every edge carries a confidence level. **Weight your conclusions by it.**
+Every edge carries a confidence level and provenance metadata. **Weight your
+conclusions by both.**
 
-- **EXTRACTED**: tree-sitter AST or AI-confirmed by code inspection. Ground truth. Act on it directly.
-- **INFERRED**: Claude API (high confidence) or plausible-but-unverified. Treat as a strong hint.
+### Confidence tiers
+
+- **EXTRACTED**: tree-sitter AST, resolver output, or AI-confirmed by code
+  inspection. Ground truth. Act on it directly.
+- **INFERRED**: LLM or behavioral heuristic. High-probability hint.
   Corroborate with one file read or grep before acting.
-- **AMBIGUOUS**: Claude API (uncertain). Do NOT act on directly. These
-  are questions to investigate, not answers. If an AMBIGUOUS edge is the
-  only evidence for a claim, say so explicitly and recommend verification.
+- **AMBIGUOUS**: LLM uncertainty. Do NOT act on directly. If an AMBIGUOUS
+  edge is the only evidence for a claim, say so explicitly and recommend
+  verification.
 
-`graph_stats` reports the confidence breakdown. A graph dominated by
-EXTRACTED edges is more reliable than one heavy on INFERRED/AMBIGUOUS.
+### Provenance metadata
+
+Every edge also carries two provenance fields. Always check them before
+trusting a connection:
+
+- `extractor`: which system produced this edge. `tree-sitter` and
+  `resolver` edges are deterministic; `llm` edges are inferred; `runtime-otel`
+  edges come from trace data. A `resolver:resolved` edge is stronger than a
+  `llm:inferred` edge with the same confidence tier.
+- `resolution_status`: how the edge target was bound. `resolved` means the
+  importer found a matching definition; `unresolved` means it could not;
+  `heuristic` means a best-guess was used; `inferred` means an LLM proposed it.
+
+Example from `query_graph` or `get_neighbors` output:
+```text
+- require_session `calls` validate_token [resolver:resolved]   <- high trust
+- auth_service `uses` db_client [llm:inferred]                 <- inspect
+- login_handler `imports` legacy_lib [resolver:unresolved]     <- dangling
+```
+
+`graph_stats` reports the confidence and provenance breakdowns. Prefer paths
+that stay on `resolved` edges. Disclose provenance when recommending actions
+based on graph evidence.
 
 ## CLI fallback (`gm query`)
 
@@ -86,6 +111,7 @@ gm query "<keywords or question>" [flags]
 | Flag | Purpose |
 |------|---------|
 | `--budget N` | Token budget (default 2000). Raise for broader exploration. |
+| `--mode MODE` | Query mode: `lexical` (TF-cosine keywords), `structural` (graph-distance proximity), or `hybrid` (combined). |
 | `--path-prefix P` | Restrict to nodes whose source path contains `P`. Use to scope to a module or directory. |
 | `--exclude-path P` | Exclude nodes whose source path contains `P`. |
 | `--dfs` | Depth-first instead of default BFS (deeper but narrower). |
@@ -108,3 +134,20 @@ gm query "authentication flow" --dfs --path-prefix auth --budget 5000
 The output is Markdown. Read it directly; do not re-parse it through
 another tool unless you need a specific field. The subgraph lists nodes
 with their IDs, labels, communities, and edges with confidence levels.
+
+## CLI fallback (`gm diff`)
+
+When the user asks about the impact of changes, use `gm diff` to compare
+two graph snapshots.
+
+```
+gm diff --before old-graph.json --after new-graph.json [--impact]
+```
+
+- Without `--impact`: shows added/removed nodes and edges.
+- With `--impact`: also shows downstream impact (reverse reachability),
+  affected communities, edge confidence breakdown, and a recommended
+  review order.
+
+If no `--before` snapshot is available, suggest the user save a copy of
+`graphenium-out/graph.json` before making changes so they can diff later.
