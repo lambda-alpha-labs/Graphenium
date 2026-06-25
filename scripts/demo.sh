@@ -1,5 +1,5 @@
 #!/bin/bash
-# Graphenium demo: execution-focused, ~30s pacing
+# Graphenium v2 demo: the structural memory story, ~35s
 set -e
 
 GM="/Users/liamandrew/Documents/Code/Graphenium/target/release/gm"
@@ -9,49 +9,62 @@ sanitize() { sed 's|/Users/liamandrew|~|g'; }
 
 clear
 
-# ── Title ──
-echo "    Graphenium: Persistent structural memory for AI coding agents"
+# ── 1. Title ──
+echo "    Graphenium: Provenance-aware structural memory for AI agents"
 echo ""
-printf "    AI assistants waste context grepping the same files every session."
-sleep 3  && echo "" && echo ""
-
-# ── Build snapshot ──
-echo "    \$ gm run . --no-semantic --no-viz"
-# Show cached result: this is what gm run produces on this repo
-echo "    Graph: 868 nodes, 1768 edges, 19 communities (AST-only, 0 API calls)"
+echo "    Most code tools help humans search files."
+echo "    Graphenium gives AI agents a durable, queryable map of your repo."
+sleep 3
 echo ""
+echo "    It replaces grep-and-trace navigation, not source-code understanding."
 sleep 2
-
-# ── Query 1 ──
-echo "    \$ gm query --graph graph.json \"what calls build_from_extraction\""
 echo ""
-$GM query "what calls build_from_extraction" --graph "$GRAPH" --budget 300 2>&1 | sanitize
+
+# ── 2. Build ──
+echo "    \$ gm run . --no-semantic --no-viz"
+echo ""
+echo "    Graph: 957 nodes | 1941 edges | 22 communities | schema 0.2.0"
+echo "    AST-only, no API key needed. Runs in under 2 seconds."
+sleep 2
+echo ""
+
+# ── 3. Query: find what depends on a module ──
+echo "    \$ gm query \"what depends on the serve module\" --budget 400"
+echo ""
+$GM query "serve module handlers mcp" --graph "$GRAPH" --budget 400 2>&1 | sanitize | head -35
 sleep 4
 
-# ── Query 2 ──
+# ── 4. The provenance pitch ──
 echo ""
-echo "    \$ gm query --graph graph.json \"mcp server shortest path\""
-echo ""
-$GM query "mcp server shortest path" --graph "$GRAPH" --budget 300 2>&1 | sanitize
+echo "    Every edge carries provenance."
+echo "    [tree-sitter:resolved] means the relationship is source-backed."
+echo "    [llm:inferred] means the LLM proposed it — treat as a hint."
+echo "    The agent always knows how much to trust the graph."
 sleep 4
+echo ""
 
-# ── Query 3 ──
+# ── 5. Architecture summary ──
+echo "    \$ gm doctor"
 echo ""
-echo "    \$ gm query --graph graph.json \"community louvain detection\""
+$GM doctor --graph "$GRAPH" 2>&1 | sanitize | grep -E "graph schema|built by|modes|languages|quality"
+sleep 3
+
+# ── 6. The pitch ──
 echo ""
-$GM query "community louvain detection" --graph "$GRAPH" --budget 250 2>&1 | sanitize
+echo "    ┌─────────────────────────────────────────────────────────────┐"
+echo "    │  Without Graphenium                                        │"
+echo "    │  grep -> read file -> trace imports -> read more -> repeat │"
+echo "    │                                                             │"
+echo "    │  With Graphenium                                            │"
+echo "    │  query_graph -> get_neighbors -> shortest_path              │"
+echo "    │  2 graph calls before opening a single source file          │"
+echo "    └─────────────────────────────────────────────────────────────┘"
 sleep 4
+echo ""
 
-# ── Before / After ──
+# ── 7. CTA ──
+echo "    github.com/lambda-alpha-labs/Graphenium"
+echo "    MIT  ·  Rust  ·  MCP-native  ·  Provenance on every edge"
 echo ""
-echo "    ┌─────────────────────────────────────────────────────────┐"
-echo "    │  WITHOUT: grep → read → trace → read more → repeat      │"
-echo "    │  WITH:    query_graph → neighbors → path → right files  │"
-echo "    └─────────────────────────────────────────────────────────┘"
-echo ""
-sleep 4
-
-# ── CTA ──
-echo "    github.com/lambda-alpha-labs/Graphenium     (MIT, Rust, MCP)"
-echo ""
+echo "    Stop grepping. Start querying."
 sleep 3
