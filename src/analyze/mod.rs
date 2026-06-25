@@ -4,6 +4,7 @@ pub mod impact;
 pub mod questions;
 pub mod rank;
 pub mod surprise;
+pub mod verifier;
 
 use crate::cluster::CommunityStats;
 use crate::model::graph::GrapheniumGraph;
