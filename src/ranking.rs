@@ -2,7 +2,29 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::path::Path;
 
+use crate::analyze::rank::DirectedProjection;
 use crate::model::{GrapheniumGraph, Node};
+
+/// Query ranking mode for hybrid retrieval.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum QueryMode {
+    /// Standard keyword-based scoring (current default, Phase 4.1).
+    Lexical,
+    /// Graph distance weighted scoring: rank by topological proximity.
+    Structural,
+    /// Combined lexical + structural scoring.
+    Hybrid,
+}
+
+impl QueryMode {
+    pub fn from_str(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "structural" => QueryMode::Structural,
+            "hybrid" => QueryMode::Hybrid,
+            _ => QueryMode::Lexical,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RankedNode {
@@ -347,6 +369,107 @@ fn is_framework_label(label: &str) -> bool {
     }
 
     saw_segment
+}
+
+// ── Mode-aware query scoring (Phase 4.1-4.3) ──────────────────────────────────
+
+/// Score nodes using the specified query mode.
+pub fn score_query_nodes_with_mode(
+    graph: &GrapheniumGraph,
+    query: &str,
+    mode: QueryMode,
+    allowed: Option<&HashSet<String>>,
+) -> Vec<RankedNode> {
+    match mode {
+        QueryMode::Lexical => score_query_nodes_detailed_in_scope(graph, query, allowed),
+        QueryMode::Structural => score_structural(graph, query, allowed),
+        QueryMode::Hybrid => score_hybrid(graph, query, allowed),
+    }
+}
+
+fn score_structural(
+    graph: &GrapheniumGraph,
+    query: &str,
+    allowed: Option<&HashSet<String>>,
+) -> Vec<RankedNode> {
+    let seeded = score_query_nodes_detailed_in_scope(graph, query, allowed);
+    let seed_ids: HashSet<String> = seeded.iter().map(|n| n.id.clone()).collect();
+
+    if seeded.is_empty() {
+        return seeded;
+    }
+
+    let proj = DirectedProjection::from_graph(graph, None);
+    let mut distance_scores: std::collections::HashMap<String, f64> =
+        std::collections::HashMap::new();
+
+    for seed in &seeded {
+        let mut visited = HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back((seed.id.clone(), 0.0));
+        visited.insert(seed.id.clone());
+
+        while let Some((current, dist)) = queue.pop_front() {
+            let weight = 1.0 / (1.0 + dist * 0.5);
+            *distance_scores.entry(current.clone()).or_insert(0.0) += weight;
+            if dist >= 3.0 { continue; }
+            if let Some(edges) = proj.outgoing.get(&current) {
+                for (tgt, _) in edges {
+                    if visited.insert(tgt.clone()) {
+                        queue.push_back((tgt.clone(), dist + 1.0));
+                    }
+                }
+            }
+        }
+    }
+
+    let mut scored: Vec<RankedNode> = Vec::new();
+    for (id, score) in distance_scores {
+        if let Some(node) = graph.node_data(&id) {
+            let matched = if seed_ids.contains(&id) {
+                seeded.iter().find(|n| n.id == id).map(|n| n.matched_keywords.clone()).unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            scored.push(RankedNode {
+                id: id.clone(),
+                score: score * query_rank_multiplier(graph, node),
+                matched_keywords: matched,
+                matched_fields: if seed_ids.contains(&id) { vec!["structural".to_string()] } else { Vec::new() },
+                fallback_reason: if seed_ids.contains(&id) { None } else { Some(format!("structural distance {score:.2}")) },
+            });
+        }
+    }
+
+    scored.sort_unstable_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    scored
+}
+
+fn score_hybrid(
+    graph: &GrapheniumGraph,
+    query: &str,
+    allowed: Option<&HashSet<String>>,
+) -> Vec<RankedNode> {
+    let lexical = score_query_nodes_detailed_in_scope(graph, query, allowed);
+    let structural = score_structural(graph, query, allowed);
+    let mut combined: std::collections::HashMap<String, (f64, RankedNode)> =
+        std::collections::HashMap::new();
+
+    for node in lexical {
+        combined.insert(node.id.clone(), (node.score * 0.6, node));
+    }
+    for node in structural {
+        let entry = combined.entry(node.id.clone()).or_insert((0.0, node.clone()));
+        entry.0 += node.score * 0.4;
+    }
+
+    let mut result: Vec<RankedNode> = combined.into_values().map(|(score, mut node)| {
+        node.score = score;
+        node
+    }).collect();
+
+    result.sort_unstable_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    result
 }
 
 #[cfg(test)]

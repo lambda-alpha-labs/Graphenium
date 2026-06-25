@@ -89,6 +89,10 @@ enum Commands {
         #[arg(long, default_value = "graphenium-out/graph.json")]
         graph: PathBuf,
 
+        /// Query mode: lexical (default), structural, or hybrid
+        #[arg(long, default_value = "lexical")]
+        mode: String,
+
         /// Restrict results to nodes whose source path contains this fragment
         #[arg(long)]
         path_prefix: Option<String>,
@@ -204,6 +208,7 @@ async fn main() {
             dfs,
             budget,
             graph,
+            mode,
             path_prefix,
             exclude_path,
             generated_code_mode,
@@ -213,6 +218,7 @@ async fn main() {
             dfs,
             budget,
             graph,
+            &mode,
             path_prefix,
             exclude_path,
             generated_code_mode,
@@ -551,6 +557,7 @@ fn cmd_query(
     dfs: bool,
     budget: usize,
     graph_path: PathBuf,
+    mode: &str,
     path_prefix: Option<String>,
     exclude_path: Option<String>,
     generated_code_mode: String,
@@ -595,7 +602,8 @@ fn cmd_query(
         None,
         generated_code_mode,
     );
-    let ranked = ranking::score_query_nodes_detailed_in_scope(&graph, &question, scoped.as_ref());
+    let qmode = ranking::QueryMode::from_str(mode);
+    let ranked = ranking::score_query_nodes_with_mode(&graph, &question, qmode, scoped.as_ref());
     let seeds: Vec<String> = ranked.iter().take(5).map(|node| node.id.clone()).collect();
     let exclude_relations = if ast_only_tuning {
         vec!["imports".to_string()]
