@@ -140,6 +140,9 @@ gm run . --no-semantic --no-viz
 # Query it
 gm query "authentication login session" --budget 1000
 
+# After making changes, compare graph snapshots to show impact
+gm diff --before old-graph.json --after graphenium-out/graph.json --impact
+
 # Check your installation
 gm doctor
 ```
@@ -176,9 +179,9 @@ matches your performance and budget needs:
 
 | Layer | What you get | Best for | Cost / API Key |
 |---|---|---|---|
-| **1. AST + Stack Graphs** (Terrain) | Deterministic imports, resolved calls, methods, inheritance, and communities. | Syntax-accurate architectural mapping, basic navigation. | Free (Local) |
-| **2. Semantic Pass** (Road Network) | Inferred conceptual dependencies, docstring rationale, and cross-file relationships. | Behavioural tracing, richer agent reasoning. | Paid (LLM Key) |
-| **3. Telemetry Overlay** (Live Traffic) | OTEL trace integration, P50/P95/P99 latency percentiles, and hot-path mapping. | Runtime-aware optimization, production-safe refactoring. | Free (Local JSON) |
+| **1. AST + Resolver** (Terrain) *[Stable]* | Deterministic syntax extraction, import binding, resolved calls where supported, methods, inheritance, and communities. | Syntax-accurate architectural mapping and basic navigation. | Free, local |
+| **2. Semantic Pass** (Road Network) *[Stable]* | Inferred conceptual dependencies, docstring rationale, and cross-file relationships. | Behavioural tracing, richer agent reasoning. | Paid (LLM Key) |
+| **3. Telemetry Overlay** (Live Traffic) *[Experimental]* | OTEL trace integration, P50/P95/P99 latency percentiles, and hot-path mapping. | Runtime-aware optimization, production-safe refactoring. | Free, local JSON |
 
 ```sh
 # Tier 1: AST-only with deterministic import resolution (default)
@@ -187,8 +190,9 @@ gm run . --no-semantic --no-viz
 # Tier 2: Add LLM-inferred relationships
 gm run . --provider anthropic
 
-# Tier 3: Ingest OpenTelemetry traces to weight the graph with runtime behaviour
-# (enables hot-path routing and latency-sensitive traversal via the telemetry module)
+# Tier 3: Telemetry overlay support is experimental
+# (Ingests OpenTelemetry traces to weight the graph with runtime behaviour)
+# Import command and trace schema may change before stabilization
 ```
 
 The `graph_stats` tool always reports the edge confidence breakdown and
@@ -254,7 +258,7 @@ how to fall back to `gm query` when MCP is unavailable.
 
 ## What the assistant can ask
 
-Once connected, the assistant has access to 13 graph tools.
+Once connected, the assistant has access to Graphenium's core graph tools.
 
 **Read tools:**
 
@@ -543,10 +547,10 @@ src/
 
 ## Limitations
 
-- **AST-only graphs are structural, not behavioural.** Without semantic
-  extraction, edges are mostly imports, containment, and method declarations.
-  Control-flow relationships (`calls`, `uses`, `implements`) come from the
-  semantic pass.
+- **AST-only graphs are structural, not behavioural.** The AST-only mode
+  captures imports, containment, method declarations, and resolves cross-file
+  imports deterministically. Cross-file control-flow relationships (`calls`,
+  `uses`, `implements`) require the semantic pass.
 - **Label collisions.** Common names like `new`, `mod`, `run` appear across
   modules. Qualified labels help disambiguate when available. `graph_stats`
   reports collision counts so you know when results may be fuzzy.
@@ -561,6 +565,6 @@ src/
 Contributions are welcome, especially language extractors, MCP integrations,
 and fixtures. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-[Good first issues →](https://github.com/lambda-alpha-labs/Graphenium/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
-· [Worked examples →](worked/)
-· [Demo script →](scripts/demo.sh)
+[Good first issues](https://github.com/lambda-alpha-labs/Graphenium/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+| [Worked examples](worked/)
+| [Demo script](scripts/demo.sh)
