@@ -233,7 +233,10 @@ mod tests {
     fn evidence_span_created_with_hashes() {
         let span = EvidenceSpan::new(
             "src/main.rs",
-            0, 100, 1, 5,
+            0,
+            100,
+            1,
+            5,
             b"fn main() {}",
             b"fn main() {}\n",
             "tree-sitter",
@@ -248,7 +251,10 @@ mod tests {
     fn evidence_validation_detects_stale() {
         let span = EvidenceSpan::new(
             "src/main.rs",
-            0, 100, 1, 5,
+            0,
+            100,
+            1,
+            5,
             b"fn main() {}",
             b"fn main() {}\n",
             "tree-sitter",

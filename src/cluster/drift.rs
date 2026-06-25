@@ -149,7 +149,7 @@ pub fn detect_drift(old: &GrapheniumGraph, new: &GrapheniumGraph) -> DriftReport
     }
 
     // 4. Hub migration: nodes with degree > 5 that changed community
-    let hub_events: Vec<_> = events
+    let hub_ids: std::collections::HashSet<String> = events
         .iter()
         .filter(|e| {
             e.kind == DriftKind::CommunityChanged
@@ -159,21 +159,30 @@ pub fn detect_drift(old: &GrapheniumGraph, new: &GrapheniumGraph) -> DriftReport
                     .count()
                     > 5
         })
+        .map(|e| e.node_id.clone())
         .collect();
-    if !hub_events.is_empty() {
-        for e in &hub_events {
-            // Re-add these as Critical events
+    for id in &hub_ids {
+        if let Some(label) = events
+            .iter()
+            .find(|e| e.node_id == *id)
+            .map(|e| e.label.clone())
+        {
+            let oc = events
+                .iter()
+                .find(|e| e.node_id == *id)
+                .and_then(|e| e.old_community);
+            let nc = events
+                .iter()
+                .find(|e| e.node_id == *id)
+                .and_then(|e| e.new_community);
             events.push(DriftEvent {
                 kind: DriftKind::HubMoved,
-                node_id: e.node_id.clone(),
-                label: e.label.clone(),
-                old_community: e.old_community,
-                new_community: e.new_community,
+                node_id: id.clone(),
+                label,
+                old_community: oc,
+                new_community: nc,
                 severity: DriftSeverity::Critical,
-                detail: format!(
-                    "hub node moved community {:?} → {:?} (degree > 5)",
-                    e.old_community, e.new_community
-                ),
+                detail: format!("hub node moved community {:?} → {:?} (degree > 5)", oc, nc),
             });
         }
     }

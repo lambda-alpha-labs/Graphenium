@@ -43,12 +43,9 @@ pub fn check_resolution_quality(
     };
 
     // Combined resolution percentage (weighted average)
-    let total_relevant = report.total_import_edges
-        + report.total_call_edges
-        + report.total_method_edges;
-    let total_resolved = report.resolved_imports
-        + report.resolved_calls
-        + report.resolved_methods;
+    let total_relevant =
+        report.total_import_edges + report.total_call_edges + report.total_method_edges;
+    let total_resolved = report.resolved_imports + report.resolved_calls + report.resolved_methods;
     let resolution_pct = if total_relevant > 0 {
         (total_resolved as f64 / total_relevant as f64) * 100.0
     } else {
@@ -133,9 +130,7 @@ mod tests {
         let graph = GrapheniumGraph::new();
         let result = check_resolution_quality(&graph, &report, 90.0, 5);
         assert!(!result.passed);
-        assert!(
-            result.details.iter().any(|d| d.contains("FAIL"))
-        );
+        assert!(result.details.iter().any(|d| d.contains("FAIL")));
     }
 
     #[test]

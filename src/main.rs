@@ -14,11 +14,11 @@ use graphenium::extract::{self, ExtractMode, ExtractOptions};
 use graphenium::harness;
 use graphenium::model::graph::GrapheniumGraph;
 use graphenium::model::{Confidence, ExtractionResult};
-use graphenium::trust;
 use graphenium::ranking;
 use graphenium::report::{self, ReportInput};
 use graphenium::semantic::{self, AiProvider, SemanticOptions};
 use graphenium::serve::traversal as serve_traversal;
+use graphenium::trust;
 
 // ── CLI definition ─────────────────────────────────────────────────────────────
 
