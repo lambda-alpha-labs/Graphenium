@@ -11,6 +11,7 @@
 ///   external libraries or stdlib.
 /// - **HyperEdges**: appended to the graph's side-car `Vec<HyperEdge>`.
 use crate::model::{ExtractionResult, GrapheniumGraph};
+use crate::resolver;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,10 @@ pub fn build_from_extraction(result: &ExtractionResult) -> (GrapheniumGraph, Bui
 pub fn build_merged(
     results: impl IntoIterator<Item = ExtractionResult>,
 ) -> (GrapheniumGraph, BuildStats) {
-    let combined = ExtractionResult::merge_all(results);
+    // Collect into a Vec so we can run import resolution before merging.
+    let mut result_vec: Vec<ExtractionResult> = results.into_iter().collect();
+    resolver::resolve_imports(&mut result_vec);
+    let combined = ExtractionResult::merge_all(result_vec);
     build_from_extraction(&combined)
 }
 

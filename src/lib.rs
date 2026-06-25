@@ -39,6 +39,7 @@ pub mod doctor;
 pub mod error;
 pub mod export;
 pub mod extract;
+pub mod resolver;
 pub mod model;
 pub mod ranking;
 pub mod report;
