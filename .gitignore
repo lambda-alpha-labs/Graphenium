@@ -42,3 +42,4 @@ Thumbs.db
 *.swo
 package.json
 .deepseek/
+.gitignore.bak
