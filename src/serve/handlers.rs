@@ -1544,11 +1544,15 @@ impl GrapheniumServer {
             .unwrap_or_else(|e| format!("(persist warning: {e})"));
 
         let action = if was_update { "Updated" } else { "Added" };
+        let total_nodes = self.graph().node_count();
+        let total_edges = self.graph().edge_count();
         format!(
-            "{action} node '{}' (id: {}, file_type: {}). {persist_msg}",
+            "{action} node '{}' (id: {}, file_type: {}). Total: {} nodes, {} edges. {persist_msg}",
             node.display_label(),
             node.id,
-            node.file_type
+            node.file_type,
+            total_nodes,
+            total_edges,
         )
     }
 
@@ -1624,12 +1628,16 @@ impl GrapheniumServer {
             .persist_graph()
             .unwrap_or_else(|e| format!("(persist warning: {e})"));
 
+        let total_nodes = self.graph().node_count();
+        let total_edges = self.graph().edge_count();
         format!(
-            "Added edge: {src} --[{relation}]--> {tgt} (confidence: {conf}). {persist_msg}",
+            "Added edge: {src} --[{relation}]--> {tgt} (confidence: {conf}). Total: {total_nodes} nodes, {total_edges} edges. {persist_msg}",
             src = src_id,
             tgt = tgt_id,
             relation = relation.to_lowercase(),
             conf = conf,
+            total_nodes = total_nodes,
+            total_edges = total_edges,
         )
     }
 
@@ -1708,8 +1716,10 @@ impl GrapheniumServer {
             .as_deref()
             .map(|r| format!(" (relation: {r})"))
             .unwrap_or_default();
+        let total_nodes = self.graph().node_count();
+        let total_edges = self.graph().edge_count();
         format!(
-            "Removed {count} edge(s) between '{src_id}' and '{tgt_id}'{rel_desc}. {persist_msg}",
+            "Removed {count} edge(s) between '{src_id}' and '{tgt_id}'{rel_desc}. Total: {total_nodes} nodes, {total_edges} edges. {persist_msg}",
             src_id = src_id,
             tgt_id = tgt_id,
         )
