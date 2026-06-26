@@ -41,11 +41,14 @@ pub fn resolve_imports(results: &mut [ExtractionResult]) {
             if edge.relation != "imports" {
                 continue;
             }
-            let status = if exports.contains_key(&edge.target) {
-                "resolved"
-            } else {
-                "unresolved"
-            };
+            // Normalize the edge target so it matches the canonical form used by node IDs
+            let normalized_target = crate::model::id::normalize_id(&edge.target);
+            let status =
+                if exports.contains_key(&edge.target) || exports.contains_key(&normalized_target) {
+                    "resolved"
+                } else {
+                    "unresolved"
+                };
             edge.extractor = Some("resolver".to_string());
             edge.resolution_status = Some(status.to_string());
         }
@@ -90,6 +93,29 @@ mod tests {
         resolve_imports(&mut results);
         let edge = &results[0].edges[0];
         assert_eq!(edge.resolution_status, Some("unresolved".to_string()));
+    }
+
+    #[test]
+    fn resolves_mixed_case_or_unnormalized_targets() {
+        let mut r = ExtractionResult::new();
+        r.nodes.push(Node::new(
+            "helper_a",
+            "helper_a",
+            FileType::Code,
+            "src/a.rs",
+        ));
+        let mut edge = Edge::extracted("main", "Helper_A", "imports", "src/src.rs");
+        edge.extractor = None;
+        edge.resolution_status = None;
+        r.edges.push(edge);
+
+        let mut results = vec![r];
+        resolve_imports(&mut results);
+        assert_eq!(
+            results[0].edges[0].resolution_status,
+            Some("resolved".to_string()),
+            "Edge target 'Helper_A' should resolve to node 'helper_a' via normalize_id"
+        );
     }
 
     #[test]
