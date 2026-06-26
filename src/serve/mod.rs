@@ -15,6 +15,7 @@ pub mod traversal;
 pub use handlers::GrapheniumServer;
 
 use std::path::Path;
+use std::sync::Arc;
 
 use rmcp::{transport::io::stdio, ServiceExt};
 
@@ -24,6 +25,10 @@ use rmcp::{transport::io::stdio, ServiceExt};
 ///
 /// Blocks until the client disconnects (stdin closes).
 pub async fn serve(graph_path: &Path) -> crate::Result<()> {
+    serve_with_watch(graph_path, false).await
+}
+
+pub async fn serve_with_watch(graph_path: &Path, watch: bool) -> crate::Result<()> {
     eprintln!("[graphenium] Loading graph: {}", graph_path.display());
 
     let graph = crate::export::json::load_graph(graph_path)?;
@@ -34,6 +39,45 @@ pub async fn serve(graph_path: &Path) -> crate::Result<()> {
     );
 
     let server = GrapheniumServer::with_path(graph, graph_path.to_path_buf());
+
+    if watch {
+        let graph_path = graph_path.to_path_buf();
+        let srv = server.clone();
+        std::thread::spawn(move || {
+            use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+            use std::sync::mpsc;
+            use std::time::Duration;
+            let (tx, rx) = mpsc::channel();
+            let mut watcher = match RecommendedWatcher::new(tx, Config::default()) {
+                Ok(w) => w,
+                Err(e) => {
+                    eprintln!("[graphenium] File watcher creation failed: {e}");
+                    return;
+                }
+            };
+            if let Err(e) = watcher.watch(&graph_path, RecursiveMode::NonRecursive) {
+                eprintln!("[graphenium] File watch failed: {e}");
+                return;
+            }
+            eprintln!(
+                "[graphenium] Watching graph file for changes: {}",
+                graph_path.display()
+            );
+            for event in rx {
+                if let Ok(Event {
+                    kind: EventKind::Modify(_),
+                    ..
+                }) = event
+                {
+                    std::thread::sleep(Duration::from_millis(200));
+                    if let Err(err) = GrapheniumServer::reload_from_file(&graph_path, &srv) {
+                        eprintln!("[graphenium] Failed to reload changed graph: {err}");
+                    }
+                }
+            }
+        });
+    }
+
     eprintln!("[graphenium] MCP server starting on stdio...");
 
     let service = server

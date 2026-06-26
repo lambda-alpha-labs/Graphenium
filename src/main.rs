@@ -175,6 +175,10 @@ enum Commands {
         /// Path to graph.json
         #[arg(long, default_value = "graphenium-out/graph.json")]
         graph: PathBuf,
+
+        /// Watch graph file for changes and auto-reload
+        #[arg(long)]
+        watch: bool,
     },
 
     /// Run diagnostic checks on the Graphenium installation
@@ -349,7 +353,13 @@ async fn main() {
             ast_only_tuning,
         ),
 
-        Commands::Serve { graph } => graphenium::serve::serve(&graph).await,
+        Commands::Serve { graph, watch } => {
+            if watch {
+                graphenium::serve::serve_with_watch(&graph, true).await
+            } else {
+                graphenium::serve::serve(&graph).await
+            }
+        }
 
         Commands::Doctor {
             graph,

@@ -1,6 +1,6 @@
 /// MCP server tools exposing the knowledge graph.
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use petgraph::visit::EdgeRef;
@@ -61,6 +61,22 @@ impl GrapheniumServer {
             graph_store: Arc::new(ArcSwap::from_pointee(graph)),
             default_path: Arc::new(Mutex::new(Some(path))),
         }
+    }
+
+    /// Reload the graph from a file path. Used by the auto-reload watcher.
+    pub fn reload_from_file(
+        graph_path: &Path,
+        server: &Self,
+    ) -> Result<(), crate::GrapheniumError> {
+        let new_graph = crate::export::json::load_graph(graph_path)?;
+        let n = new_graph.node_count();
+        let e = new_graph.edge_count();
+        server.graph_store.store(Arc::new(new_graph));
+        if let Ok(mut guard) = server.default_path.lock() {
+            *guard = Some(graph_path.to_path_buf());
+        }
+        eprintln!("[graphenium] Graph file changed, reloaded: {n} nodes, {e} edges");
+        Ok(())
     }
 
     /// Take a lock-free snapshot of the current graph. Cheap — one atomic
@@ -430,6 +446,25 @@ fn normalize_display_path(path: &str) -> String {
         .to_string()
 }
 
+/// Strip the project root prefix from an absolute path to produce a relative path.
+/// If the path is already relative or the root is unknown, returns as-is.
+fn relative_path(path: &str, root: Option<&str>) -> String {
+    match root {
+        Some(root) => {
+            let normalized = path.replace('\\', "/");
+            let root_norm = root.replace('\\', "/");
+            let root_norm = root_norm.trim_end_matches('/');
+            if normalized.starts_with(root_norm) {
+                let rel = normalized[root_norm.len()..].trim_start_matches('/');
+                if rel.is_empty() { "." } else { rel }.to_string()
+            } else {
+                path.to_string()
+            }
+        }
+        None => path.to_string(),
+    }
+}
+
 fn community_overviews(
     graph: &GrapheniumGraph,
     nodes: &[&crate::model::Node],
@@ -758,6 +793,8 @@ impl GrapheniumServer {
         let graph = self.graph();
         let node = graph.node_data(&resolved).unwrap();
         let degree = graph.degree(&resolved);
+        let root_str = graph.metadata.project_root.clone();
+        let root = root_str.as_deref();
 
         // Check for duplicate labels
         let duplicate_count = graph
@@ -796,7 +833,7 @@ impl GrapheniumServer {
              {dup_warning}",
             ft = node.file_type,
             id = node.id,
-            sf = node.source_file,
+            sf = relative_path(&node.source_file, root),
         )
     }
 
