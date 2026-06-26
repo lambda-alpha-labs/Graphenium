@@ -431,11 +431,15 @@ pub fn subgraph_to_text_with_match_details(
         .iter()
         .map(|ranked| (ranked.id.as_str(), ranked))
         .collect();
-    let mut out = format!("Found {} node(s)\n\n", node_ids.len());
+    let total = node_ids.len();
+    let mut out = format!("Found {} node(s)\n\n", total);
 
+    let mut displayed = 0usize;
     for id in node_ids {
         if out.len() >= budget_chars {
-            out.push_str("\n[... output truncated at budget]\n");
+            out.push_str(&format!(
+                "\n[... output truncated: showing {displayed} of {total} matches. Increase 'budget' or reduce 'depth' for more.]\n"
+            ));
             break;
         }
 

@@ -118,6 +118,14 @@ enum Commands {
         /// API key (overrides the provider-specific env var)
         #[arg(long)]
         api_key: Option<String>,
+
+        /// Comma-separated list of directories to exclude (e.g. target,node_modules,.git)
+        #[arg(long)]
+        exclude_dirs: Option<String>,
+
+        /// Skip GRAPH_REPORT.md generation
+        #[arg(long)]
+        no_report: bool,
     },
 
     /// Query the knowledge graph with keywords
@@ -298,6 +306,8 @@ async fn main() {
             api_base,
             model,
             api_key,
+            exclude_dirs,
+            no_report,
         } => {
             cmd_run(
                 path,
@@ -309,6 +319,8 @@ async fn main() {
                 api_base,
                 model,
                 api_key,
+                exclude_dirs,
+                no_report,
             )
             .await
         }
@@ -448,6 +460,8 @@ async fn cmd_run(
     api_base: Option<String>,
     model: Option<String>,
     api_key: Option<String>,
+    exclude_dirs: Option<String>,
+    no_report: bool,
 ) -> graphenium::Result<()> {
     let root = path.canonicalize().unwrap_or(path);
     let out_dir = root.join("graphenium-out");
@@ -468,7 +482,25 @@ async fn cmd_run(
     // ── 1. Detect files ────────────────────────────────────────────────────────
     eprintln!("[graphenium] Detecting files in: {}", root.display());
 
-    let (all_files, corpus_warnings) = detect::detect(&root, &DetectOptions::default())?;
+    let (mut all_files, corpus_warnings) = detect::detect(&root, &DetectOptions::default())?;
+
+    // Apply --exclude-dirs filter
+    if let Some(ref dirs) = exclude_dirs {
+        let excluded: Vec<&str> = dirs.split(',').map(|s| s.trim()).collect();
+        all_files.retain(|f| {
+            let path_str = f.path.to_string_lossy();
+            !excluded
+                .iter()
+                .any(|d| path_str.contains(&format!("/{}/", d)) || path_str.ends_with(d))
+        });
+        if !excluded.is_empty() {
+            eprintln!(
+                "[graphenium] Excluded {} dir(s), {} file(s) remaining",
+                excluded.len(),
+                all_files.len()
+            );
+        }
+    }
 
     for w in &corpus_warnings {
         eprintln!("[graphenium] warn: {w}");
@@ -708,19 +740,21 @@ async fn cmd_run(
     }
 
     // ── 9. Report ──────────────────────────────────────────────────────────────
-    let report_path = report::write_report(
-        &ReportInput {
-            graph: &graph,
-            community_stats: &community_stats,
-            analysis: &analysis,
-            corpus_warnings: &corpus_warnings,
-            input_tokens: total_input_tokens,
-            output_tokens: total_output_tokens,
-            title,
-        },
-        &out_dir,
-    )?;
-    eprintln!("[graphenium] Wrote: {}", report_path.display());
+    if !no_report {
+        let report_path = report::write_report(
+            &ReportInput {
+                graph: &graph,
+                community_stats: &community_stats,
+                analysis: &analysis,
+                corpus_warnings: &corpus_warnings,
+                input_tokens: total_input_tokens,
+                output_tokens: total_output_tokens,
+                title,
+            },
+            &out_dir,
+        )?;
+        eprintln!("[graphenium] Wrote: {}", report_path.display());
+    }
 
     // ── 10. Update manifest ────────────────────────────────────────────────────
     let all_paths: Vec<_> = all_files.iter().map(|f| f.path.clone()).collect();
