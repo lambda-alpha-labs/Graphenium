@@ -758,6 +758,12 @@ impl GrapheniumServer {
         let graph = self.graph();
         let node = graph.node_data(&resolved).unwrap();
         let degree = graph.degree(&resolved);
+
+        // Check for duplicate labels
+        let duplicate_count = graph
+            .nodes()
+            .filter(|n| n.label.to_lowercase() == id.to_lowercase() && n.id != resolved)
+            .count();
         let comm = node
             .community
             .map(|c| c.to_string())
@@ -774,13 +780,20 @@ impl GrapheniumServer {
             String::new()
         };
 
+        let dup_warning = if duplicate_count > 0 {
+            format!("\n⚠ WARNING: {duplicate_count} other node(s) share this label. Use the ID above for exact matching.")
+        } else {
+            String::new()
+        };
+
         format!(
             "**{display}**{name_suffix} ({ft})\n\
              ID: {id}\n\
              File: {sf}\n\
              Span: {loc}\n\
              Community: {comm}\n\
-             Degree: {degree}",
+             Degree: {degree}\
+             {dup_warning}",
             ft = node.file_type,
             id = node.id,
             sf = node.source_file,
@@ -803,6 +816,9 @@ impl GrapheniumServer {
             description = "Optional substring to filter by relation type (e.g. 'calls', 'imports')"
         )]
         relation: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Max neighbors to return (default 50, cap output for hub nodes)")]
+        max_neighbors: Option<i32>,
     ) -> String {
         let resolved = match self.resolve_id(&node_id) {
             Some(r) => r,
@@ -848,7 +864,12 @@ impl GrapheniumServer {
             )
         });
 
-        let count = entries.len();
+        let cap = max_neighbors.unwrap_or(50).max(1) as usize;
+        let total = entries.len();
+        if cap < total {
+            entries.truncate(cap);
+        }
+        let displayed = entries.len();
         for (_, edge, nb) in &entries {
             out.push_str(&format!(
                 "- **{}** via `{}` ({}, score={:.2}) — {}\n",
@@ -860,14 +881,18 @@ impl GrapheniumServer {
             ));
         }
 
-        if count == 0 {
+        if total == 0 {
             out.push_str("No neighbors found");
             if relation.is_some() {
                 out.push_str(" with the given relation filter");
             }
             out.push('.');
+        } else if cap < total {
+            out.push_str(&format!(
+                "\nShowing {displayed} of {total} neighbors (increase max_neighbors for more)"
+            ));
         } else {
-            out.push_str(&format!("\nTotal: {count} neighbor(s)"));
+            out.push_str(&format!("\nTotal: {total} neighbor(s)"));
         }
 
         out
@@ -1132,6 +1157,7 @@ impl GrapheniumServer {
              - Edges: {e}\n\
              - Hyperedges: {h}\n\
              - Communities: {c}\n\n\
+             ## Schema\n{provenance_rows}\n\n\
              ## Node Types\n{type_rows}\n\n\
              ## Edge Confidence\n\
              - EXTRACTED: {extracted}\n\
@@ -1143,6 +1169,17 @@ impl GrapheniumServer {
             e = edge_count,
             h = hyperedge_count,
             c = communities.len(),
+            provenance_rows = {
+                let meta = &g.metadata;
+                let mut parts = Vec::new();
+                if let Some(ref v) = meta.schema_version {
+                    parts.push(format!("Schema version: {v}"));
+                }
+                if let Some(ref v) = meta.created_at {
+                    parts.push(format!("Built at: {v}"));
+                }
+                parts.join("\n")
+            },
         ));
         out = meta_block + &out;
         out
@@ -2841,7 +2878,7 @@ mod tests {
     #[test]
     fn get_neighbors_returns_connected() {
         let s = make_server();
-        let result = s.get_neighbors("src_alpha".to_string(), None);
+        let result = s.get_neighbors("src_alpha".to_string(), None, None);
         assert!(result.contains("Beta"));
         assert!(result.contains("calls"));
     }
@@ -2849,7 +2886,7 @@ mod tests {
     #[test]
     fn get_neighbors_relation_filter() {
         let s = make_server();
-        let result = s.get_neighbors("src_alpha".to_string(), Some("imports".to_string()));
+        let result = s.get_neighbors("src_alpha".to_string(), Some("imports".to_string()), None);
         assert!(result.contains("No neighbors found"));
     }
 
@@ -2879,7 +2916,7 @@ mod tests {
         );
 
         let s = GrapheniumServer::new(g);
-        let result = s.get_neighbors("src_alpha".to_string(), None);
+        let result = s.get_neighbors("src_alpha".to_string(), None, None);
         assert_eq!(result.matches("**Beta** via `calls`").count(), 1);
         assert!(result.contains("Total: 1 neighbor(s)"));
     }
