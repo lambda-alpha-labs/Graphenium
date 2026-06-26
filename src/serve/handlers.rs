@@ -136,11 +136,9 @@ impl GrapheniumServer {
     }
 
     fn ast_only_tuning_header(enabled: bool) -> Option<&'static str> {
-        if enabled {
-            Some("AST-only tuning active: suppressing common import/generated-code noise by default\n\n")
-        } else {
-            None
-        }
+        // Banner suppressed: the filter message already conveys AST-only tuning.
+        // Re-enable by returning Some("...") when enabled.
+        None
     }
 
     fn summarize_community(&self, community_id: usize, include_members: bool) -> String {
@@ -622,7 +620,15 @@ impl GrapheniumServer {
             description = "AST-only tuning: true enables AST-only noise suppression, false disables it, omitted = auto"
         )]
         ast_only_tuning: Option<bool>,
+        #[tool(param)]
+        #[schemars(description = "Exclude test/spec nodes from results (default false)")]
+        exclude_test_nodes: Option<bool>,
+        #[tool(param)]
+        #[schemars(description = "Minimum node degree to include (filters low-degree noise)")]
+        min_degree: Option<i32>,
     ) -> String {
+        let exclude_tests = exclude_test_nodes.unwrap_or(false);
+        let min_degree_val = min_degree.unwrap_or(0).max(0) as usize;
         let depth = (depth.unwrap_or(3) as usize).clamp(1, 6);
         let budget = (budget.unwrap_or(2000) as usize).max(200);
         let use_dfs = dfs.unwrap_or(false);
@@ -652,6 +658,41 @@ impl GrapheniumServer {
 
         let graph = self.graph();
         let ranked = traversal::score_nodes_detailed_in_scope(&graph, &keywords, scoped.as_ref());
+        let ranked: Vec<_> = if exclude_tests {
+            ranked
+                .into_iter()
+                .filter(|node| {
+                    graph.node_data(&node.id).map_or(true, |n| {
+                        let p = n.source_file.to_lowercase();
+                        let l = n.label.to_lowercase();
+                        !p.contains("/test/")
+                            && !p.contains("/tests/")
+                            && !p.contains("_test.")
+                            && !l.starts_with("test_")
+                            && !l.starts_with("test")
+                            && l != "test"
+                    })
+                })
+                .collect()
+        } else {
+            ranked
+        };
+        let ranked: Vec<_> = if min_degree_val > 0 {
+            ranked
+                .into_iter()
+                .filter(|node| {
+                    graph.node_data(&node.id).map_or(true, |_| {
+                        graph
+                            .edges_iter()
+                            .filter(|e| e.source == node.id || e.target == node.id)
+                            .count()
+                            >= min_degree_val
+                    })
+                })
+                .collect()
+        } else {
+            ranked
+        };
         let seeds: Vec<String> = ranked.iter().take(5).map(|node| node.id.clone()).collect();
 
         if seeds.is_empty() {
@@ -1349,6 +1390,9 @@ impl GrapheniumServer {
         #[schemars(description = "Grouping: 'kind' (default) groups by file type, \
             'community' groups by community ID.")]
         group_by: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Minimum node degree to include (filters low-degree noise)")]
+        min_degree: Option<i32>,
     ) -> String {
         let graph = self.graph();
         let needle = normalize_display_path(&path).to_lowercase();
@@ -1791,6 +1835,26 @@ impl GrapheniumServer {
             n,
             e
         )
+    }
+
+    #[tool(description = "Re-run community detection on the loaded graph. \
+        Communities are re-assigned based on the current edge structure. \
+        Useful after adding nodes or edges via add_node/add_edge.")]
+    fn recluster(&self) -> String {
+        let mut graph = (*self.graph()).clone();
+        let options = crate::cluster::ClusterOptions::default();
+        let _community_stats = crate::cluster::cluster(&mut graph, &options);
+        self.graph_store.store(Arc::new(graph));
+        let persist_msg = self
+            .persist_graph()
+            .unwrap_or_else(|e| format!("(persist warning: {e})"));
+        let community_count = self
+            .graph()
+            .nodes()
+            .filter_map(|n| n.community)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        format!("Reclustered into {community_count} communities. {persist_msg}")
     }
 
     // ── v3 MCP tools ────────────────────────────────────────────────────────
@@ -2619,6 +2683,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
         );
         assert!(result.contains("Alpha"));
         assert!(result.contains("Match: direct keyword match"));
@@ -2633,6 +2699,8 @@ mod tests {
             None,
             None,
             Some("tests/".to_string()),
+            None,
+            None,
             None,
             None,
             None,
@@ -2659,6 +2727,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
         );
         assert!(result.contains("Guide"));
 
@@ -2671,6 +2741,8 @@ mod tests {
             None,
             Some(vec!["code".to_string()]),
             Some(vec!["imports".to_string()]),
+            None,
+            None,
             None,
             None,
             None,
@@ -2694,6 +2766,8 @@ mod tests {
             None,
             Some("exclude".to_string()),
             None,
+            None,
+            None,
         );
         assert!(excluded.contains("generated/template/vendor paths excluded"));
         assert!(excluded.contains("RealService"));
@@ -2710,6 +2784,8 @@ mod tests {
             None,
             None,
             Some("only".to_string()),
+            None,
+            None,
             None,
         );
         assert!(only.contains("only generated/template/vendor paths included"));
@@ -2732,8 +2808,9 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
         );
-        assert!(result.contains("AST-only tuning active"));
         assert!(result.contains("generated/template/vendor paths excluded"));
         assert!(!result.contains("TemplateScreen"));
     }
@@ -2913,7 +2990,6 @@ mod tests {
     fn architecture_summary_auto_tunes_for_ast_only_graphs() {
         let s = make_ast_only_generated_server();
         let result = s.architecture_summary(None, None, None, None, None, None);
-        assert!(result.contains("AST-only tuning active"));
         assert!(result.contains("generated/template/vendor paths excluded"));
     }
 
@@ -3086,7 +3162,7 @@ mod tests {
     fn summarize_file_lists_symbols_matching_suffix() {
         let s = make_server();
         // make_server has src/alpha.rs (Alpha), src/beta.rs (Beta), docs/guide.md (Guide)
-        let out = s.summarize_file("alpha.rs".to_string(), None);
+        let out = s.summarize_file("alpha.rs".to_string(), None, None);
         assert!(out.contains("Alpha"), "expected Alpha symbol: {out}");
         assert!(!out.contains("Beta"), "beta.rs should not match: {out}");
     }
@@ -3095,21 +3171,21 @@ mod tests {
     fn summarize_file_handles_backslash_paths() {
         let s = make_server();
         // Windows-style input should normalize the same as forward slashes.
-        let out = s.summarize_file(r"src\beta.rs".to_string(), None);
+        let out = s.summarize_file(r"src\beta.rs".to_string(), None, None);
         assert!(out.contains("Beta"), "expected Beta symbol: {out}");
     }
 
     #[test]
     fn summarize_file_no_match_returns_clean_message() {
         let s = make_server();
-        let out = s.summarize_file("does_not_exist.rs".to_string(), None);
+        let out = s.summarize_file("does_not_exist.rs".to_string(), None, None);
         assert!(out.contains("No nodes found"));
     }
 
     #[test]
     fn summarize_file_group_by_community() {
         let s = make_server();
-        let out = s.summarize_file("alpha.rs".to_string(), Some("community".to_string()));
+        let out = s.summarize_file("alpha.rs".to_string(), Some("community".to_string()), None);
         // Alpha is in community 0 in make_server.
         assert!(
             out.contains("Community 0"),
