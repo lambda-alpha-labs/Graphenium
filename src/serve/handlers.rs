@@ -3124,4 +3124,58 @@ mod tests {
             "unexpected message: {msg}"
         );
     }
+
+    #[test]
+    fn add_edge_persist_roundtrip_preserves_all_edges() {
+        use std::io::Write;
+
+        // Reproduce the MCP add_edge persist flow:
+        // 1. Build a graph with 3 nodes and 2 edges
+        // 2. Serialize to JSON file (simulate persist)
+        // 3. Reload via load_graph
+        // 4. Clone graph, add a new edge (simulate add_edge in MCP handler)
+        // 5. Serialize again
+        // 6. Reload and verify ALL 3 edges are present
+        let mut g = GrapheniumGraph::new();
+        g.upsert_node(Node::new("a", "A", FileType::Code, "src/a.rs"));
+        g.upsert_node(Node::new("b", "B", FileType::Code, "src/b.rs"));
+        g.upsert_node(Node::new("c", "C", FileType::Code, "src/c.rs"));
+        g.add_edge(Edge::extracted("a", "b", "calls", "src/a.rs"));
+        g.add_edge(Edge::extracted("b", "c", "calls", "src/b.rs"));
+        assert_eq!(g.edge_count(), 2);
+
+        // Step 1-3: Serialize to file, reload (simulate initial persist)
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("graph.json");
+        let json1 = crate::export::json::to_json(&g).unwrap();
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(json1.as_bytes()).unwrap();
+        drop(f);
+        let g_loaded = crate::export::json::load_graph(&path).unwrap();
+        assert_eq!(g_loaded.edge_count(), 2);
+
+        // Step 4: Clone graph, add edge (MCP add_edge flow)
+        let mut cloned = g.clone();
+        cloned.add_edge(Edge::extracted("c", "a", "depends_on", "src/c.rs"));
+        assert_eq!(cloned.edge_count(), 3);
+
+        // Step 5-6: Serialize to file, reload (simulate persist after add_edge)
+        let json2 = crate::export::json::to_json(&cloned).unwrap();
+        let mut f2 = std::fs::File::create(&path).unwrap();
+        f2.write_all(json2.as_bytes()).unwrap();
+        drop(f2);
+        let g_final = crate::export::json::load_graph(&path).unwrap();
+        assert_eq!(
+            g_final.edge_count(),
+            3,
+            "BUG: add_edge persist lost edges! Expected 3, got {}",
+            g_final.edge_count()
+        );
+
+        // Verify all edges are of the correct type
+        let relation_types: std::collections::BTreeSet<&str> =
+            g_final.edges_iter().map(|e| e.relation.as_str()).collect();
+        assert!(relation_types.contains("calls"));
+        assert!(relation_types.contains("depends_on"));
+    }
 }

@@ -412,14 +412,8 @@ async fn main() {
         },
 
         Commands::Snapshot { command } => match command {
-            SnapshotCommands::Create { name } => {
-                eprintln!("not yet implemented: snapshot create --name {name}");
-                Ok(())
-            }
-            SnapshotCommands::List => {
-                eprintln!("not yet implemented: snapshot list");
-                Ok(())
-            }
+            SnapshotCommands::Create { name } => cmd_snapshot_create(&name),
+            SnapshotCommands::List => cmd_snapshot_list(),
         },
 
         Commands::Gate { diff } => {
@@ -883,6 +877,20 @@ fn cmd_check(
     strict: bool,
 ) -> graphenium::Result<()> {
     let graph = export::json::load_graph(graph_path)?;
+
+    // Check if this is an AST-only pre-resolver graph
+    let has_resolver_edges: bool = graph
+        .edges_iter()
+        .any(|e| e.extractor.as_deref() == Some("resolver"));
+
+    if !has_resolver_edges && (graph.edges_iter().count() > 0) {
+        println!(
+            "NOTE: Graph has no resolver annotations. Resolution checks apply only\n\
+                  to graphs built with the full pipeline (including import resolution).\n\
+                  Skipping resolution gate — checking confidence and ambiguous edges only.\n"
+        );
+    }
+
     let mut report = trust::ResolutionReport::default();
 
     // Build resolution report from graph edges
@@ -918,6 +926,26 @@ fn cmd_check(
             Confidence::Inferred => report.heuristic_edges += 1,
             Confidence::Ambiguous => report.ambiguous_edges += 1,
         }
+    }
+
+    let ast_only = !has_resolver_edges && graph.edges_iter().count() > 0;
+
+    if ast_only {
+        // AST-only graphs: skip resolution gate, only check ambiguous count
+        let ambiguous_count = report.ambiguous_edges;
+        if report.ambiguous_edges > max_ambiguous {
+            eprintln!(
+                "\n⚠ Trust check FAILED: {max_ambiguous} max ambiguous edges allowed, found {ambiguous_count}."
+            );
+            if strict {
+                std::process::exit(1);
+            }
+        } else {
+            println!(
+                "\n✓ Trust check PASSED (ambiguous edges: {ambiguous_count}, max: {max_ambiguous})"
+            );
+        }
+        return Ok(());
     }
 
     let result = harness::check_resolution_quality(&graph, &report, min_resolution, max_ambiguous);
@@ -1087,6 +1115,58 @@ fn cmd_review_plan(before: Option<&Path>, after: &Path) -> graphenium::Result<()
     Ok(())
 }
 
+// ── `snapshot` commands ────────────────────────────────────────────────────────
+
+/// Create a snapshot of the current graph by copying it to graphenium-snapshots/.
+fn cmd_snapshot_create(name: &str) -> graphenium::Result<()> {
+    let snap_dir = PathBuf::from("graphenium-snapshots");
+    std::fs::create_dir_all(&snap_dir)?;
+
+    let src = PathBuf::from("graphenium-out/graph.json");
+    if !src.exists() {
+        eprintln!("No graph found at {} — run `gm run` first.", src.display());
+        return Ok(());
+    }
+
+    let dest = snap_dir.join(format!("{name}.json"));
+    std::fs::copy(&src, &dest).map_err(|e| graphenium::GrapheniumError::Io(e))?;
+
+    println!("Snapshot '{name}' saved to {}.", dest.display());
+    Ok(())
+}
+
+/// List available snapshots.
+fn cmd_snapshot_list() -> graphenium::Result<()> {
+    let snap_dir = PathBuf::from("graphenium-snapshots");
+    if !snap_dir.exists() {
+        println!("No snapshots found. Use `gm snapshot create --name <name>` to create one.");
+        return Ok(());
+    }
+
+    let entries = std::fs::read_dir(&snap_dir)?;
+    let mut names: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        if let Some(name) = entry.file_name().to_str() {
+            if name.ends_with(".json") {
+                names.push(name.trim_end_matches(".json").to_string());
+            }
+        }
+    }
+
+    if names.is_empty() {
+        println!("No snapshots found in {}.", snap_dir.display());
+    } else {
+        println!("Available snapshots ({}):", names.len());
+        for name in &names {
+            let path = snap_dir.join(format!("{name}.json"));
+            let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            println!("  {name} ({size} bytes)");
+        }
+    }
+
+    Ok(())
+}
+
 // ── `setup` command ────────────────────────────────────────────────────────────
 
 fn cmd_setup(target: &str, gm_path: Option<PathBuf>, graph: &Path) -> graphenium::Result<()> {
@@ -1108,9 +1188,11 @@ fn cmd_setup(target: &str, gm_path: Option<PathBuf>, graph: &Path) -> graphenium
             println!("{{\n  \"mcpServers\": {{\n    \"graphenium\": {{\n      \"command\": \"{gm_str}\",\n      \"args\": [\"serve\", \"--graph\", \"{graph_str}\"]\n    }}\n  }}\n}}");
         }
         "codewhale" | "codex" => {
-            println!("Add this to ~/.codewhale/mcp.json:");
+            println!("Add this to ~/.codewhale/config.toml:");
             println!();
-            println!("{{\n  \"servers\": {{\n    \"graphenium\": {{\n      \"command\": \"{gm_str}\",\n      \"args\": [\"serve\", \"--graph\", \"{graph_str}\"],\n      \"env\": {{}}\n    }}\n  }}\n}}");
+            println!("[mcp_servers.graphenium]");
+            println!("command = \"{gm_str}\"");
+            println!("args = [\"serve\", \"--graph\", \"{graph_str}\"]");
         }
         other => {
             eprintln!("Unknown target '{other}'. Supported: claude, cursor, codewhale");
