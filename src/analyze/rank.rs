@@ -255,8 +255,10 @@ pub fn rooted_dominators(proj: &DirectedProjection, root: &str) -> HashMap<Strin
         }
     }
 
-    // Iterative dominator computation
-    for _iter in 0..10 {
+    // Iterative dominator computation: scale iterations by graph depth
+    // BFS depth is bounded by the number of nodes in the reachable subgraph
+    let max_iters = (order.len() * 2 / 3).max(10);
+    for _iter in 0..max_iters {
         let mut changed = false;
         for node in &order {
             if *node == root {
