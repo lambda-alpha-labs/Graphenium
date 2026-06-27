@@ -340,12 +340,14 @@ impl GrapheniumServer {
 
         if !hotspots.is_empty() {
             out.push_str("\n## Architectural Hotspots\n");
+            let self_g = self.graph();
+            let root = self_g.metadata.project_root.as_deref();
             for gn in hotspots.iter().take(5) {
                 out.push_str(&format!(
                     "- **{}** (degree {}) — {}\n",
                     gn.display_label(),
                     gn.degree,
-                    gn.source_file
+                    relative_path(&gn.source_file, root)
                 ));
             }
         }
@@ -920,6 +922,8 @@ impl GrapheniumServer {
             entries.truncate(cap);
         }
         let displayed = entries.len();
+        let self_g = self.graph();
+        let root = self_g.metadata.project_root.as_deref();
         for (_, edge, nb) in &entries {
             out.push_str(&format!(
                 "- **{}** via `{}` ({}, score={:.2}) — {}\n",
@@ -927,7 +931,7 @@ impl GrapheniumServer {
                 edge.relation,
                 edge.confidence,
                 edge.confidence_score,
-                nb.source_file
+                relative_path(&nb.source_file, root)
             ));
         }
 
@@ -1038,6 +1042,8 @@ impl GrapheniumServer {
             out.push_str(header);
         }
         out.push_str(&format!("# Top {} Hub Nodes\n\n", result.len()));
+        let self_g = self.graph();
+        let root = self_g.metadata.project_root.as_deref();
         for gn in &result {
             let comm = gn
                 .community
@@ -1048,7 +1054,7 @@ impl GrapheniumServer {
                 gn.display_label(),
                 comm,
                 gn.degree,
-                gn.source_file
+                relative_path(&gn.source_file, root)
             ));
         }
         out
@@ -1482,6 +1488,8 @@ impl GrapheniumServer {
         min_degree: Option<i32>,
     ) -> String {
         let graph = self.graph();
+        let self_g = self.graph();
+        let root = self_g.metadata.project_root.as_deref();
         let needle = normalize_display_path(&path).to_lowercase();
         if needle.is_empty() {
             return "Empty path provided.".to_string();
@@ -1520,10 +1528,10 @@ impl GrapheniumServer {
                 distinct_files.len()
             ));
             for f in &distinct_files {
-                out.push_str(&format!("  - {f}\n"));
+                out.push_str(&format!("  - {}\n", relative_path(f, root)));
             }
         } else if let Some(f) = distinct_files.first() {
-            out.push_str(&format!("- File: {f}\n"));
+            out.push_str(&format!("- File: {}\n", relative_path(f, root)));
         }
 
         let mut grouped: HashMap<String, Vec<&crate::model::Node>> = HashMap::new();
@@ -2523,6 +2531,42 @@ impl GrapheniumServer {
 
         output.push_str(&crate::analyze::verifier::format_plan(&plan));
         output
+    }
+    // ── Meta tools ──────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Return metadata about the currently loaded graph.         Shows project root, schema version, build timestamp, extraction mode,         languages, and node/edge counts. Useful for confirming which graph the         server is serving before acting on its results."
+    )]
+    fn graph_info(&self) -> String {
+        let graph = self.graph();
+        let meta = &graph.metadata;
+        let mut out = String::new();
+        out.push_str("# Graph Info\n\n");
+        if let Some(ref v) = meta.schema_version {
+            out.push_str(&format!("**Schema:** {v}\n"));
+        }
+        if let Some(ref v) = meta.project_root {
+            out.push_str(&format!("**Project root:** {v}\n"));
+        }
+        if let Some(ref v) = meta.created_at {
+            out.push_str(&format!("**Built at:** {v}\n"));
+        }
+        if let Some(ref modes) = meta.extraction_modes {
+            out.push_str(&format!("**Extraction:** {}\n", modes.join(", ")));
+        }
+        if let Some(ref langs) = meta.languages {
+            out.push_str(&format!("**Languages:** {}\n", langs.join(", ")));
+        }
+        out.push_str(&format!("**Nodes:** {}\n", graph.node_count()));
+        out.push_str(&format!("**Edges:** {}\n", graph.edge_count()));
+        out.push_str(&format!("**Hyperedges:** {}\n", graph.hyperedges.len()));
+        let communities = graph
+            .nodes()
+            .filter_map(|n| n.community)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        out.push_str(&format!("**Communities:** {communities}\n"));
+        out
     }
 }
 
