@@ -1681,7 +1681,10 @@ impl GrapheniumServer {
             label = node.display_label(),
             id = node.id,
             ft = node.file_type,
-            file = node.source_file,
+            file = crate::serve::traversal::relative_path(
+                &node.source_file,
+                graph.metadata.project_root.as_deref()
+            ),
             loc = node.source_location,
             degree = degree,
             comm_str = comm_str,
@@ -2051,6 +2054,11 @@ impl GrapheniumServer {
         #[tool(param)]
         #[schemars(description = "Only follow edges with these relation types (substring match)")]
         relation: Option<String>,
+        #[tool(param)]
+        #[schemars(
+            description = "Direction: 'forward' (default, outgoing edges), 'reverse' (incoming edges), or 'both'"
+        )]
+        direction: Option<String>,
     ) -> String {
         let graph = self.graph();
         let seed_id = match self.resolve_id(&seed) {
@@ -2058,44 +2066,18 @@ impl GrapheniumServer {
             None => return format!("Node '{seed}' not found."),
         };
         let max_depth = depth.unwrap_or(3).max(1).min(6) as usize;
+        let dir = direction.as_deref().unwrap_or("forward");
 
-        // BFS transitive closure
-        let mut visited = std::collections::HashSet::new();
-        let mut queue = std::collections::VecDeque::new();
-        let mut depth_map: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
+        let results = crate::serve::traversal::query_transitive_with_direction(
+            &graph, &seed_id, dir, max_depth, None,
+        );
 
-        visited.insert(seed_id.clone());
-        queue.push_back(seed_id.clone());
-        depth_map.insert(seed_id, 0);
-
-        while let Some(current) = queue.pop_front() {
-            let current_depth = depth_map[&current];
-            if current_depth >= max_depth {
-                continue;
-            }
-
-            for (neighbor_id, edge) in graph.node_edges(&current) {
-                if let Some(ref filter) = relation {
-                    if !edge
-                        .relation
-                        .to_lowercase()
-                        .contains(&filter.to_lowercase())
-                    {
-                        continue;
-                    }
-                }
-                if visited.insert(neighbor_id.to_string()) {
-                    queue.push_back(neighbor_id.to_string());
-                    depth_map.insert(neighbor_id.to_string(), current_depth + 1);
-                }
-            }
-        }
+        let mut depth_map: std::collections::HashMap<String, usize> = results.into_iter().collect();
 
         let mut out = format!(
             "# Transitive Closure from '{}'\n\n- Reachable nodes: {}\n- Max depth: {}\n\n",
             seed,
-            visited.len(),
+            depth_map.len(),
             max_depth
         );
 
@@ -2563,9 +2545,13 @@ impl GrapheniumServer {
                 .node_data(&e.target)
                 .map(|n| n.label.as_str())
                 .unwrap_or(e.target.as_str());
+            let root = graph.metadata.project_root.as_deref();
             output.push_str(&format!(
                 "- {} `{}` {} [{}]\n",
-                src_label, e.relation, tgt_label, e.source_file
+                src_label,
+                e.relation,
+                tgt_label,
+                crate::serve::traversal::relative_path(&e.source_file, root)
             ));
         }
         output

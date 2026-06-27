@@ -25,7 +25,7 @@ use rmcp::{transport::io::stdio, ServiceExt};
 ///
 /// Blocks until the client disconnects (stdin closes).
 pub async fn serve(graph_path: &Path) -> crate::Result<()> {
-    serve_with_watch(graph_path, false).await
+    serve_with_watch(graph_path, true).await
 }
 
 pub async fn serve_with_watch(graph_path: &Path, watch: bool) -> crate::Result<()> {

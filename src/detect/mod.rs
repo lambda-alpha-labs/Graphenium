@@ -169,6 +169,30 @@ fn load_graphenium_ignore(root: &Path) -> Option<GlobSet> {
     builder.build().ok()
 }
 
+/// Initialize workspace defaults by writing a `.grapheniumignore` file if not present.
+pub fn initialize_workspace(root: &Path) -> std::io::Result<bool> {
+    let ignore_path = root.join(".grapheniumignore");
+    if ignore_path.exists() {
+        return Ok(false);
+    }
+
+    let default_ignore = "\
+# Ignore toolchain and build artifacts
+.rust-toolchain/
+.cargo/
+target/
+node_modules/
+__pycache__/
+.venv/
+dist/
+build/
+graphenium-out/
+";
+
+    std::fs::write(&ignore_path, default_ignore)?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

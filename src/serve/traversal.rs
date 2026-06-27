@@ -29,6 +29,8 @@ pub fn is_test_like_path(path: &str) -> bool {
         || normalized.contains("_spec.")
         || normalized.contains("tests.rs")
         || normalized.contains("test_bench")
+        || normalized.contains("_test.rs")
+        || normalized.contains("_tests.rs")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -472,8 +474,10 @@ pub fn subgraph_to_text_with_match_details(
     let mut displayed = 0usize;
     for id in node_ids {
         if out.len() >= budget_chars {
+            let remaining = total.saturating_sub(displayed);
+            let est_budget_needed = remaining.saturating_mul(250);
             out.push_str(&format!(
-                "\n[... output truncated: showing {displayed} of {total} matches. Increase 'budget' or reduce 'depth' for more.]\n"
+                "\n[... output truncated: showing {displayed} of {total} matches. Remaining {remaining} matches would require approximately an additional {est_budget_needed} characters of budget. Increase the 'budget' parameter or decrease 'depth' to refine your query.]\n"
             ));
             break;
         }
@@ -582,6 +586,55 @@ fn format_rank_explanation(ranked: &RankedNode) -> String {
     } else {
         format!("ranked seed (score {:.2})", ranked.score)
     }
+}
+
+/// Perform transitive closure with direction control (forward, reverse, or both).
+pub fn query_transitive_with_direction(
+    graph: &GrapheniumGraph,
+    seed: &str,
+    direction: &str,
+    max_depth: usize,
+    allowed: Option<&std::collections::HashSet<String>>,
+) -> Vec<(String, usize)> {
+    let mut visited = std::collections::HashSet::new();
+    let mut results = Vec::new();
+    let mut queue = std::collections::VecDeque::new();
+
+    if graph.contains_node(seed) {
+        visited.insert(seed.to_string());
+        queue.push_back((seed.to_string(), 0));
+    }
+
+    while let Some((current, depth)) = queue.pop_front() {
+        results.push((current.clone(), depth));
+        if depth >= max_depth {
+            continue;
+        }
+
+        let mut neighbors = Vec::new();
+        for (neighbor_id, edge) in graph.node_edges(&current) {
+            let is_outgoing = edge.src_original.is_empty() || edge.src_original == current;
+            let is_incoming = edge.tgt_original.is_empty() || edge.tgt_original == current;
+
+            match direction {
+                "forward" if is_outgoing => neighbors.push(neighbor_id.to_string()),
+                "reverse" if is_incoming => neighbors.push(neighbor_id.to_string()),
+                "both" => neighbors.push(neighbor_id.to_string()),
+                _ => {}
+            }
+        }
+
+        for neighbor in neighbors {
+            if allowed.is_some_and(|a| !a.contains(&neighbor)) {
+                continue;
+            }
+            if visited.insert(neighbor.clone()) {
+                queue.push_back((neighbor, depth + 1));
+            }
+        }
+    }
+
+    results
 }
 
 /// Generate a detailed trust breakdown for nodes along a computed path.

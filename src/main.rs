@@ -81,6 +81,13 @@ enum SnapshotCommands {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Initialize a Graphenium workspace with default config files
+    Init {
+        /// Directory to initialize (default: current directory)
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+
     /// Run the full pipeline on a directory
     Run {
         /// Directory to analyze (default: current directory)
@@ -300,6 +307,21 @@ async fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
+        Commands::Init { path } => {
+            match graphenium::detect::initialize_workspace(&path) {
+                Ok(true) => println!(
+                    "Initialized Graphenium workspace at '{}'. Created .grapheniumignore.",
+                    path.display()
+                ),
+                Ok(false) => println!(
+                    "Workspace at '{}' already initialized (.grapheniumignore exists).",
+                    path.display()
+                ),
+                Err(e) => eprintln!("Failed to initialize workspace: {e}"),
+            }
+            Ok(())
+        }
+
         Commands::Run {
             path,
             mode,

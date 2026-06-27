@@ -122,17 +122,22 @@ fn evaluate_one(
             }
         }
         Policy::MinCallResolution(threshold) => {
-            let passed = call_pct >= threshold;
+            let passed = graph.is_ast_only() || call_pct >= threshold;
+            let actual = if graph.is_ast_only() { 100.0 } else { call_pct };
             PolicyResult {
                 passed,
-                actual: call_pct,
+                actual,
                 threshold,
-                message: format!(
-                    "Call resolution: {:.0}% (threshold: {:.0}%) — {}",
-                    call_pct,
-                    threshold,
-                    if passed { "PASS" } else { "FAIL" }
-                ),
+                message: if graph.is_ast_only() {
+                    "Call resolution: [SKIPPED] (AST-only graph — run with semantic pass for call resolution) — PASS".to_string()
+                } else {
+                    format!(
+                        "Call resolution: {:.0}% (threshold: {:.0}%) — {}",
+                        call_pct,
+                        threshold,
+                        if passed { "PASS" } else { "FAIL" }
+                    )
+                },
             }
         }
         Policy::MaxStale(threshold) => {

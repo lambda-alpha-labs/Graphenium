@@ -228,3 +228,65 @@ pub fn show_resolution(graph_path: Option<&Path>) {
 
     println!("{}", report.format());
 }
+
+/// Run diagnostic checks and output structured JSON for programmatic consumption.
+pub fn run_doctor_json(graph_path: Option<&std::path::Path>) {
+    let binary_path = std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    let mut out = serde_json::json!({
+        "binary": {
+            "path": binary_path,
+            "status": "OK"
+        },
+        "graph": null,
+        "quality": null,
+        "api_keys": {
+            "anthropic": std::env::var("ANTHROPIC_API_KEY").is_ok(),
+            "openai": std::env::var("OPENAI_API_KEY").is_ok(),
+            "deepseek": std::env::var("DEEPSEEK_API_KEY").is_ok(),
+            "openrouter": std::env::var("OPENROUTER_API_KEY").is_ok(),
+        }
+    });
+
+    let path = graph_path.unwrap_or_else(|| std::path::Path::new("graphenium-out/graph.json"));
+    if let Ok(graph) = crate::export::json::load_graph(path) {
+        let community_count: usize =
+            std::collections::BTreeSet::from_iter(graph.nodes().filter_map(|n| n.community)).len();
+
+        out["graph"] = serde_json::json!({
+            "path": path.to_string_lossy().to_string(),
+            "nodes": graph.node_count(),
+            "edges": graph.edge_count(),
+            "communities": community_count,
+            "schema_version": graph.metadata.schema_version,
+            "graphenium_version": graph.metadata.graphenium_version,
+            "created_at": graph.metadata.created_at,
+            "extraction_modes": graph.metadata.extraction_modes,
+            "languages": graph.metadata.languages,
+            "is_ast_only": graph.is_ast_only()
+        });
+
+        let total = graph.edge_count();
+        if total > 0 {
+            let extracted = graph
+                .edges_iter()
+                .filter(|e| e.confidence == crate::model::Confidence::Extracted)
+                .count();
+            let inferred = graph
+                .edges_iter()
+                .filter(|e| e.confidence == crate::model::Confidence::Inferred)
+                .count();
+            let ambiguous = total - extracted - inferred;
+
+            out["quality"] = serde_json::json!({
+                "extracted_pct": (extracted as f64 / total as f64) * 100.0,
+                "inferred_pct": (inferred as f64 / total as f64) * 100.0,
+                "ambiguous_pct": (ambiguous as f64 / total as f64) * 100.0,
+            });
+        }
+    }
+
+    println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+}
