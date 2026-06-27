@@ -736,6 +736,10 @@ Graphenium writes outputs to `graphenium-out/` inside the analyzed directory.
 | `graph.html` | Self-contained visual graph inspection page |
 | `manifest.json` | mtime index for incremental updates |
 | `cache/` | Per-file semantic extraction cache, SHA256 keyed |
+| `quality.json` | Structured quality report: resolution ratio, ambiguous edges, per-file stats |
+| | |
+| **Scripts** | |
+| `scripts/bench.sh` | Reproducible benchmark: cold index, graph load, query latency |
 
 ---
 
