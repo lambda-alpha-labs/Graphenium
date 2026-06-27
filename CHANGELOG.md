@@ -2,6 +2,18 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.7.0 (2026-06-27) — Path normalization, trust scaling, transitive queries
+
+### Added
+- **`relative_path` helper**: Project-root-relative paths in `subgraph_to_text_with_match_details` output — no more absolute host paths in query responses
+- **`format_path_confidence`**: Trust breakdown for every step in `shortest_path` output (relation, confidence, provenance)
+- **`query_transitive` MCP tool**: BFS transitive closure from a seed symbol — finds all reachable nodes with depth control and relation filtering
+- **`is_test_like_path`**: Path-based test/spec detection in `filtered_node_ids` — more precise test exclusion patterns (handles `.spec.`, `/spec/`, `_bench` paths)
+- **AST-only trust scaling**: `gm check` now dynamically skips call resolution metrics for AST-only graphs and shows `[SKIPPED]` with clear explanation
+
+### Fixed
+- **`displayed` counter bug**: Truncation warning in `subgraph_to_text_with_match_details` now correctly shows actual displayed count instead of always `0`
+
 ## v0.6.0 (2026-06-27) — Token optimization, composite tools, trust gating
 
 ### Added

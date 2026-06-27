@@ -329,6 +329,17 @@ v0.6.0 composite and trust tools:
 | `module_dependencies` | Module-to-module dependency summary between two directory paths |
 | `what_changed` | Risk-sorted delta against a stored snapshot: removed symbols, community moves, additions |
 
+v0.7.0:
+
+| Tool | Purpose |
+|---|---|
+| `query_transitive` | BFS transitive closure from a seed symbol — all reachable nodes with depth control and relation filtering |
+
+**Other v0.7.0 improvements:**
+- `shortest_path` output now includes per-hop **Confidence breakdown** via `format_path_confidence` (relation, confidence, provenance for each step)
+- `gm check` dynamically scales for AST-only graphs — skips call resolution and shows `[SKIPPED]` with explanation
+- All `query_graph` responses now use **project-root-relative paths** instead of absolute host paths
+
 **New query parameters (v0.6.0):**
 - `summarize_file` gains `show_leaves` — default `false` hides low-degree leaf symbols to save tokens; hubs (degree > 5) always shown
 - `query_graph` and all tools: `include_tests` — default `false` excludes test/spec nodes (replaces `exclude_test_nodes`)

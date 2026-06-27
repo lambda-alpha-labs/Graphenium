@@ -145,6 +145,12 @@ gm query "<keywords or question>" [flags]
 | `--graph path/to/graph.json` | Point to a non-default graph file. |
 | `--safe` | Confidence-aware search: prefers paths on `resolved`/`EXTRACTED` edges, excludes `AMBIGUOUS` connections. |
 
+### v0.7.0 transitive query
+
+| MCP Tool | What it returns | When to use |
+|---|---|---|
+| `query_transitive(seed, depth?)` | BFS transitive closure — all reachable nodes grouped by depth | "What is the full dependency graph reachable from this symbol?" |
+
 ### v0.6.0 composite tools
 
 | MCP Tool | What it returns | When to use |
