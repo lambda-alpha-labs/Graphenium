@@ -1865,6 +1865,23 @@ impl GrapheniumServer {
         out
     }
 
+    /// Try to load a snapshot graph from a list of candidate paths.
+    /// Returns Ok(graph) on first success, or None if no path exists.
+    fn load_snapshot_graph(
+        candidates: &[std::path::PathBuf],
+        name: &str,
+    ) -> Option<crate::model::GrapheniumGraph> {
+        for path in candidates {
+            if path.exists() {
+                match crate::export::json::load_graph(path) {
+                    Ok(g) => return Some(g),
+                    Err(_) => continue,
+                }
+            }
+        }
+        None
+    }
+
     // ── what_changed ──────────────────────────────────────────────────────────
 
     #[tool(description = "Compare current graph against a stored snapshot. \
@@ -1884,22 +1901,15 @@ impl GrapheniumServer {
             PathBuf::from(format!("{name}.json")),
         ];
 
-        let old_graph = 'load: loop {
-            for path in &candidate_paths {
-                if path.exists() {
-                    match crate::export::json::load_graph(path) {
-                        Ok(g) => break 'load g,
-                        Err(e) => {
-                            return format!("Failed to load snapshot '{}': {}", path.display(), e);
-                        }
-                    }
-                }
+        let old_graph = match Self::load_snapshot_graph(&candidate_paths, &name) {
+            Some(g) => g,
+            None => {
+                return format!(
+                    "Snapshot '{name}' not found. Looked in:\n\
+                     - graphemium-snapshots/{name}.json\n\
+                     - {name}.json"
+                );
             }
-            return format!(
-                "Snapshot '{name}' not found. Looked in:\n\
-                 - graphemium-snapshots/{name}.json\n\
-                 - {name}.json"
-            );
         };
 
         let new_graph = self.graph();
