@@ -1466,11 +1466,14 @@ impl GrapheniumServer {
                 if let Some(header) = Self::generated_mode_header(generated_code_mode) {
                     out.push_str(header);
                 }
+                let confidence_details =
+                    crate::serve::traversal::format_path_confidence(&self.graph(), &result.path);
                 out.push_str(&format!(
-                    "{mode_label} ({hops} hop(s), cost {cost:.2}): {path}",
+                    "{mode_label} ({hops} hop(s), cost {cost:.2}): {path}\n\nConfidence breakdown:\n{confidence}",
                     hops = result.hops,
                     cost = result.total_cost_millis as f64 / 1000.0,
                     path = labels.join(" → "),
+                    confidence = confidence_details,
                 ));
                 out
             }
@@ -2026,6 +2029,93 @@ impl GrapheniumServer {
             "- Edge trust: {} extracted, {} inferred, {} ambiguous\n",
             impact.extracted_edges, impact.inferred_edges, impact.ambiguous_edges,
         ));
+
+        out
+    }
+
+    // ── query_transitive ───────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Multi-turn transitive query: starting from a seed symbol, \
+        follow edges outward through successive hops and return the full transitive \
+        closure. Useful for finding all nodes reachable from a given symbol."
+    )]
+    fn query_transitive(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Starting node ID or label")]
+        seed: String,
+        #[tool(param)]
+        #[schemars(description = "Maximum traversal depth (default 3, max 6)")]
+        depth: Option<i32>,
+        #[tool(param)]
+        #[schemars(description = "Only follow edges with these relation types (substring match)")]
+        relation: Option<String>,
+    ) -> String {
+        let graph = self.graph();
+        let seed_id = match self.resolve_id(&seed) {
+            Some(id) => id,
+            None => return format!("Node '{seed}' not found."),
+        };
+        let max_depth = depth.unwrap_or(3).max(1).min(6) as usize;
+
+        // BFS transitive closure
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+        let mut depth_map: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+
+        visited.insert(seed_id.clone());
+        queue.push_back(seed_id.clone());
+        depth_map.insert(seed_id, 0);
+
+        while let Some(current) = queue.pop_front() {
+            let current_depth = depth_map[&current];
+            if current_depth >= max_depth {
+                continue;
+            }
+
+            for (neighbor_id, edge) in graph.node_edges(&current) {
+                if let Some(ref filter) = relation {
+                    if !edge
+                        .relation
+                        .to_lowercase()
+                        .contains(&filter.to_lowercase())
+                    {
+                        continue;
+                    }
+                }
+                if visited.insert(neighbor_id.to_string()) {
+                    queue.push_back(neighbor_id.to_string());
+                    depth_map.insert(neighbor_id.to_string(), current_depth + 1);
+                }
+            }
+        }
+
+        let mut out = format!(
+            "# Transitive Closure from '{}'\n\n- Reachable nodes: {}\n- Max depth: {}\n\n",
+            seed,
+            visited.len(),
+            max_depth
+        );
+
+        for depth in 0..=max_depth {
+            let at_depth: Vec<&str> = depth_map
+                .iter()
+                .filter(|(_, d)| **d == depth)
+                .map(|(id, _)| id.as_str())
+                .collect();
+            if at_depth.is_empty() {
+                continue;
+            }
+            out.push_str(&format!("## Depth {}\n", depth));
+            for id in at_depth {
+                if let Some(n) = graph.node_data(id) {
+                    out.push_str(&format!("  - {} (`{}`)\n", n.label, n.id));
+                }
+            }
+            out.push('\n');
+        }
 
         out
     }
