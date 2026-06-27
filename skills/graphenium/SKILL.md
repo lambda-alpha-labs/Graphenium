@@ -145,6 +145,23 @@ gm query "<keywords or question>" [flags]
 | `--graph path/to/graph.json` | Point to a non-default graph file. |
 | `--safe` | Confidence-aware search: prefers paths on `resolved`/`EXTRACTED` edges, excludes `AMBIGUOUS` connections. |
 
+### v0.6.0 composite tools
+
+| MCP Tool | What it returns | When to use |
+|---|---|---|
+| `analyse_symbol(symbol)` | Node info + behavioral connections (calls/uses/inherits) + structural (imports/contains) + trust profile | Single-turn symbol understanding instead of calling get_node + get_neighbors separately |
+| `module_dependencies(mod_a, mod_b)` | Dependency summary: edges from module A to module B grouped by relation | "What does the auth module depend on from the core module?" |
+| `what_changed(snapshot_name)` | Risk-sorted delta: removed symbols, community moves, additions + downstream impact | "What changed since my last snapshot?" |
+
+### v0.6.0 new query parameters
+
+| Parameter | Applies to | Effect |
+|---|---|---|
+| `include_tests=false` (default) | All query tools | Excludes test/spec nodes (replaces `exclude_test_nodes`) |
+| `show_leaves=false` (default) | `summarize_file` | Hides low-degree leaf symbols; hubs always shown |
+| `extracted_only=false` (default) | `get_neighbors` | Only `EXTRACTED` (source-backed) edges — zero heuristic/ambiguous |
+| Trust Profile | All query responses | Appends `N EXTRACTED, N INFERRED, N AMBIGUOUS` summary |
+
 **Examples:**
 
 ```sh

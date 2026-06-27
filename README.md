@@ -321,6 +321,20 @@ v3 read tools, confidence-aware and policy-driven:
 | `graph_info` | Full graph metadata: schema version, project root, build timestamp, languages, counts |
 | `recluster` | Re-run community detection after manual node/edge edits |
 
+v0.6.0 composite and trust tools:
+
+| Tool | Purpose |
+|---|---|
+| `analyse_symbol` | Single-turn composite: resolves a symbol + groups behavioral/structural connections with trust profile |
+| `module_dependencies` | Module-to-module dependency summary between two directory paths |
+| `what_changed` | Risk-sorted delta against a stored snapshot: removed symbols, community moves, additions |
+
+**New query parameters (v0.6.0):**
+- `summarize_file` gains `show_leaves` — default `false` hides low-degree leaf symbols to save tokens; hubs (degree > 5) always shown
+- `query_graph` and all tools: `include_tests` — default `false` excludes test/spec nodes (replaces `exclude_test_nodes`)
+- `get_neighbors` gains `extracted_only` — strict mode filters to only `EXTRACTED` confidence
+- All query responses now include a **Trust Profile** line: `N EXTRACTED, N INFERRED, N AMBIGUOUS`
+
 ### 6. Multi-mode retrieval
 
 Graphenium supports multiple query modes:

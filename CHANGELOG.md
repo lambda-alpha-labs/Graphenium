@@ -2,6 +2,17 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.6.0 (2026-06-27) — Token optimization, composite tools, trust gating
+
+### Added
+- **Degree-grouped truncation**: `summarize_file` now splits hubs (degree > 5) from leaves; leaves hidden by default with `show_leaves=true` to expand. Payloads drop from 30KB to under 3KB for large files.
+- **`include_tests` parameter**: Replaces `exclude_test_nodes` with inverted logic; defaults to `false` so test/spec nodes are excluded by default across `query_graph`, `get_node`, `get_neighbors`, and `god_nodes`.
+- **`extracted_only` strict mode**: Added to `get_neighbors` — filters to only `EXTRACTED` confidence (source-backed ground truth). Zero heuristic/ambiguous edges.
+- **Trust Profile summaries**: Every `query_graph` response now appends a confidence breakdown: `N EXTRACTED, N INFERRED, N AMBIGUOUS` so agents can gauge trust at a glance.
+- **`analyse_symbol` MCP tool**: Single-turn composite analysis — resolves a symbol and groups behavioral connections (calls, uses, inherits) vs structural (imports, contains).
+- **`module_dependencies` MCP tool**: Module-to-module dependency summary between two path fragments.
+- **`what_changed` MCP tool**: Risk-sorted delta against a stored snapshot — shows removed symbols first, then community moves, then additions with downstream impact.
+
 ## v0.5.0 (2026-06-27) — Graph identity, relative paths, demo polish
 
 ### Added
