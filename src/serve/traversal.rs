@@ -5,6 +5,32 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use crate::model::{GrapheniumGraph, Node};
 use crate::ranking::{self, RankedNode};
 
+/// Convert an absolute path to a project-relative path using graph metadata.
+pub fn relative_path(path: &str, project_root: Option<&str>) -> String {
+    let clean_path = path.replace('\\', "/");
+    if let Some(root) = project_root {
+        let clean_root = root.replace('\\', "/");
+        if let Some(stripped) = clean_path.strip_prefix(&clean_root) {
+            return stripped.trim_start_matches('/').to_string();
+        }
+    }
+    clean_path
+}
+
+/// Identify test/benchmark/spec modules by analyzing file path fragments.
+pub fn is_test_like_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/").to_lowercase();
+    normalized.contains("/tests/")
+        || normalized.contains("/test/")
+        || normalized.contains("_test.")
+        || normalized.contains(".test.")
+        || normalized.contains("/spec/")
+        || normalized.contains("/specs/")
+        || normalized.contains("_spec.")
+        || normalized.contains("tests.rs")
+        || normalized.contains("test_bench")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeneratedCodeMode {
     Include,
@@ -71,6 +97,7 @@ pub fn scoped_node_ids(
         exclude_path,
         None,
         GeneratedCodeMode::Include,
+        true,
     )
 }
 
@@ -81,6 +108,7 @@ pub fn filtered_node_ids(
     exclude_path: Option<&str>,
     node_types: Option<&[String]>,
     generated_code_mode: GeneratedCodeMode,
+    include_tests: bool,
 ) -> Option<HashSet<String>> {
     let include = normalize_scope(path_prefix);
     let exclude = normalize_scope(exclude_path);
@@ -90,6 +118,7 @@ pub fn filtered_node_ids(
         && exclude.is_none()
         && node_types.is_empty()
         && generated_code_mode == GeneratedCodeMode::Include
+        && include_tests
     {
         return None;
     }
@@ -99,6 +128,12 @@ pub fn filtered_node_ids(
             .node_ids()
             .filter_map(|id| {
                 let node = graph.node_data(id)?;
+
+                // Block test artifacts if include_tests is false
+                if !include_tests && is_test_like_path(&node.source_file) {
+                    return None;
+                }
+
                 (path_matches_scope(&node.source_file, include.as_deref(), exclude.as_deref())
                     && node_matches_type(node, &node_types)
                     && generated_code_matches(&node.source_file, generated_code_mode))
@@ -447,6 +482,9 @@ pub fn subgraph_to_text_with_match_details(
             continue;
         };
 
+        let root = graph.metadata.project_root.as_deref();
+        let rel_file = relative_path(&node.source_file, root);
+
         let comm_tag = node
             .community
             .map(|c| format!(" [community {c}]"))
@@ -454,7 +492,7 @@ pub fn subgraph_to_text_with_match_details(
 
         let mut entry = format!(
             "## {} ({}{})\nFile: {}\n",
-            node.label, node.file_type, comm_tag, node.source_file
+            node.label, node.file_type, comm_tag, rel_file
         );
         if !node.source_location.is_empty() {
             entry.push_str(&format!("Span: {}\n", node.source_location));
@@ -495,6 +533,8 @@ pub fn subgraph_to_text_with_match_details(
         }
         entry.push('\n');
         out.push_str(&entry);
+
+        displayed += 1;
     }
 
     // Append trust-profile summary for the rendered connections
@@ -542,6 +582,32 @@ fn format_rank_explanation(ranked: &RankedNode) -> String {
     } else {
         format!("ranked seed (score {:.2})", ranked.score)
     }
+}
+
+/// Generate a detailed trust breakdown for nodes along a computed path.
+pub fn format_path_confidence(graph: &GrapheniumGraph, path: &[String]) -> String {
+    let mut details = Vec::new();
+    for window in path.windows(2) {
+        let u = &window[0];
+        let v = &window[1];
+        let edges = graph.edges_between(u, v);
+        if let Some(edge) = edges.first() {
+            let u_label = graph.node_data(u).map(|n| n.label.as_str()).unwrap_or(u);
+            let v_label = graph.node_data(v).map(|n| n.label.as_str()).unwrap_or(v);
+
+            let prov = match (&edge.extractor, &edge.resolution_status) {
+                (Some(ext), Some(stat)) => format!(" [{ext}:{stat}]"),
+                (Some(ext), None) => format!(" [{ext}]"),
+                _ => String::new(),
+            };
+
+            details.push(format!(
+                "  {} --[{} {}]{}--> {}",
+                u_label, edge.relation, edge.confidence, prov, v_label
+            ));
+        }
+    }
+    details.join("\n")
 }
 
 /// Find the shortest path while respecting node scope and relation filters.
@@ -961,8 +1027,15 @@ mod tests {
     fn filtered_node_ids_can_filter_by_node_type() {
         let g = make_graph();
         let allowed = vec!["document".to_string()];
-        let filtered =
-            filtered_node_ids(&g, None, None, Some(&allowed), GeneratedCodeMode::Include).unwrap();
+        let filtered = filtered_node_ids(
+            &g,
+            None,
+            None,
+            Some(&allowed),
+            GeneratedCodeMode::Include,
+            true,
+        )
+        .unwrap();
         assert_eq!(filtered, HashSet::from(["c_baz".to_string()]));
     }
 
@@ -976,12 +1049,13 @@ mod tests {
             "Data/Templates/MainScreen.view.cs",
         ));
 
-        let filtered = filtered_node_ids(&g, None, None, None, GeneratedCodeMode::Exclude).unwrap();
+        let filtered =
+            filtered_node_ids(&g, None, None, None, GeneratedCodeMode::Exclude, true).unwrap();
         assert!(!filtered.contains("template_node"));
         assert!(filtered.contains("a_foo"));
 
         let generated_only =
-            filtered_node_ids(&g, None, None, None, GeneratedCodeMode::Only).unwrap();
+            filtered_node_ids(&g, None, None, None, GeneratedCodeMode::Only, true).unwrap();
         assert_eq!(generated_only, HashSet::from(["template_node".to_string()]));
     }
 

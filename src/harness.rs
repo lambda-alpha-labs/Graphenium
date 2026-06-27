@@ -29,7 +29,7 @@ pub fn check_resolution_quality(
     let mut result = TrustCheckResult::default();
     let mut details = Vec::new();
 
-    // Resolution coverage
+    // Dynamically scale metrics based on graph capability
     let import_pct = if report.total_import_edges > 0 {
         (report.resolved_imports as f64 / report.total_import_edges as f64) * 100.0
     } else {
@@ -42,10 +42,20 @@ pub fn check_resolution_quality(
         100.0
     };
 
-    // Combined resolution percentage (weighted average)
-    let total_relevant =
-        report.total_import_edges + report.total_call_edges + report.total_method_edges;
-    let total_resolved = report.resolved_imports + report.resolved_calls + report.resolved_methods;
+    // Combined resolution, scaled for AST-only vs semantic
+    let (total_relevant, total_resolved) = if graph.is_ast_only() {
+        // AST-only: only imports and methods have resolution data
+        let relevant = report.total_import_edges + report.total_method_edges;
+        let resolved = report.resolved_imports + report.resolved_methods;
+        (relevant, resolved)
+    } else {
+        // Semantic: includes call resolution
+        let relevant =
+            report.total_import_edges + report.total_call_edges + report.total_method_edges;
+        let resolved = report.resolved_imports + report.resolved_calls + report.resolved_methods;
+        (relevant, resolved)
+    };
+
     let resolution_pct = if total_relevant > 0 {
         (total_resolved as f64 / total_relevant as f64) * 100.0
     } else {
@@ -57,10 +67,18 @@ pub fn check_resolution_quality(
         "Import resolution: {:.0}% ({}/{})",
         import_pct, report.resolved_imports, report.total_import_edges
     ));
-    details.push(format!(
-        "Call resolution: {:.0}% ({}/{})",
-        call_pct, report.resolved_calls, report.total_call_edges
-    ));
+
+    if !graph.is_ast_only() {
+        details.push(format!(
+            "Call resolution: {:.0}% ({}/{})",
+            call_pct, report.resolved_calls, report.total_call_edges
+        ));
+    } else {
+        details.push(
+            "Call resolution: [SKIPPED] (AST-only — run with semantic pass for call resolution)"
+                .to_string(),
+        );
+    }
     details.push(format!(
         "Combined resolution: {:.0}% (threshold: {:.0}%)",
         resolution_pct, min_resolution_pct

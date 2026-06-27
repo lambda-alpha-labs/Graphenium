@@ -105,6 +105,7 @@ impl GrapheniumServer {
         exclude_path: Option<&str>,
         node_types: Option<&[String]>,
         generated_code_mode: traversal::GeneratedCodeMode,
+        include_tests: bool,
     ) -> Option<HashSet<String>> {
         traversal::filtered_node_ids(
             &self.graph(),
@@ -112,6 +113,7 @@ impl GrapheniumServer {
             exclude_path,
             node_types,
             generated_code_mode,
+            include_tests,
         )
     }
 
@@ -697,6 +699,7 @@ impl GrapheniumServer {
             exclude_path.as_deref(),
             node_types.as_deref(),
             generated_code_mode,
+            true,
         );
         let include_relations = traversal::normalize_filters(include_relations.as_deref());
         let mut exclude_relations = traversal::normalize_filters(exclude_relations.as_deref());
@@ -1031,6 +1034,7 @@ impl GrapheniumServer {
             exclude_path.as_deref(),
             node_types.as_deref(),
             generated_code_mode,
+            true,
         );
 
         if scoped.as_ref().is_some_and(HashSet::is_empty) {
@@ -1121,6 +1125,7 @@ impl GrapheniumServer {
             exclude_path.as_deref(),
             node_types.as_deref(),
             generated_code_mode,
+            true,
         );
         let in_scope = |id: &str| scoped.as_ref().is_none_or(|allowed| allowed.contains(id));
 
@@ -1303,6 +1308,7 @@ impl GrapheniumServer {
             exclude_path.as_deref(),
             node_types.as_deref(),
             generated_code_mode,
+            true,
         );
         if scoped.as_ref().is_some_and(HashSet::is_empty) {
             return Self::empty_scope_message(true);
@@ -1416,6 +1422,7 @@ impl GrapheniumServer {
             exclude_path.as_deref(),
             node_types.as_deref(),
             generated_code_mode,
+            true,
         );
         let include_relations = traversal::normalize_filters(include_relations.as_deref());
         let exclude_relations = traversal::normalize_filters(exclude_relations.as_deref());
