@@ -2,6 +2,27 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.4.0 (2026-06-27) — Scale Foundation + Trust UX
+
+### Added
+- **Graph Invariant Checker**: `graph_integrity.rs` — validates `id_index` consistency, catches dangling edges and stale indices after incremental updates
+- **`rebuild_id_index()`**: Fixes petgraph `NodeIndex` invalidation after node deletion — prevents stale index corruption in incremental builds
+- **`quality.json`**: Structured quality report generated alongside `graph.json` — includes resolution ratio, ambiguous edges, per-file unresolved refs, recommended commands
+- **Benchmark Harness**: `scripts/bench.sh` — measures cold index, graph load, and query latency with JSON output
+- **Manifest Dependency Tracking**: `FileMeta` stores per-file `imports` and `imported_by` for cache invalidation
+- **`invalidation_set()`**: Computes downstream files needing re-extraction when dependencies change
+- **MCP Pre-serialization Truncation**: Community member listing capped at 200 with overflow notes
+- **TS/JS Extractor Upgrade**: ES module import/export handler (named, default, namespace, side-effect) + CommonJS `require()` support
+- **CI Lifecycle**: Build and test targets link to CI jobs via `runs_in` edges
+
+### Fixed
+- Petgraph `id_index` invalidation: `rebuild_id_index()` called after batched node deletion
+- MCP `summarize_community` now caps output at 200 members to prevent 293KB artifacts
+- Manifest now persists `file_meta` alongside legacy `entries` for backward compatibility
+
+### Performance
+- 342 tests across all modules (was 340)
+
 ## v0.3.1 (2026-06-27) — Usability, Bug Fixes, and Quality-of-Life
 
 ### Added
