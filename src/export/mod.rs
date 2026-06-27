@@ -1,6 +1,7 @@
 pub mod html;
 pub mod html_template;
 pub mod json;
+pub use json::generate_quality_report;
 
 use std::fs;
 use std::path::{Path, PathBuf};

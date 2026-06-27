@@ -140,6 +140,29 @@ impl GrapheniumGraph {
         true
     }
 
+    /// Rebuild the id_index from the current petgraph state.
+    /// Must be called after remove_node operations since petgraph may shift indices.
+    pub fn rebuild_id_index(&mut self) {
+        self.id_index = self.inner
+            .node_indices()
+            .map(|idx| (self.inner[idx].id.clone(), idx))
+            .collect();
+    }
+
+    /// Validate id_index consistency. Returns true if every entry matches.
+    pub fn validate_id_index(&self) -> bool {
+        for (id, idx) in &self.id_index {
+            if let Some(node) = self.inner.node_weight(*idx) {
+                if node.id != *id {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn edge_count(&self) -> usize {
         self.inner.edge_count()
     }

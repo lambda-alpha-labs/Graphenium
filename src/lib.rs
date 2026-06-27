@@ -40,6 +40,7 @@ pub mod embed;
 pub mod error;
 pub mod export;
 pub mod extract;
+pub mod graph_integrity;
 pub mod harness;
 pub mod model;
 pub mod policy;

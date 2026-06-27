@@ -749,6 +749,13 @@ async fn cmd_run(
         eprintln!("[graphenium] Wrote: {}", paths.html.display());
     }
 
+    // ── 8b. Quality report ─────────────────────────────────────────────────
+    let quality_path = out_dir.join("quality.json");
+    let quality = export::json::generate_quality_report(&graph);
+    let quality_json = serde_json::to_string_pretty(&quality)?;
+    std::fs::write(&quality_path, &quality_json)?;
+    eprintln!("[graphenium] Wrote: {}", quality_path.display());
+
     // ── 9. Report ──────────────────────────────────────────────────────────────
     if !no_report {
         let report_path = report::write_report(

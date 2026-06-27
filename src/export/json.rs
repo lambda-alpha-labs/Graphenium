@@ -178,6 +178,120 @@ pub fn load_graph(path: &Path) -> crate::Result<GrapheniumGraph> {
     Ok(graph)
 }
 
+// ── Quality report ─────────────────────────────────────────────────────────
+
+/// Generate a structured quality report for the graph.
+pub fn generate_quality_report(graph: &GrapheniumGraph) -> serde_json::Value {
+    let mut by_file: Vec<serde_json::Value> = Vec::new();
+    let mut total_resolved = 0usize;
+    let mut total_unresolved = 0usize;
+    let mut total_extracted = 0usize;
+    let mut total_inferred = 0usize;
+    let mut total_ambiguous = 0usize;
+    let mut total_imports = 0usize;
+
+    // Per-file stats
+    let mut file_stats: std::collections::BTreeMap<String, (usize, usize, usize)> =
+        std::collections::BTreeMap::new();
+    for edge in graph.edges_iter() {
+        let stats = file_stats.entry(edge.source_file.clone()).or_default();
+        stats.0 += 1; // total edges
+        match edge.confidence {
+            crate::model::Confidence::Extracted => total_extracted += 1,
+            crate::model::Confidence::Inferred => total_inferred += 1,
+            crate::model::Confidence::Ambiguous => total_ambiguous += 1,
+        }
+        if edge.relation == "imports" {
+            total_imports += 1;
+            match edge.resolution_status.as_deref() {
+                Some("resolved") => total_resolved += 1,
+                Some("unresolved") => {
+                    total_unresolved += 1;
+                    stats.1 += 1;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    for (file, (n, unresolved, _)) in &file_stats {
+        if *unresolved > 0 {
+            by_file.push(serde_json::json!({
+                "file": file,
+                "total_edges": n,
+                "unresolved_refs": unresolved,
+            }));
+        }
+    }
+    by_file.sort_by(|a, b| b["unresolved_refs"].as_u64().cmp(&a["unresolved_refs"].as_u64()));
+    by_file.truncate(20);
+
+    let resolution_ratio = if total_imports > 0 {
+        total_resolved as f64 / total_imports as f64
+    } else {
+        1.0
+    };
+
+    let mut recommended_commands = Vec::new();
+    if total_unresolved > 0 {
+        recommended_commands.push("gm doctor --resolution".to_string());
+    }
+    if total_ambiguous > 0 {
+        recommended_commands.push("gm check".to_string());
+    }
+
+    serde_json::json!({
+        "schema_version": "quality.v1",
+        "generated_at": chrono_or_fallback(),
+        "graph_schema_version": graph.metadata.schema_version,
+        "summary": {
+            "nodes": graph.node_count(),
+            "edges": graph.edge_count(),
+            "resolved_references": total_resolved,
+            "unresolved_references": total_unresolved,
+            "resolution_ratio": (resolution_ratio * 1000.0).round() / 1000.0,
+            "extracted_edges": total_extracted,
+            "inferred_edges": total_inferred,
+            "ambiguous_edges": total_ambiguous,
+        },
+        "by_file": by_file,
+        "by_relation": [],
+        "top_risks": [],
+        "recommended_commands": recommended_commands,
+    })
+}
+
+/// Get an ISO timestamp without the chrono crate dependency.
+fn chrono_or_fallback() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = now.as_secs();
+    let days = secs / 86400;
+    let time = secs % 86400;
+    let h = time / 3600;
+    let m = (time % 3600) / 60;
+    let s = time % 60;
+    let mut y = 1970i64;
+    let mut rem = days as i64;
+    loop {
+        let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+        let dim = if leap { 366 } else { 365 };
+        if rem < dim { break; }
+        rem -= dim;
+        y += 1;
+    }
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let md = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut mo = 0usize;
+    for &d in &md {
+        if rem < d { break; }
+        rem -= d;
+        mo += 1;
+    }
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, mo + 1, rem + 1, h, m, s)
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
