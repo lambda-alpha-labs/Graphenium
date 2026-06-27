@@ -2,6 +2,36 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.3.1 (2026-06-27) — Usability, Bug Fixes, and Quality-of-Life
+
+### Added
+- `gm run --no-report` flag to skip GRAPH_REPORT.md generation
+- `gm run --exclude-dirs` flag to filter directories without `.grapheniumignore`
+- `gm serve --watch` flag for auto-reloading MCP graph on file changes
+- `graph_info` MCP tool: returns full graph metadata (schema, version, project root, counts)
+- `recluster` MCP tool: re-run community detection after manual edits
+- `min_degree` filter on `query_graph` and `summarize_file` MCP tools
+- `exclude_test_nodes` parameter on `query_graph` MCP tool
+- `max_neighbors` parameter on `get_neighbors` MCP tool
+- Relative paths in `get_node` output (strips project root prefix)
+- Dynamic dominator iteration limit scaled by subgraph size
+- Graph provenance metadata displayed in `graph_stats` output
+
+### Fixed
+- Label disambiguation: `get_node` warns when label matches multiple nodes
+- Import resolver normalizes edge targets for mixed-case matching
+- `add_node`/`add_edge`/`remove_edge` now return total node/edge counts
+- `get_community` `include_members` defaults to `false` (prevents large artifacts)
+- `query_graph` truncation shows "showing X of Y matches" with guidance
+- AST-only tuning banner suppressed (filter message already conveys info)
+- `gm check` handles AST-only graphs without resolver annotations
+- `gm setup codewhale` outputs correct TOML config format
+- Snapshot create/list commands implemented (not stubs)
+- `add_edge` persist round-trip test added to prevent regression
+
+### Performance
+- 340 tests across all modules (was 339)
+
 ## v0.3.0 (2026-06-25) — Trust Core, Repository Verification, Change Safety
 
 ### Added
