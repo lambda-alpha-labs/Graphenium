@@ -2,6 +2,12 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.4.1 (2026-06-27) — Patch: incremental rebuild fixes
+
+### Fixed
+- **Critical data corruption in incremental rebuilds:** `replace_file_extraction` now calls `rebuild_id_index()` after batch-removing stale nodes. Without this, petgraph's swap-remove shifts node indices, silently corrupting lookups in the `id_index`.
+- **Disconnected manifest invalidation:** `try_incremental` now loads the manifest and uses `invalidation_set()` to include downstream importers in the re-extraction set during watch-mode rebuilds.
+
 ## v0.4.0 (2026-06-27) — Scale Foundation + Trust UX
 
 ### Added
