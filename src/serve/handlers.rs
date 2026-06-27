@@ -669,13 +669,15 @@ impl GrapheniumServer {
         )]
         ast_only_tuning: Option<bool>,
         #[tool(param)]
-        #[schemars(description = "Exclude test/spec nodes from results (default false)")]
-        exclude_test_nodes: Option<bool>,
+        #[schemars(
+            description = "Include test/spec nodes in results. Default false (test/spec excluded)."
+        )]
+        include_tests: Option<bool>,
         #[tool(param)]
         #[schemars(description = "Minimum node degree to include (filters low-degree noise)")]
         min_degree: Option<i32>,
     ) -> String {
-        let exclude_tests = exclude_test_nodes.unwrap_or(false);
+        let include_tests = include_tests.unwrap_or(false);
         let min_degree_val = min_degree.unwrap_or(0).max(0) as usize;
         let depth = (depth.unwrap_or(3) as usize).clamp(1, 6);
         let budget = (budget.unwrap_or(2000) as usize).max(200);
@@ -708,7 +710,7 @@ impl GrapheniumServer {
 
         let graph = self.graph();
         let ranked = traversal::score_nodes_detailed_in_scope(&graph, &keywords, scoped.as_ref());
-        let ranked: Vec<_> = if exclude_tests {
+        let ranked: Vec<_> = if !include_tests {
             ranked
                 .into_iter()
                 .filter(|node| {
@@ -3267,7 +3269,7 @@ mod tests {
             None,
             None,
             None,
-            None,
+            Some(true),
             None,
         );
         assert!(result.contains("TestHelper"));
