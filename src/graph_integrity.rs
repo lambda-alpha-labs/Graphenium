@@ -24,14 +24,26 @@ impl IntegrityReport {
 
     pub fn format(&self) -> String {
         if self.is_healthy() && self.passed {
-            return format!("PASSED ({} nodes, {} edges).", self.total_nodes, self.total_edges);
+            return format!(
+                "PASSED ({} nodes, {} edges).",
+                self.total_nodes, self.total_edges
+            );
         }
-        let mut out = format!("ISSUES ({} nodes, {} edges)\n", self.total_nodes, self.total_edges);
+        let mut out = format!(
+            "ISSUES ({} nodes, {} edges)\n",
+            self.total_nodes, self.total_edges
+        );
         if !self.id_index_mismatches.is_empty() {
-            out.push_str(&format!("  id_index mismatches: {}\n", self.id_index_mismatches.len()));
+            out.push_str(&format!(
+                "  id_index mismatches: {}\n",
+                self.id_index_mismatches.len()
+            ));
         }
         if !self.dangling_edges.is_empty() {
-            out.push_str(&format!("  dangling edges: {}\n", self.dangling_edges.len()));
+            out.push_str(&format!(
+                "  dangling edges: {}\n",
+                self.dangling_edges.len()
+            ));
         }
         out
     }
@@ -49,7 +61,8 @@ pub fn check_invariants(graph: &GrapheniumGraph) -> IntegrityReport {
         if let Some(node) = graph.inner.node_weight(*idx) {
             if node.id != *id {
                 report.id_index_mismatches.push(format!(
-                    "id_index[{id}] -> NodeIndex({:?}) has id '{}'", idx, node.id
+                    "id_index[{id}] -> NodeIndex({:?}) has id '{}'",
+                    idx, node.id
                 ));
             }
         }
@@ -57,10 +70,18 @@ pub fn check_invariants(graph: &GrapheniumGraph) -> IntegrityReport {
 
     for edge in graph.edges_iter() {
         if !graph.id_index.contains_key(&edge.source) {
-            report.dangling_edges.push((edge.source.clone(), edge.target.clone(), edge.relation.clone()));
+            report.dangling_edges.push((
+                edge.source.clone(),
+                edge.target.clone(),
+                edge.relation.clone(),
+            ));
         }
         if !graph.id_index.contains_key(&edge.target) {
-            report.dangling_edges.push((edge.source.clone(), edge.target.clone(), edge.relation.clone()));
+            report.dangling_edges.push((
+                edge.source.clone(),
+                edge.target.clone(),
+                edge.relation.clone(),
+            ));
         }
     }
 

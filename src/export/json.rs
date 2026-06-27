@@ -223,7 +223,11 @@ pub fn generate_quality_report(graph: &GrapheniumGraph) -> serde_json::Value {
             }));
         }
     }
-    by_file.sort_by(|a, b| b["unresolved_refs"].as_u64().cmp(&a["unresolved_refs"].as_u64()));
+    by_file.sort_by(|a, b| {
+        b["unresolved_refs"]
+            .as_u64()
+            .cmp(&a["unresolved_refs"].as_u64())
+    });
     by_file.truncate(20);
 
     let resolution_ratio = if total_imports > 0 {
@@ -277,19 +281,44 @@ fn chrono_or_fallback() -> String {
     loop {
         let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
         let dim = if leap { 366 } else { 365 };
-        if rem < dim { break; }
+        if rem < dim {
+            break;
+        }
         rem -= dim;
         y += 1;
     }
     let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
-    let md = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let md = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut mo = 0usize;
     for &d in &md {
-        if rem < d { break; }
+        if rem < d {
+            break;
+        }
         rem -= d;
         mo += 1;
     }
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, mo + 1, rem + 1, h, m, s)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        y,
+        mo + 1,
+        rem + 1,
+        h,
+        m,
+        s
+    )
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

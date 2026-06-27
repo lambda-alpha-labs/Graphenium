@@ -143,7 +143,8 @@ impl GrapheniumGraph {
     /// Rebuild the id_index from the current petgraph state.
     /// Must be called after remove_node operations since petgraph may shift indices.
     pub fn rebuild_id_index(&mut self) {
-        self.id_index = self.inner
+        self.id_index = self
+            .inner
             .node_indices()
             .map(|idx| (self.inner[idx].id.clone(), idx))
             .collect();

@@ -259,13 +259,24 @@ impl GrapheniumServer {
 
         if include_members {
             out.push_str("\n## Members\n");
-            for (node, degree) in representative_nodes {
+            let member_cap = 200;
+            let total_members = representative_nodes.len();
+            let display_limit = member_cap.min(total_members);
+            for (node, degree) in representative_nodes.iter().take(display_limit) {
                 out.push_str(&format!(
                     "- **{}** ({}, degree={}) — {}\n",
                     node.display_label(),
                     node.file_type,
                     degree,
                     node.source_file
+                ));
+            }
+            if total_members > member_cap {
+                out.push_str(&format!(
+                    "\n*and {} more members (showing {} of {})*\n",
+                    total_members - member_cap,
+                    member_cap,
+                    total_members
                 ));
             }
         }
@@ -667,6 +678,8 @@ impl GrapheniumServer {
         let depth = (depth.unwrap_or(3) as usize).clamp(1, 6);
         let budget = (budget.unwrap_or(2000) as usize).max(200);
         let use_dfs = dfs.unwrap_or(false);
+        // Budget-enforced traversal cap: limits nodes visited during BFS/DFS,
+        // preventing unbounded memory use before output formatting.
         let max_nodes = (budget / 40).max(5).min(200);
         let ast_only_tuning = self.ast_only_tuning_enabled(ast_only_tuning);
         let generated_code_mode = match self

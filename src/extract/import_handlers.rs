@@ -142,35 +142,117 @@ pub fn python_import(
 
 // ── JavaScript / TypeScript ───────────────────────────────────────────────────
 
-/// JS/TS: `import X from "module"`, `import { X } from "module"`
+/// JS/TS: ES module imports and exports (all forms with a `source` field).
 ///
-/// The module specifier is a string literal; we strip the quotes and use the
-/// bare path as the imported identifier.
-pub fn js_import(
+/// Handles:
+/// - `import X from "module"`           (default import)
+/// - `import { X } from "module"`       (named import)
+/// - `import * as X from "module"`      (namespace import)
+/// - `import "module"`                  (side-effect import)
+/// - `export { X } from "module"`       (named re-export)
+/// - `export * from "module"`           (star re-export)
+///
+/// Only processes `import_statement` and `export_statement` nodes that have
+/// a `source` child field (the module specifier string).
+pub fn es_import_handler(
     node: tree_sitter::Node<'_>,
     source: &[u8],
     file_path: &str,
     file_node_id: &str,
     result: &mut ExtractionResult,
 ) {
-    if node.kind() != "import_statement" {
+    let src = match node.kind() {
+        "import_statement" | "export_statement" => node.child_by_field_name("source"),
+        _ => None,
+    };
+    let Some(src) = src else {
+        return;
+    };
+    let Some(raw) = text(src, source) else {
+        return;
+    };
+    // Strip surrounding quotes
+    let module = raw.trim_matches(|c| c == '"' || c == '\'' || c == '`');
+    // Normalise path: take the last component, strip extension
+    let stem = module
+        .rsplit('/')
+        .next()
+        .unwrap_or(module)
+        .split('.')
+        .next()
+        .unwrap_or(module);
+    emit_import(file_node_id, stem, file_path, result);
+}
+
+/// JS/TS: CommonJS `require("module")` calls.
+///
+/// Matches `call_expression` nodes whose function name is `"require"`.
+/// Extracts the first string argument as the imported module path.
+pub fn cjs_require_handler(
+    node: tree_sitter::Node<'_>,
+    source: &[u8],
+    file_path: &str,
+    file_node_id: &str,
+    result: &mut ExtractionResult,
+) {
+    if node.kind() != "call_expression" {
         return;
     }
-    // The `source` field holds the string_literal
-    if let Some(src) = node.child_by_field_name("source") {
-        if let Some(raw) = text(src, source) {
-            // strip surrounding quotes
-            let module = raw.trim_matches(|c| c == '"' || c == '\'' || c == '`');
-            // Normalise path: take the last component, strip extension
-            let stem = module
-                .rsplit('/')
-                .next()
-                .unwrap_or(module)
-                .split('.')
-                .next()
-                .unwrap_or(module);
-            emit_import(file_node_id, stem, file_path, result);
+    // Check the `function` field is an identifier named "require"
+    let func_node = match node.child_by_field_name("function") {
+        Some(f) => f,
+        None => return,
+    };
+    if text(func_node, source) != Some("require") {
+        return;
+    }
+    // Get the arguments node
+    let args_node = match node.child_by_field_name("arguments") {
+        Some(a) => a,
+        None => return,
+    };
+    // Find the first string/template argument
+    for i in 0..args_node.named_child_count() {
+        if let Some(arg) = args_node.named_child(i) {
+            if matches!(arg.kind(), "string" | "template_string") {
+                if let Some(raw) = text(arg, source) {
+                    let module = raw.trim_matches(|c| c == '"' || c == '\'' || c == '`');
+                    let stem = module
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(module)
+                        .split('.')
+                        .next()
+                        .unwrap_or(module);
+                    emit_import(file_node_id, stem, file_path, result);
+                }
+                break;
+            }
         }
+    }
+}
+
+/// Combined JS/TS import handler that dispatches to the appropriate sub-handler
+/// based on node kind.
+///
+/// This is the function registered in `LanguageConfig::import_handler`.
+/// It routes to `es_import_handler` for `import_statement`/`export_statement`
+/// and to `cjs_require_handler` for `call_expression` (`require(...)`).
+pub fn js_import_handler(
+    node: tree_sitter::Node<'_>,
+    source: &[u8],
+    file_path: &str,
+    file_node_id: &str,
+    result: &mut ExtractionResult,
+) {
+    match node.kind() {
+        "import_statement" | "export_statement" => {
+            es_import_handler(node, source, file_path, file_node_id, result);
+        }
+        "call_expression" => {
+            cjs_require_handler(node, source, file_path, file_node_id, result);
+        }
+        _ => {}
     }
 }
 

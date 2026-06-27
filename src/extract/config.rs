@@ -90,7 +90,7 @@ fn python() -> LanguageConfig {
 
 #[cfg(feature = "lang-js")]
 fn javascript() -> LanguageConfig {
-    use super::import_handlers::js_import;
+    use super::import_handlers::js_import_handler;
     LanguageConfig {
         language: tree_sitter_javascript::LANGUAGE.into(),
         class_kinds: &["class_declaration", "class_expression"],
@@ -99,16 +99,16 @@ fn javascript() -> LanguageConfig {
             "function_expression",
             "method_definition",
         ],
-        import_kinds: &["import_statement"],
+        import_kinds: &["import_statement", "export_statement", "call_expression"],
         call_kinds: &["call_expression"],
         name_field: "name",
-        import_handler: Some(js_import),
+        import_handler: Some(js_import_handler),
     }
 }
 
 #[cfg(feature = "lang-ts")]
 fn typescript(tsx: bool) -> LanguageConfig {
-    use super::import_handlers::js_import; // TS imports use the same syntax
+    use super::import_handlers::js_import_handler; // TS imports use the same syntax
     let language = if tsx {
         tree_sitter_typescript::LANGUAGE_TSX.into()
     } else {
@@ -123,10 +123,10 @@ fn typescript(tsx: bool) -> LanguageConfig {
             "method_definition",
             "abstract_method_signature",
         ],
-        import_kinds: &["import_statement"],
+        import_kinds: &["import_statement", "export_statement", "call_expression"],
         call_kinds: &["call_expression"],
         name_field: "name",
-        import_handler: Some(js_import),
+        import_handler: Some(js_import_handler),
     }
 }
 
