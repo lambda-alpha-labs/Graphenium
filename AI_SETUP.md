@@ -249,6 +249,16 @@ For CI integration, run `gm check` to enforce trust quality gates:
 gm check --min-resolution 80 --max-ambiguous 10
 ```
 
+## Auto-Reload (v0.3.1)
+
+For a live workflow, start the MCP server with `--watch` to auto-reload when the graph file changes:
+
+```sh
+gm serve --graph graphenium-out/graph.json --watch
+```
+
+This watches the graph file via notify and reloads it into the running server whenever `gm run` writes a new graph.
+
 ## Error recovery
 
 | Symptom | Likely cause | Action |
