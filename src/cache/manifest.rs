@@ -11,7 +11,7 @@
 /// 4. Call `update(path)` for every file that was (re-)extracted successfully.
 /// 5. Call `prune(existing)` to remove stale entries.
 /// 6. Save the manifest back to disk.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -19,10 +19,26 @@ use serde::{Deserialize, Serialize};
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
+/// Per-file metadata for dependency tracking.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FileMeta {
+    /// Last modification time in UNIX seconds.
+    pub mtime: u64,
+    /// Files this file directly imports (normalized paths).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub imports: Vec<String>,
+    /// Files that directly import this file (normalized paths).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub imported_by: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Manifest {
-    /// `normalized_path → mtime_unix_secs`
+    /// `normalized_path → mtime_unix_secs` (legacy format, kept for compat)
     entries: HashMap<String, u64>,
+    /// `normalized_path → FileMeta` with import tracking (v0.4.0+)
+    #[serde(default)]
+    pub file_meta: HashMap<String, FileMeta>,
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
@@ -55,31 +71,75 @@ impl Manifest {
 
     /// Returns `true` if the file has changed since the manifest was last
     /// updated, or if the file is not yet tracked.
-    ///
-    /// A file that cannot be stat'd (e.g. deleted) is treated as changed so
-    /// the caller can decide what to do with it.
     pub fn is_changed(&self, path: &Path) -> bool {
         let key = normalize(path);
-        match self.entries.get(&key) {
-            Some(&recorded) => mtime_secs(path).map_or(true, |t| t != recorded),
-            None => true, // new file
+        match self.file_meta.get(&key) {
+            Some(meta) => mtime_secs(path).map_or(true, |t| t != meta.mtime),
+            None => {
+                // backward compat: check legacy entries
+                self.entries.get(&key).map_or(true, |&recorded| {
+                    mtime_secs(path).map_or(true, |t| t != recorded)
+                })
+            }
         }
     }
 
-    /// Record the current mtime for `path`.  Call this after a successful
-    /// extraction so the next run skips the file if it hasn't changed.
+    /// Record the current mtime for `path`.
     pub fn update(&mut self, path: &Path) {
         if let Some(t) = mtime_secs(path) {
-            self.entries.insert(normalize(path), t);
+            let key = normalize(path);
+            self.entries.insert(key.clone(), t);
+            self.file_meta.entry(key).or_default().mtime = t;
         }
     }
 
-    /// Remove entries whose paths are not in `existing`.  Keeps the manifest
-    /// from growing unboundedly when files are deleted from the corpus.
+    /// Set the imports for a file. Used by the extraction pipeline to record
+    /// which files this file depends on.
+    pub fn set_imports(&mut self, path: &Path, imports: Vec<String>) {
+        let key = normalize(path);
+        if let Some(meta) = self.file_meta.get_mut(&key) {
+            meta.imports = imports.clone();
+        } else {
+            self.file_meta.insert(
+                key.clone(),
+                FileMeta {
+                    mtime: 0,
+                    imports: imports.clone(),
+                    imported_by: Vec::new(),
+                },
+            );
+        }
+        for imp in &imports {
+            self.file_meta
+                .entry(imp.clone())
+                .or_default()
+                .imported_by
+                .push(key.clone());
+        }
+    }
+
+    /// Given a changed file, return the set of files that need re-extraction:
+    /// the changed file itself plus any files that directly import it.
+    pub fn invalidation_set(&self, changed: &[PathBuf]) -> HashSet<String> {
+        let mut result: HashSet<String> = HashSet::new();
+        for path in changed {
+            let key = normalize(path);
+            result.insert(key.clone());
+            // Also invalidate direct importers
+            if let Some(meta) = self.file_meta.get(&key) {
+                for importer in &meta.imported_by {
+                    result.insert(importer.clone());
+                }
+            }
+        }
+        result
+    }
+
+    /// Remove entries whose paths are not in `existing`.
     pub fn prune(&mut self, existing: &[PathBuf]) {
-        let keys: std::collections::HashSet<String> =
-            existing.iter().map(|p| normalize(p)).collect();
+        let keys: HashSet<String> = existing.iter().map(|p| normalize(p)).collect();
         self.entries.retain(|k, _| keys.contains(k));
+        self.file_meta.retain(|k, _| keys.contains(k));
     }
 
     /// Number of entries currently tracked.
@@ -194,8 +254,10 @@ mod tests {
         let p = write_file(tmp.path(), "a.py", b"v1");
         let mut m = Manifest::new();
         m.update(&p);
-        // Record a deliberately wrong old timestamp
-        m.entries.insert(normalize(&p), 0);
+        // Record a deliberately wrong old mtime in file_meta
+        if let Some(meta) = m.file_meta.get_mut(&normalize(&p)) {
+            meta.mtime = 0;
+        }
         assert!(m.is_changed(&p)); // stale entry → changed
 
         // Re-update with correct mtime
