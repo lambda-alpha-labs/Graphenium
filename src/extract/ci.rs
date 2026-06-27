@@ -79,6 +79,29 @@ pub fn ci_targets_to_extraction(targets: &[CiTarget], source_file: &str) -> Extr
             source_file,
         ));
 
+        // Link build/test targets to CI jobs via runs_in
+        for built in &target.built_files {
+            let built_id = format!("build_{}", built.replace('/', "_").replace('.', "_"));
+            result
+                .nodes
+                .push(Node::new(&built_id, built, FileType::Code, source_file));
+            result
+                .edges
+                .push(Edge::extracted(&built_id, &node_id, "runs_in", source_file));
+        }
+        for tested in &target.tested_files {
+            let tested_id = format!("tested_{}", tested.replace('/', "_").replace('.', "_"));
+            result
+                .nodes
+                .push(Node::new(&tested_id, tested, FileType::Code, source_file));
+            result.edges.push(Edge::extracted(
+                &tested_id,
+                &node_id,
+                "runs_in",
+                source_file,
+            ));
+        }
+
         // Link to tested files as "tests" edges
         for tested in &target.tested_files {
             let tested_id = format!("tested_{}", tested.replace('/', "_").replace('.', "_"));
