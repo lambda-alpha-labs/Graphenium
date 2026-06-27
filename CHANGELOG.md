@@ -2,6 +2,20 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.8.0 (2026-06-27) — Diagnostics, init, auto-watch, transitive direction
+
+### Added
+- **`gm doctor --json`**: Structured JSON diagnostics with binary, graph, quality, and API key status
+- **`gm init`**: Workspace initializer — creates `.grapheniumignore` with sensible defaults for Rust, Python, Node.js
+- **Auto-watch by default**: `gm serve` now automatically watches the graph file for changes and reloads — no more manual `reload_graph` calls
+- **`query_transitive` direction param**: Support `forward` (outgoing edges), `reverse` (incoming), or `both` for dependency/impact analysis
+- **Budget estimation**: Truncation messages now estimate remaining characters needed, helping agents calibrate their budget
+
+### Fixed
+- **AST-only policy gates**: `MinCallResolution` policy now auto-passes for AST-only graphs with clear `[SKIPPED]` message
+- **`is_test_like_path` patterns**: Added `_test.rs` and `_tests.rs` to test exclusion patterns
+- **Relative paths**: `analyse_symbol` and `module_dependencies` now use project-root-relative paths
+
 ## v0.7.0 (2026-06-27) — Path normalization, trust scaling, transitive queries
 
 ### Added

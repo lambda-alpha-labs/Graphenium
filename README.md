@@ -333,7 +333,7 @@ v0.7.0:
 
 | Tool | Purpose |
 |---|---|
-| `query_transitive` | BFS transitive closure from a seed symbol — all reachable nodes with depth control and relation filtering |
+| `query_transitive` | BFS transitive closure from a seed symbol — all reachable nodes with depth control, direction (forward/reverse/both), and relation filtering |
 
 **Other v0.7.0 improvements:**
 - `shortest_path` output now includes per-hop **Confidence breakdown** via `format_path_confidence` (relation, confidence, provenance for each step)
@@ -555,6 +555,22 @@ Features: `lang-python`, `lang-js`, `lang-ts`, `lang-rust`, `lang-go`,
 
 ## Commands
 
+### `gm init`
+
+Initialize a Graphenium workspace with a default `.grapheniumignore` file.
+
+```text
+gm init [PATH]
+```
+
+```sh
+# Initialize the current directory
+gm init
+
+# Initialize a specific project directory
+gm init ~/projects/my-repo
+```
+
 ### `gm run`
 
 Run the full analysis pipeline on a directory.
@@ -649,13 +665,15 @@ graph trust metrics.
 Use `--schema` to dump the full graph schema (node kinds, edge kinds,
 confidence levels, and provenance metadata). Use `--resolution` to generate a
 detailed resolution-quality report covering resolved vs unresolved references.
-Use `--repository` for repository metadata summary.
+Use `--repository` for repository metadata summary. Use `--json` for
+structured JSON output (machine-readable, suitable for IDE extensions).
 
 ```text
 gm doctor [--graph PATH]
 gm doctor --schema              # Dump graph schema
 gm doctor --resolution          # Resolution quality diagnostics
 gm doctor --repository          # Repository metadata summary
+gm doctor --json                # Machine-readable JSON output
 ```
 
 ### `gm check`

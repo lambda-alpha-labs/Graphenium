@@ -149,7 +149,7 @@ gm query "<keywords or question>" [flags]
 
 | MCP Tool | What it returns | When to use |
 |---|---|---|
-| `query_transitive(seed, depth?)` | BFS transitive closure — all reachable nodes grouped by depth | "What is the full dependency graph reachable from this symbol?" |
+| `query_transitive(seed, depth?, relation?, direction?)` | BFS transitive closure — all reachable nodes grouped by depth; direction: forward (default), reverse, both | "What depends on this symbol?" / "What does this symbol depend on?" |
 
 ### v0.6.0 composite tools
 
