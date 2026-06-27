@@ -2,6 +2,16 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.5.0 (2026-06-27) — Graph identity, relative paths, demo polish
+
+### Added
+- `graph_info` MCP tool exposing schema version, project root, build timestamp, extraction mode, languages, and counts
+- Relative paths in all MCP tool outputs (get_node, get_neighbors, god_nodes, summarize_file, architecture_summary)
+- Demo script uses relative directory discovery instead of hardcoded absolute paths
+
+### Fixed
+- AST-only `gm check` output now clearly explains that resolution requires the semantic pass
+
 ## v0.4.1 (2026-06-27) — Patch: incremental rebuild fixes
 
 ### Fixed

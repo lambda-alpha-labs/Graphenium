@@ -2,10 +2,11 @@
 # Graphenium v2 demo: the structural memory story, ~35s
 set -e
 
-GM="/Users/liamandrew/Documents/Code/Graphenium/target/release/gm"
-GRAPH="/Users/liamandrew/Documents/Code/Graphenium/worked/graphenium-self-analysis/graph.json"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GM="${SCRIPT_DIR}/../target/release/gm"
+GRAPH="${SCRIPT_DIR}/../worked/graphenium-self-analysis/graph.json"
 
-sanitize() { sed 's|/Users/liamandrew|~|g'; }
+sanitize() { sed 's|/Users/|~|g'; }
 
 clear
 
