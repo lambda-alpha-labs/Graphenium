@@ -837,6 +837,7 @@ fn cmd_query(
         exclude_path.as_deref(),
         None,
         generated_code_mode,
+        true,
     );
     let qmode = if safe {
         ranking::QueryMode::Structural
