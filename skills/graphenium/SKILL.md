@@ -115,6 +115,8 @@ The following MCP tools provide trust, verification, and impact analysis:
 | `safest_path` | Pathfinding that prefers high-trust (`resolved`/`EXTRACTED`) edges |
 | `verification_plan` | 7-tier prioritized verification plan from a graph diff |
 | `blast_radius` | Downstream impact analysis via reverse reachability |
+| `graph_info` | Full graph metadata: schema version, project root, build timestamp, languages, counts |
+| `recluster` | Re-run community detection after manual node/edge edits |
 
 Use these when the user asks about trust quality, change safety, or
 verification — especially in CI or review contexts. For CI integration,

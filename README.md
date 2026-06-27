@@ -318,6 +318,8 @@ v3 read tools, confidence-aware and policy-driven:
 | `agent_change_gate` | Policy-based gate checks for CI pipelines |
 | `diff_graph` | Snapshot comparison, symbol-level diff between two graph versions |
 | `next_files_to_read` | Reading order recommendation derived from a verification plan |
+| `graph_info` | Full graph metadata: schema version, project root, build timestamp, languages, counts |
+| `recluster` | Re-run community detection after manual node/edge edits |
 
 ### 6. Multi-mode retrieval
 
@@ -547,11 +549,14 @@ gm run [PATH] [OPTIONS]
 | `--api-base URL` | API base URL for `openai-compatible` provider |
 | `--mode deep` | Aggressive LLM inference |
 | `--update` | Incremental mode: only re-extract changed files |
+| `--no-report` | Skip GRAPH_REPORT.md generation |
+| `--exclude-dirs DIRS` | Comma-separated directory names to exclude (e.g. `target,node_modules`) |
 
 ```sh
 gm run . --no-semantic --no-viz      # Fast local structural scan
 gm run . --provider openai           # With LLM semantic extraction
 gm run . --update                    # Incremental after editing files
+gm run . --no-report                 # Skip report generation
 ```
 
 ### `gm query`
@@ -569,6 +574,8 @@ gm query "<keywords>" [OPTIONS]
 | `--mode MODE` | `lexical` | Retrieval model: `lexical` for TF-cosine keyword scoring, `structural` for graph-distance proximity, or `hybrid` |
 | `--dfs` | off | Use depth-first search |
 | `--safe` | off | Confidence-aware pathfinding: only traverse edges with `EXTRACTED` or `INFERRED` confidence, skip `AMBIGUOUS` |
+| `--min-degree N` | 0 | Minimum node degree to include (filters low-degree noise) |
+| `--exclude-test-nodes` | off | Exclude test/spec nodes from results |
 
 ```sh
 gm query "parser ast walker" --safe               # Confidence-aware pathfinding
@@ -588,6 +595,7 @@ gm serve [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
+| `--watch` | off | Watch graph file for changes and auto-reload |
 
 ### `gm watch`
 
