@@ -227,31 +227,53 @@ fn try_incremental(
     changed_paths: &[&Path],
 ) -> crate::Result<IncrementalStats> {
     let json_path = out_dir.join("graph.json");
+    let manifest_path = out_dir.join("manifest.json");
 
-    // Load the existing graph.
+    // Load the existing graph and manifest.
     let mut graph = json::load_graph(&json_path)?;
+    let mut manifest = crate::cache::Manifest::load(&manifest_path);
     let prev_node_count = graph.node_count();
 
     let mut total_nodes_removed = 0usize;
     let mut total_nodes_inserted = 0usize;
     let mut total_edges_inserted = 0usize;
 
-    for path in changed_paths {
+    // Compute the full invalidation set: directly changed files plus any
+    // files that import them (so cross-file resolution stays current).
+    let changed_bufs: Vec<std::path::PathBuf> =
+        changed_paths.iter().map(|p| p.to_path_buf()).collect();
+    let paths_to_extract = manifest.invalidation_set(&changed_bufs);
+
+    for path_str in &paths_to_extract {
+        let file_path = std::path::Path::new(path_str);
         let file = detect::DetectedFile {
             file_type: FileType::Code,
-            path: path.to_path_buf(),
+            path: file_path.to_path_buf(),
         };
         let result = extract::extract_file(&file, &ExtractOptions::default());
         if result.is_empty() {
             continue; // unrecognised or empty file — skip
         }
 
-        let source_file = path.to_string_lossy().to_string();
+        let source_file = path_str.to_string();
         let stats = graph.replace_file_extraction(&source_file, &result);
         total_nodes_removed += stats.nodes_removed;
         total_nodes_inserted += stats.nodes_inserted;
         total_edges_inserted += stats.edges_inserted;
+
+        // Record imports detected in this file for future invalidation.
+        let imported: Vec<String> = result
+            .edges
+            .iter()
+            .filter(|e| e.relation == "imports")
+            .map(|e| e.target.clone())
+            .collect();
+        manifest.set_imports(file_path, imported);
+        manifest.update(file_path);
     }
+
+    // Persist the updated manifest.
+    let _ = manifest.save(&manifest_path);
 
     let nodes_changed = total_nodes_removed.max(total_nodes_inserted);
     let pct_changed = if prev_node_count > 0 {

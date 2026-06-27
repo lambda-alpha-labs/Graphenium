@@ -282,6 +282,12 @@ impl GrapheniumGraph {
             }
         }
 
+        // CRITICAL: Rebuild the id_index after batch deletion.
+        // petgraph uses swap-remove, which shifts the last node into the
+        // vacated slot. Without rebuilding, future lookups via stale indices
+        // will silently return the wrong node or panic.
+        self.rebuild_id_index();
+
         // 2. Insert the new nodes and edges from the re-extraction.
         for node in &new_result.nodes {
             self.upsert_node(node.clone());
