@@ -871,7 +871,13 @@ impl GrapheniumServer {
         #[tool(param)]
         #[schemars(description = "Max neighbors to return (default 50, cap output for hub nodes)")]
         max_neighbors: Option<i32>,
+        #[tool(param)]
+        #[schemars(
+            description = "Only show edges with EXTRACTED confidence (source-backed ground truth)"
+        )]
+        extracted_only: Option<bool>,
     ) -> String {
+        let extracted_only = extracted_only.unwrap_or(false);
         let resolved = match self.resolve_id(&node_id) {
             Some(r) => r,
             None => return format!("Node '{node_id}' not found."),
@@ -885,12 +891,17 @@ impl GrapheniumServer {
         let mut entries: Vec<_> = graph
             .node_edges(&resolved)
             .into_iter()
-            .filter(|(_, edge)| match relation.as_deref() {
-                Some(filter) => edge
-                    .relation
-                    .to_lowercase()
-                    .contains(&filter.to_lowercase()),
-                None => true,
+            .filter(|(_, edge)| {
+                if extracted_only && edge.confidence != crate::model::Confidence::Extracted {
+                    return false;
+                }
+                match relation.as_deref() {
+                    Some(filter) => edge
+                        .relation
+                        .to_lowercase()
+                        .contains(&filter.to_lowercase()),
+                    None => true,
+                }
             })
             .filter(|(neighbor_id, edge)| {
                 seen.insert((
@@ -1486,6 +1497,11 @@ impl GrapheniumServer {
         #[tool(param)]
         #[schemars(description = "Minimum node degree to include (filters low-degree noise)")]
         min_degree: Option<i32>,
+        #[tool(param)]
+        #[schemars(
+            description = "Show low-degree leaf symbols (degree <= 5). Default false to save tokens."
+        )]
+        show_leaves: Option<bool>,
     ) -> String {
         let graph = self.graph();
         let self_g = self.graph();
@@ -1559,7 +1575,12 @@ impl GrapheniumServer {
                     .then_with(|| a.0.label.cmp(&b.0.label))
                     .then_with(|| a.0.id.cmp(&b.0.id))
             });
-            for (n, degree) in rows {
+
+            let show_leaves = show_leaves.unwrap_or(false);
+            let hubs: Vec<_> = rows.iter().filter(|(_, d)| *d > 5).collect();
+            let leaves: Vec<_> = rows.iter().filter(|(_, d)| *d <= 5).collect();
+
+            for (n, degree) in &hubs {
                 let loc = if n.source_location.is_empty() {
                     "unknown".to_string()
                 } else {
@@ -1575,7 +1596,417 @@ impl GrapheniumServer {
                     id = n.id,
                 ));
             }
+
+            if show_leaves {
+                for (n, degree) in &leaves {
+                    let loc = if n.source_location.is_empty() {
+                        "unknown".to_string()
+                    } else {
+                        n.source_location.clone()
+                    };
+                    let comm = n
+                        .community
+                        .map(|c| format!(" [community {c}]"))
+                        .unwrap_or_default();
+                    out.push_str(&format!(
+                        "- **{label}**{comm} — id `{id}`, span {loc}, degree {degree}\n",
+                        label = n.display_label(),
+                        id = n.id,
+                    ));
+                }
+            } else if !leaves.is_empty() {
+                out.push_str(&format!(
+                    "\n_Omitted {} low-degree leaf symbols to save tokens. Use `show_leaves=true` to expand._\n",
+                    leaves.len()
+                ));
+            }
         }
+
+        out
+    }
+
+    // ── analyse_symbol ─────────────────────────────────────────────────────────
+
+    #[tool(description = "Single-turn composite analysis of a symbol. \
+        Returns node metadata, behavioral connections (calls, uses, inherits, implements), \
+        and structural connections (imports, contains) with confidence summaries. \
+        Prioritizes behavioral dependencies over structural ones.")]
+    fn analyse_symbol(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Node ID or label to analyse")]
+        symbol: String,
+    ) -> String {
+        let id = match self.resolve_id(&symbol) {
+            Some(id) => id,
+            None => return format!("Symbol '{symbol}' not found."),
+        };
+
+        let graph = self.graph();
+
+        let node = match graph.node_data(&id) {
+            Some(n) => n,
+            None => {
+                return format!("Symbol '{symbol}' (resolved to '{id}') not found in graph.");
+            }
+        };
+
+        let degree = graph.degree(&id);
+        let comm_str = node
+            .community
+            .map(|c| format!("community {c}"))
+            .unwrap_or_else(|| "none".to_string());
+
+        // ── Node info header ────────────────────────────────────────────────
+        let mut out = format!(
+            "## Node: {label}\n\n\
+             - **ID**: `{id}`\n\
+             - **Type**: {ft}\n\
+             - **File**: {file}\n\
+             - **Location**: {loc}\n\
+             - **Degree**: {degree}\n\
+             - **Community**: {comm_str}\n\n",
+            label = node.display_label(),
+            id = node.id,
+            ft = node.file_type,
+            file = node.source_file,
+            loc = node.source_location,
+            degree = degree,
+            comm_str = comm_str,
+        );
+
+        // ── Gather and classify edges ──────────────────────────────────────
+        // Each entry: (relation, source, target, confidence_label)
+        let mut behavioral: Vec<(String, String, String, String)> = Vec::new();
+        let mut structural: Vec<(String, String, String, String)> = Vec::new();
+
+        for edge in graph.edges_iter() {
+            if edge.source != id && edge.target != id {
+                continue;
+            }
+            let conf_label = format!("{:?}", edge.confidence);
+
+            match edge.relation.as_str() {
+                "calls" | "uses" | "inherits" | "implements" => {
+                    behavioral.push((
+                        edge.relation.clone(),
+                        edge.source.clone(),
+                        edge.target.clone(),
+                        conf_label,
+                    ));
+                }
+                "contains" | "imports" => {
+                    structural.push((
+                        edge.relation.clone(),
+                        edge.source.clone(),
+                        edge.target.clone(),
+                        conf_label,
+                    ));
+                }
+                _ => {
+                    behavioral.push((
+                        edge.relation.clone(),
+                        edge.source.clone(),
+                        edge.target.clone(),
+                        conf_label,
+                    ));
+                }
+            }
+        }
+
+        // ── Helper to sort by confidence then relation ─────────────────────
+        let sort_edges = |edges: &mut Vec<(String, String, String, String)>| {
+            edges.sort_by(|a, b| {
+                let a_prio = match a.3.as_str() {
+                    "Extracted" => 0,
+                    "Inferred" => 1,
+                    _ => 2,
+                };
+                let b_prio = match b.3.as_str() {
+                    "Extracted" => 0,
+                    "Inferred" => 1,
+                    _ => 2,
+                };
+                a_prio.cmp(&b_prio).then_with(|| a.0.cmp(&b.0))
+            });
+        };
+
+        // ── Behavioral connections (capped at 10) ──────────────────────────
+        out.push_str("### Behavioral Connections\n\n");
+        if behavioral.is_empty() {
+            out.push_str("None.\n\n");
+        } else {
+            sort_edges(&mut behavioral);
+            for (rel, src, tgt, conf) in behavioral.iter().take(10) {
+                if *src == id {
+                    out.push_str(&format!("- `{rel}` → `{tgt}` (confidence: {conf})\n"));
+                } else {
+                    out.push_str(&format!("- `{rel}` ← `{src}` (confidence: {conf})\n"));
+                }
+            }
+            if behavioral.len() > 10 {
+                out.push_str(&format!(
+                    "- *… and {} more behavioral connections*\n",
+                    behavioral.len() - 10
+                ));
+            }
+            out.push('\n');
+        }
+
+        // ── Structural connections (capped at 5) ───────────────────────────
+        out.push_str("### Structural Connections\n\n");
+        if structural.is_empty() {
+            out.push_str("None.\n\n");
+        } else {
+            sort_edges(&mut structural);
+            for (rel, src, tgt, conf) in structural.iter().take(5) {
+                if *src == id {
+                    out.push_str(&format!("- `{rel}` → `{tgt}` (confidence: {conf})\n"));
+                } else {
+                    out.push_str(&format!("- `{rel}` ← `{src}` (confidence: {conf})\n"));
+                }
+            }
+            if structural.len() > 5 {
+                out.push_str(&format!(
+                    "- *… and {} more structural connections*\n",
+                    structural.len() - 5
+                ));
+            }
+            out.push('\n');
+        }
+
+        // ── Trust profile ──────────────────────────────────────────────────
+        out.push_str(&format!(
+            "**Trust profile**: {} edges ({} behavioral, {} structural).\n",
+            behavioral.len() + structural.len(),
+            behavioral.len(),
+            structural.len(),
+        ));
+
+        out
+    }
+
+    // ── module_dependencies ────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Show dependency connections between two modules/directories. \
+        Iterates over all edges and groups them by modules containing \
+        the given path fragments."
+    )]
+    fn module_dependencies(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Source module/directory path fragment")]
+        module_a: String,
+        #[tool(param)]
+        #[schemars(description = "Target module/directory path fragment")]
+        module_b: String,
+    ) -> String {
+        let graph = self.graph();
+        let a_lower = module_a.to_lowercase();
+        let b_lower = module_b.to_lowercase();
+
+        let mut grouped: HashMap<String, Vec<String>> = HashMap::new();
+        let mut total = 0usize;
+
+        for edge in graph.edges_iter() {
+            let src_node = match graph.node_data(&edge.source) {
+                Some(n) => n,
+                None => continue,
+            };
+            let tgt_node = match graph.node_data(&edge.target) {
+                Some(n) => n,
+                None => continue,
+            };
+
+            let src_file = src_node.source_file.to_lowercase();
+            let tgt_file = tgt_node.source_file.to_lowercase();
+
+            if src_file.contains(&a_lower) && tgt_file.contains(&b_lower) {
+                total += 1;
+                grouped
+                    .entry(edge.relation.clone())
+                    .or_default()
+                    .push(format!(
+                        "- `{}` {} → {}",
+                        edge.relation,
+                        src_node.display_label(),
+                        tgt_node.display_label(),
+                    ));
+            }
+        }
+
+        let mut out = format!(
+            "# Module Dependencies: `{ma}` → `{mb}`\n\n\
+             {total} connections from {ma} to {mb}.\n",
+            ma = module_a,
+            mb = module_b,
+            total = total,
+        );
+
+        if total == 0 {
+            out.push_str("\nNo direct dependencies found between these modules.\n");
+            return out;
+        }
+
+        let mut relations: Vec<_> = grouped.keys().cloned().collect();
+        relations.sort();
+        for rel in relations {
+            let entries = grouped.get(&rel).unwrap();
+            out.push_str(&format!("\n### `{rel}` ({count})\n", count = entries.len()));
+            for entry in entries {
+                out.push_str(entry);
+                out.push('\n');
+            }
+        }
+
+        out
+    }
+
+    // ── what_changed ──────────────────────────────────────────────────────────
+
+    #[tool(description = "Compare current graph against a stored snapshot. \
+        Returns risk-sorted delta with removed symbols, community moves, \
+        added symbols, and downstream impact analysis.")]
+    fn what_changed(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Snapshot name (default: 'backup')")]
+        snapshot_name: Option<String>,
+    ) -> String {
+        let name = snapshot_name.unwrap_or_else(|| "backup".to_string());
+
+        // Try graphemium-snapshots/<name>.json first, then <name>.json
+        let candidate_paths = [
+            PathBuf::from(format!("graphenium-snapshots/{name}.json")),
+            PathBuf::from(format!("{name}.json")),
+        ];
+
+        let old_graph = 'load: loop {
+            for path in &candidate_paths {
+                if path.exists() {
+                    match crate::export::json::load_graph(path) {
+                        Ok(g) => break 'load g,
+                        Err(e) => {
+                            return format!("Failed to load snapshot '{}': {}", path.display(), e);
+                        }
+                    }
+                }
+            }
+            return format!(
+                "Snapshot '{name}' not found. Looked in:\n\
+                 - graphemium-snapshots/{name}.json\n\
+                 - {name}.json"
+            );
+        };
+
+        let new_graph = self.graph();
+        let changes = crate::analyze::impact::symbol_inventory_diff(&old_graph, &new_graph);
+        let impact = crate::analyze::impact::downstream_impact(&new_graph, &changes);
+
+        let mut out = format!("# What Changed (snapshot: `{name}`)\n\n");
+
+        // Separate changes by type
+        let mut removed: Vec<&crate::analyze::impact::SymbolChange> = Vec::new();
+        let mut moved: Vec<&crate::analyze::impact::SymbolChange> = Vec::new();
+        let mut added: Vec<&crate::analyze::impact::SymbolChange> = Vec::new();
+
+        for change in &changes {
+            match change {
+                crate::analyze::impact::SymbolChange::Removed { .. } => removed.push(change),
+                crate::analyze::impact::SymbolChange::CommunityChanged { .. } => moved.push(change),
+                crate::analyze::impact::SymbolChange::Added { .. } => added.push(change),
+            }
+        }
+
+        // ── REMOVED (highest risk) ─────────────────────────────────────────
+        if removed.is_empty() {
+            out.push_str("## ❌ Removed Symbols\n\nNone.\n\n");
+        } else {
+            out.push_str(&format!(
+                "## ❌ Removed Symbols ({count})\n\n",
+                count = removed.len()
+            ));
+            for change in &removed {
+                if let crate::analyze::impact::SymbolChange::Removed { id, label, file } = change {
+                    out.push_str(&format!("- **{label}** (`{id}`) — {file}\n"));
+                }
+            }
+            out.push('\n');
+        }
+
+        // ── COMMUNITY MOVES ────────────────────────────────────────────────
+        if moved.is_empty() {
+            out.push_str("## 🔄 Community Moves\n\nNone.\n\n");
+        } else {
+            out.push_str(&format!(
+                "## 🔄 Community Moves ({count})\n\n",
+                count = moved.len()
+            ));
+            for change in &moved {
+                if let crate::analyze::impact::SymbolChange::CommunityChanged {
+                    id,
+                    label,
+                    old_community,
+                    new_community,
+                } = change
+                {
+                    let old_s =
+                        old_community.map_or_else(|| "none".to_string(), |c| format!("{c}"));
+                    let new_s =
+                        new_community.map_or_else(|| "none".to_string(), |c| format!("{c}"));
+                    out.push_str(&format!(
+                        "- **{label}** (`{id}`): community {old_s} → {new_s}\n"
+                    ));
+                }
+            }
+            out.push('\n');
+        }
+
+        // ── ADDED (lowest risk) ────────────────────────────────────────────
+        if added.is_empty() {
+            out.push_str("## ✅ Added Symbols\n\nNone.\n\n");
+        } else {
+            out.push_str(&format!(
+                "## ✅ Added Symbols ({count})\n\n",
+                count = added.len()
+            ));
+            for change in &added {
+                if let crate::analyze::impact::SymbolChange::Added {
+                    id,
+                    label,
+                    file,
+                    file_type,
+                } = change
+                {
+                    out.push_str(&format!("- **{label}** (`{id}`) — {file_type} in {file}\n"));
+                }
+            }
+            out.push('\n');
+        }
+
+        // ── Downstream impact ──────────────────────────────────────────────
+        out.push_str("## 📊 Downstream Impact\n\n");
+        out.push_str(&format!(
+            "- Downstream nodes affected: {}\n",
+            impact.downstream_nodes.len()
+        ));
+        out.push_str(&format!(
+            "- Affected communities: {}\n",
+            impact.affected_communities.len()
+        ));
+        if !impact.affected_communities.is_empty() {
+            let comms: Vec<String> = impact
+                .affected_communities
+                .iter()
+                .map(|c| format!("{c}"))
+                .collect();
+            out.push_str(&format!("- Community IDs: {}\n", comms.join(", ")));
+        }
+        out.push_str(&format!(
+            "- Edge trust: {} extracted, {} inferred, {} ambiguous\n",
+            impact.extracted_edges, impact.inferred_edges, impact.ambiguous_edges,
+        ));
 
         out
     }
@@ -2972,7 +3403,7 @@ mod tests {
     #[test]
     fn get_neighbors_returns_connected() {
         let s = make_server();
-        let result = s.get_neighbors("src_alpha".to_string(), None, None);
+        let result = s.get_neighbors("src_alpha".to_string(), None, None, None);
         assert!(result.contains("Beta"));
         assert!(result.contains("calls"));
     }
@@ -2980,7 +3411,12 @@ mod tests {
     #[test]
     fn get_neighbors_relation_filter() {
         let s = make_server();
-        let result = s.get_neighbors("src_alpha".to_string(), Some("imports".to_string()), None);
+        let result = s.get_neighbors(
+            "src_alpha".to_string(),
+            Some("imports".to_string()),
+            None,
+            None,
+        );
         assert!(result.contains("No neighbors found"));
     }
 
@@ -3010,7 +3446,7 @@ mod tests {
         );
 
         let s = GrapheniumServer::new(g);
-        let result = s.get_neighbors("src_alpha".to_string(), None, None);
+        let result = s.get_neighbors("src_alpha".to_string(), None, None, None);
         assert_eq!(result.matches("**Beta** via `calls`").count(), 1);
         assert!(result.contains("Total: 1 neighbor(s)"));
     }
@@ -3293,7 +3729,7 @@ mod tests {
     fn summarize_file_lists_symbols_matching_suffix() {
         let s = make_server();
         // make_server has src/alpha.rs (Alpha), src/beta.rs (Beta), docs/guide.md (Guide)
-        let out = s.summarize_file("alpha.rs".to_string(), None, None);
+        let out = s.summarize_file("alpha.rs".to_string(), None, None, Some(true));
         assert!(out.contains("Alpha"), "expected Alpha symbol: {out}");
         assert!(!out.contains("Beta"), "beta.rs should not match: {out}");
     }
@@ -3302,21 +3738,26 @@ mod tests {
     fn summarize_file_handles_backslash_paths() {
         let s = make_server();
         // Windows-style input should normalize the same as forward slashes.
-        let out = s.summarize_file(r"src\beta.rs".to_string(), None, None);
+        let out = s.summarize_file(r"src\beta.rs".to_string(), None, None, Some(true));
         assert!(out.contains("Beta"), "expected Beta symbol: {out}");
     }
 
     #[test]
     fn summarize_file_no_match_returns_clean_message() {
         let s = make_server();
-        let out = s.summarize_file("does_not_exist.rs".to_string(), None, None);
+        let out = s.summarize_file("does_not_exist.rs".to_string(), None, None, None);
         assert!(out.contains("No nodes found"));
     }
 
     #[test]
     fn summarize_file_group_by_community() {
         let s = make_server();
-        let out = s.summarize_file("alpha.rs".to_string(), Some("community".to_string()), None);
+        let out = s.summarize_file(
+            "alpha.rs".to_string(),
+            Some("community".to_string()),
+            None,
+            None,
+        );
         // Alpha is in community 0 in make_server.
         assert!(
             out.contains("Community 0"),

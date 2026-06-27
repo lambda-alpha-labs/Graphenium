@@ -497,6 +497,26 @@ pub fn subgraph_to_text_with_match_details(
         out.push_str(&entry);
     }
 
+    // Append trust-profile summary for the rendered connections
+    let extracted = graph
+        .edges_iter()
+        .filter(|e| e.confidence == crate::model::Confidence::Extracted)
+        .count();
+    let inferred = graph
+        .edges_iter()
+        .filter(|e| e.confidence == crate::model::Confidence::Inferred)
+        .count();
+    let ambiguous = graph
+        .edges_iter()
+        .filter(|e| e.confidence == crate::model::Confidence::Ambiguous)
+        .count();
+    let total = extracted + inferred + ambiguous;
+    if total > 0 {
+        out.push_str(&format!(
+            "\n---\n**Trust Profile**: {extracted} EXTRACTED (source-backed), {inferred} INFERRED (heuristics), {ambiguous} AMBIGUOUS (review recommended) connections in this view.\n",
+        ));
+    }
+
     out
 }
 
