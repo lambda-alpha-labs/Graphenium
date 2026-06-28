@@ -17,7 +17,7 @@ Graphenium's own codebase.
 ## Results: Graphenium queries on Graphenium itself
 
 | Task | Graphenium workflow | Output chars | Tokens (~4 c/t) | Response time |
-|---|---|---|---|---:|---:|
+|---|---|---|---:|---:|
 | Impact analysis of `replace_file_extraction` | `query_transitive` + `blast_radius` | 8,674 | ~2,170 | 27ms |
 | Community and cluster overview | `query_graph "GrapheniumCluster" --budget 1500` | 6,690 | ~1,670 | 31ms |
 | Module architecture of `GrapheniumGraph` | `query_graph "GrapheniumGraph" --budget 2000` | 8,395 | ~2,100 | 24ms |
