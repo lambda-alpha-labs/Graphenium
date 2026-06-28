@@ -182,7 +182,7 @@ gm setup claude
 gm query "symbol or feature" --safe
 ```
 
-See `docs/GETTING_STARTED.md` for a guided first workflow.
+See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for a guided first workflow.
 
 ---
 
@@ -309,20 +309,20 @@ A strong benchmark report should include:
 - whether the plan was correct;
 - missed dependencies and false assumptions.
 
-See `docs/BENCHMARKING.md` for the benchmark protocol and reporting template.
+See [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) for the benchmark protocol and reporting template.
 
 ---
 
 ## Documentation
 
-- `docs/GETTING_STARTED.md` - guided first workflow.
-- `docs/AGENT_WORKFLOWS.md` - prompts and agent usage patterns.
-- `docs/COMMAND_REFERENCE.md` - CLI commands and common options.
-- `docs/MCP_TOOLS.md` - MCP tool reference for agent integrations.
-- `docs/BENCHMARKING.md` - token-cost and correctness benchmark methodology.
-- `docs/COMPARISON.md` - positioning against search, repo maps, generic graphs, and enterprise indexers.
-- `docs/ARCHITECTURE.md` - graph model, extraction pipeline, internals, and limitations.
-- `docs/DEMO_SCRIPT.md` - suggested demo script and terminal storyboard.
+- [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) - guided first workflow.
+- [`docs/AGENT_WORKFLOWS.md`](docs/AGENT_WORKFLOWS.md) - prompts and agent usage patterns.
+- [`docs/COMMAND_REFERENCE.md`](docs/COMMAND_REFERENCE.md) - CLI commands and common options.
+- [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md) - MCP tool reference for agent integrations.
+- [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) - token-cost and correctness benchmark methodology.
+- [`docs/COMPARISON.md`](docs/COMPARISON.md) - positioning against search, repo maps, generic graphs, and enterprise indexers.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - graph model, extraction pipeline, internals, and limitations.
+- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) - suggested demo script and terminal storyboard.
 
 ---
 
