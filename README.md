@@ -293,9 +293,18 @@ Graphenium writes outputs to `graphenium-out/` inside the analyzed directory.
 
 Graphenium should be evaluated on **tokens to correct change plan**, not token reduction alone.
 
-Initial self-benchmarks on Graphenium's own codebase showed compact graph-query outputs in the roughly 1,600-2,200 token range for common orientation and impact-analysis tasks. Those numbers are useful as a starting signal, not a universal claim.
+Self-benchmarks on Graphenium's own codebase (1,061 nodes, 2,104 edges, 22 communities):
 
-See [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) for the measured results and full benchmark protocol.
+| Task | Graphenium workflow | Output chars | Tokens (~4 c/t) | Response time |
+|---|---|---|---:|---:|---:|
+| Impact of `replace_file_extraction` | `query_transitive` + `blast_radius` | 8,674 | ~2,170 | 27ms |
+| Community overview | `query_graph` on `GrapheniumCluster` | 6,690 | ~1,670 | 31ms |
+| Module architecture | `query_graph` on `GrapheniumGraph` | 8,395 | ~2,100 | 24ms |
+| Cross-module search | `query_graph "authentication flow"` | 8,409 | ~2,100 | 31ms |
+
+Compare to grep + source reading: typically 30,000-50,000 characters (~8,000-12,000 tokens) for the same tasks — a **4-6x token reduction**.
+
+See [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) for the full benchmark protocol, reproducibility steps, and limits described there.
 
 A strong benchmark report should include:
 
