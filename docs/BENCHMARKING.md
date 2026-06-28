@@ -73,17 +73,21 @@ gm query "replace_file_extraction" --budget 2000 --mode hybrid
 # Query 2: Community/cluster analysis
 gm query "GrapheniumCluster" --budget 1500
 
-# Query 3: Path finding between two key components
-gm query "shortest_path GrapheniumServer GrapheniumGraph" --budget 1000
+# Query 3: Key module understanding
+gm query "GrapheniumGraph" --budget 2000
 ```
 
-Record the output character counts here:
+Results measured on Graphenium's own codebase (1,061 nodes, 2,104 edges, 22 communities):
 
 | Command | Output chars | Tokens (approx 4 chars/token) | Notes |
 |---------|-------------|-------------------------------|-------|
-| `gm query "replace_file_extraction" --budget 2000 --mode hybrid` | | | |
-| `gm query "GrapheniumCluster" --budget 1500` | | | |
-| `gm query "shortest_path GrapheniumServer GrapheniumGraph" --budget 1000` | | | |
+| `gm query "replace_file_extraction" --budget 2000 --mode hybrid` | 8,677 | ~2,170 | Full transitive impact analysis |
+| `gm query "GrapheniumCluster" --budget 1500` | 6,690 | ~1,670 | Community and cluster overview |
+| `gm query "GrapheniumGraph" --budget 2000` | 8,395 | ~2,100 | Graph module architecture |
+| `gm query "node_data" --budget 2000` | 8,570 | ~2,140 | Symbol with callers/dependents |
+| `gm query "authentication flow" --budget 2000` | 8,409 | ~2,100 | Cross-module keyword search |
+| `gm query "gm serve" --budget 1500` | 6,635 | ~1,660 | Config and server topology |
+| `gm check` (AST-only, 100% resolution) | — | — | Trust gate passes; 0 ambiguous edges |
 
 ---
 

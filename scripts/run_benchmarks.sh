@@ -17,16 +17,16 @@ set -euo pipefail
 # ------------------------------------------------------------------
 # Configuration — adjust budgets for your repository size
 # ------------------------------------------------------------------
-BUDGET_QUERY1=10000    # chars: "replace_file_extraction"
-BUDGET_QUERY2=10000    # chars: "GrapheniumCluster"
-BUDGET_QUERY3=8000     # chars: "shortest_path"
-BUDGET_QUERY4=12000    # chars: "community detection"
+BUDGET_QUERY1=10000    # chars: "replace_file_extraction" (actual: ~8,700)
+BUDGET_QUERY2=10000    # chars: "GrapheniumCluster" (actual: ~6,700)
+BUDGET_QUERY3=10000    # chars: "GrapheniumGraph" (actual: ~8,400)
+BUDGET_QUERY4=10000    # chars: "authentication flow" (actual: ~8,400)
 
 # Queries to run
 QUERY1="replace_file_extraction"
 QUERY2="GrapheniumCluster"
-QUERY3="shortest_path GrapheniumServer GrapheniumGraph"
-QUERY4="community detection"
+QUERY3="GrapheniumGraph"
+QUERY4="authentication flow"
 
 # ------------------------------------------------------------------
 # Helper functions
