@@ -2,6 +2,20 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.9.0 (2026-06-28) — Modular documentation restructuring
+
+### Added
+- **`docs/COMMAND_REFERENCE.md`** — Complete CLI reference: all 12 commands with flags, options tables, usage templates, and common workflows
+- **`docs/MCP_TOOLS.md`** — Full MCP tool catalog: 22 tools across 5 categories (read, write, composite, trust, diff) with parameters and use cases
+- **`docs/ARCHITECTURE.md`** — Three-tier model, graph schema, extraction pipeline, trust model, module map, and limitations
+- **`docs/COMPARISON.md`** — Competitive comparison: 15-capability table across grep, AST tools, semantic search, and Graphenium
+- **`docs/BENCHMARKING.md`** — Token-reduction benchmarks with methodology and self-analysis commands
+- **`scripts/run_benchmarks.sh`** — Automated benchmark runner with character-count budgets
+
+### Changed
+- **`README.md`** — Restructured from 887 lines to 144-line landing page with quick start, MCP setup, feature summary, and links to modular docs
+- Version bumped to 0.9.0
+
 ## v0.8.0 (2026-06-27) — Diagnostics, init, auto-watch, transitive direction
 
 ### Added
