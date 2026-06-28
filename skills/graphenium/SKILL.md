@@ -10,11 +10,29 @@ Graphenium is a knowledge graph engine for the current codebase. It runs
 via MCP tools or the `gm query` CLI. This skill tells you which tool to
 reach for and how to interpret the output.
 
+## Session start: verify the loaded graph
+
+The MCP server may be serving a graph from a **different project** than the
+one you are currently working on. At the start of every session (and any time
+you switch projects), call `graph_info` to confirm:
+
+> Call `mcp_graphenium_graph_info()` and check that the **project root** or
+> **graph source path** matches the workspace directory.
+
+If the graph is from the wrong project, call `reload_graph` with the correct
+path:
+
+> Call `mcp_graphenium_reload_graph(graph_path: "/full/path/to/project/graphenium-out/graph.json")`
+
+The `gm serve` server runs with `--watch` by default (since v0.8.0), so if
+you run `gm run .` to rebuild the graph, the server picks up the changes
+automatically.
+
 ## Detection: is the graph available?
 
-Check whether `graphenium-out/graph.json` exists. If it does not, suggest
-`gm run .` (or `gm run . --no-semantic` for fast AST-only without an API
-key).
+Check whether `graphenium-out/graph.json` exists in the current project root.
+If it does not, suggest `gm init && gm run .` (or `gm run . --no-semantic`
+for fast AST-only without an API key).
 
 If MCP tools (`query_graph`, `get_node`, `get_neighbors`, etc.) appear in
 the available tool list, prefer them over the CLI. They give you richer
