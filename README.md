@@ -295,6 +295,8 @@ Graphenium should be evaluated on **tokens to correct change plan**, not token r
 
 Initial self-benchmarks on Graphenium's own codebase showed compact graph-query outputs in the roughly 1,600-2,200 token range for common orientation and impact-analysis tasks. Those numbers are useful as a starting signal, not a universal claim.
 
+See [`docs/BENCHMARKING.md#initial-self-benchmark-example`](docs/BENCHMARKING.md#initial-self-benchmark-example) for the measured results and [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) for the full benchmark protocol.
+
 A strong benchmark report should include:
 
 - the repository and commit used;
