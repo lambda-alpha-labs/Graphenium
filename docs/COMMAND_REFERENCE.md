@@ -1,6 +1,18 @@
 # Graphenium Command Reference
 
-This document contains the detailed CLI reference moved out of the top-level README to keep the front page focused on positioning, quick start, and common workflows.
+This reference keeps the front-page README focused on the main value proposition while documenting the CLI in detail.
+
+Start with three commands:
+
+```sh
+gm run . --no-semantic
+gm setup claude
+gm query "symbol or feature" --safe
+```
+
+Then add health checks, diffing, watch mode, and CI gates as your workflow matures.
+
+---
 
 ## `gm init`
 
@@ -16,6 +28,10 @@ Examples:
 gm init
 gm init ~/projects/my-repo
 ```
+
+Use this before the first run so generated files, build output, and vendored dependencies can be excluded.
+
+---
 
 ## `gm run`
 
@@ -46,7 +62,16 @@ gm run . --no-semantic --no-viz
 gm run . --provider openai
 gm run . --update
 gm run . --no-report
+gm run . --exclude-dirs target,node_modules,dist
 ```
+
+Recommended first run:
+
+```sh
+gm run . --no-semantic --no-viz
+```
+
+---
 
 ## `gm query`
 
@@ -73,7 +98,12 @@ gm query "parser ast walker" --safe
 gm query "authentication login" --mode lexical
 gm query "database connection" --mode structural
 gm query "parser ast walker" --mode hybrid
+gm query "billing retry" --safe --budget 1000
 ```
+
+Use `--safe` for pre-edit planning. Use `--mode hybrid` when naming may be inconsistent or the feature spans multiple modules.
+
+---
 
 ## `gm serve`
 
@@ -87,6 +117,37 @@ gm serve [OPTIONS]
 |---|---:|---|
 | `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
 | `--watch` | off | Watch graph file for changes and auto-reload |
+
+Example:
+
+```sh
+gm serve --graph /absolute/path/to/graphenium-out/graph.json
+```
+
+Use `gm setup` when possible so you do not need to hand-write MCP config.
+
+---
+
+## `gm setup`
+
+Print ready-to-paste MCP config for an AI assistant.
+
+```text
+gm setup <claude|cursor|codewhale> [--graph PATH]
+```
+
+Examples:
+
+```sh
+gm setup claude
+gm setup cursor
+gm setup codewhale
+gm setup claude --graph /absolute/path/to/graphenium-out/graph.json
+```
+
+After changing MCP configuration, fully restart the client application.
+
+---
 
 ## `gm watch`
 
@@ -108,6 +169,10 @@ Example:
 gm watch . --debounce 2.0
 ```
 
+Use watch mode during active agent sessions so MCP queries see recent graph updates.
+
+---
+
 ## `gm doctor`
 
 Run diagnostic checks on the Graphenium installation and graph health.
@@ -122,10 +187,22 @@ gm doctor --json
 
 Use cases:
 
-- `--schema`: dump graph schema, node kinds, edge kinds, confidence levels, and provenance metadata.
-- `--resolution`: report resolved vs unresolved references.
-- `--repository`: summarize repository metadata.
-- `--json`: emit machine-readable diagnostics for IDE extensions or CI.
+| Option | Use case |
+|---|---|
+| `--schema` | Dump graph schema, node kinds, edge kinds, confidence levels, and provenance metadata |
+| `--resolution` | Report resolved vs unresolved references |
+| `--repository` | Summarize repository metadata |
+| `--json` | Emit machine-readable diagnostics for IDE extensions or CI |
+
+Examples:
+
+```sh
+gm doctor --resolution
+gm doctor --repository
+gm doctor --json
+```
+
+---
 
 ## `gm check`
 
@@ -140,6 +217,7 @@ gm check [OPTIONS]
 | `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
 | `--min-resolution N` | `80` | Minimum accepted resolution coverage percentage |
 | `--max-ambiguous N` | `10` | Maximum allowed ambiguous edge count |
+| `--strict` | off | Use stricter policy behavior when available |
 
 Examples:
 
@@ -148,6 +226,10 @@ gm check
 gm check --min-resolution 80 --max-ambiguous 10
 gm check --min-resolution 70 --max-ambiguous 20 --strict
 ```
+
+Policy advice: start permissive, collect data, then tighten thresholds once graph extraction is stable.
+
+---
 
 ## `gm diff`
 
@@ -172,21 +254,9 @@ gm diff --after new-graph.json --impact
 gm diff --before old-graph.json --after new-graph.json --review-plan
 ```
 
-## `gm setup`
+Use `--impact` when reviewing agent edits to high-degree modules or public interfaces.
 
-Print ready-to-paste MCP config for an AI assistant.
-
-```text
-gm setup <claude|cursor|codewhale> [--graph PATH]
-```
-
-Examples:
-
-```sh
-gm setup claude
-gm setup cursor
-gm setup codewhale
-```
+---
 
 ## `gm graph`
 
@@ -205,7 +275,10 @@ Examples:
 gm graph schema
 gm graph build-map
 gm graph test-map
+gm graph migrate old-graph.json
 ```
+
+---
 
 ## `gm snapshot`
 
@@ -216,6 +289,17 @@ gm snapshot create --name <name> [--graph PATH]
 gm snapshot list
 ```
 
+Examples:
+
+```sh
+gm snapshot create --name before-auth-refactor
+gm snapshot list
+```
+
+Snapshot before major agent-led changes so review planning can compare graph state.
+
+---
+
 ## `gm gate`
 
 Run quality gates with diff-based analysis.
@@ -224,3 +308,27 @@ Run quality gates with diff-based analysis.
 gm gate --diff <before.json> <after.json>
 ```
 
+Example:
+
+```sh
+gm gate --diff old-graph.json graphenium-out/graph.json
+```
+
+Use this in CI to prevent graph quality regressions or risky unverified topology changes.
+
+---
+
+## Command selection guide
+
+| Goal | Command |
+|---|---|
+| First setup | `gm init` |
+| Build graph | `gm run . --no-semantic` |
+| Ask a graph question | `gm query "keywords" --safe` |
+| Connect agent | `gm setup claude` or `gm serve` |
+| Keep graph fresh while coding | `gm watch` |
+| Inspect health | `gm doctor --resolution` |
+| Enforce quality | `gm check` |
+| Review changed topology | `gm diff --impact` |
+| Create a comparison point | `gm snapshot create` |
+| Run CI diff gate | `gm gate --diff` |
