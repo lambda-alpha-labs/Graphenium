@@ -306,18 +306,6 @@ Compare to grep + source reading: typically 30,000-50,000 characters (~8,000-12,
 
 See [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) for the full benchmark protocol, reproducibility steps, and limits described there.
 
-A strong benchmark report should include:
-
-- the repository and commit used;
-- the task prompt;
-- the baseline tool workflow;
-- the Graphenium workflow;
-- input and output tokens;
-- files opened;
-- time to first useful plan;
-- whether the plan was correct;
-- missed dependencies and false assumptions.
-
 ---
 
 ## Documentation
