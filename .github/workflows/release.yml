@@ -18,9 +18,6 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact: gm-darwin-arm64
-          - os: macos-13
-            target: x86_64-apple-darwin
-            artifact: gm-darwin-x86_64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: gm-linux-x86_64
@@ -90,7 +87,6 @@ jobs:
           body_path: notes.md
           files: |
             gm-darwin-arm64/gm-darwin-arm64.tar.gz
-            gm-darwin-x86_64/gm-darwin-x86_64.tar.gz
             gm-linux-x86_64/gm-linux-x86_64.tar.gz
             gm-linux-arm64/gm-linux-arm64.tar.gz
             gm-windows-x86_64/gm-windows-x86_64.zip
