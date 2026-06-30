@@ -133,6 +133,10 @@ enum Commands {
         /// Skip GRAPH_REPORT.md generation
         #[arg(long)]
         no_report: bool,
+
+        /// Only plan: scan directory and report file statistics without running extraction
+        #[arg(long)]
+        plan: bool,
     },
 
     /// Query the knowledge graph with keywords
@@ -175,6 +179,10 @@ enum Commands {
         /// AST-only tuning mode: auto, on, or off
         #[arg(long, default_value = "auto")]
         ast_only_tuning: String,
+
+        /// Output query results as JSON (machine-parseable)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Start the MCP server for agent/tool integration (stdio JSON-RPC)
@@ -334,21 +342,26 @@ async fn main() {
             api_key,
             exclude_dirs,
             no_report,
+            plan,
         } => {
-            cmd_run(
-                path,
-                mode,
-                update,
-                no_semantic,
-                no_viz,
-                provider,
-                api_base,
-                model,
-                api_key,
-                exclude_dirs,
-                no_report,
-            )
-            .await
+            if plan {
+                cmd_plan(&path)
+            } else {
+                cmd_run(
+                    path,
+                    mode,
+                    update,
+                    no_semantic,
+                    no_viz,
+                    provider,
+                    api_base,
+                    model,
+                    api_key,
+                    exclude_dirs,
+                    no_report,
+                )
+                .await
+            }
         }
 
         Commands::Query {
@@ -362,6 +375,7 @@ async fn main() {
             exclude_path,
             generated_code_mode,
             ast_only_tuning,
+            json,
         } => cmd_query(
             question,
             dfs,
@@ -373,6 +387,7 @@ async fn main() {
             exclude_path,
             generated_code_mode,
             ast_only_tuning,
+            json,
         ),
 
         Commands::Serve { graph, watch } => {
@@ -807,6 +822,89 @@ async fn cmd_run(
     Ok(())
 }
 
+// ── `plan` command ─────────────────────────────────────────────────────────────
+
+/// Scan a directory and report file statistics without running the full extraction.
+/// Used via `gm run --plan <path>`.
+fn cmd_plan(root: &Path) -> graphenium::Result<()> {
+    eprintln!("[graphenium] Planning scan for: {}", root.display());
+
+    let (files, _corpus_warnings) = detect::detect(root, &DetectOptions::default())?;
+    let total = files.len();
+
+    // Group by extension
+    let mut ext_counts: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+    // Directories that look vendored / standard-library-ish
+    let mut vendor_dirs: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+
+    let vendor_keywords = [
+        "Lib",
+        "lib",
+        "third_party",
+        "third-party",
+        "vendor",
+        "vendored",
+        "bin",
+        "obj",
+        "packages",
+        "deps",
+        "external",
+    ];
+
+    for f in &files {
+        // Count by extension
+        let ext = f
+            .path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase())
+            .unwrap_or_else(|| "no-ext".to_string());
+        *ext_counts.entry(ext).or_insert(0) += 1;
+
+        // Flag vendor/lib directories
+        if let Some(parent) = f.path.parent() {
+            for component in parent.components() {
+                if let std::path::Component::Normal(c) = component {
+                    let name = c.to_string_lossy();
+                    if vendor_keywords.iter().any(|vk| name == *vk) {
+                        *vendor_dirs.entry(name.to_string()).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    println!("═══════════════════════════════════════════");
+    println!("  Graphenium Plan — {}", root.display());
+    println!("═══════════════════════════════════════════");
+    println!("  Total detected files: {}", total);
+    println!();
+
+    if !ext_counts.is_empty() {
+        println!("  Files by extension:");
+        for (ext, count) in &ext_counts {
+            println!("    .{ext}: {count}");
+        }
+        println!();
+    }
+
+    if !vendor_dirs.is_empty() {
+        println!("  Vendor / standard-library directories detected:");
+        for (dir, count) in &vendor_dirs {
+            println!("    {dir}/ — {count} file(s)");
+        }
+        eprintln!();
+        eprintln!("[graphenium] note: vendor/lib dirs shown above. These may contain");
+        eprintln!("  third-party code that inflates the graph. Consider adding them");
+        eprintln!("  to .grapheniumignore or using --exclude-dirs if they are not");
+        eprintln!("  part of your own source.");
+    }
+
+    Ok(())
+}
+
 // ── `query` command ────────────────────────────────────────────────────────────
 
 fn cmd_query(
@@ -820,6 +918,7 @@ fn cmd_query(
     exclude_path: Option<String>,
     generated_code_mode: String,
     ast_only_tuning: String,
+    json: bool,
 ) -> graphenium::Result<()> {
     let graph = load_graph(&graph_path)?;
 
@@ -907,6 +1006,26 @@ fn cmd_query(
         .as_ref()
         .map(|allowed| allowed.len())
         .unwrap_or_else(|| graph.node_count());
+
+    // ── JSON output (machine-parseable) ────────────────────────────────────
+    if json {
+        let entries: Vec<serde_json::Value> = visited
+            .iter()
+            .filter_map(|id| {
+                let node = graph.node_data(id)?;
+                Some(serde_json::json!({
+                    "node_id": node.id,
+                    "label": node.label,
+                    "degree": graph.degree(id),
+                    "source_file": node.source_file,
+                    "community": node.community,
+                }))
+            })
+            .collect();
+        let output = serde_json::to_string_pretty(&entries)?;
+        println!("{output}");
+        return Ok(());
+    }
 
     // Format output within the token budget (rough: 4 chars ≈ 1 token).
     let chars_budget = budget * 4;

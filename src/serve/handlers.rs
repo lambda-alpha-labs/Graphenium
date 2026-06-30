@@ -2062,6 +2062,9 @@ impl GrapheniumServer {
             description = "Direction: 'forward' (default, outgoing edges), 'reverse' (incoming edges), or 'both'"
         )]
         direction: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Approximate output character budget (default 2000)")]
+        budget: Option<i32>,
     ) -> String {
         let graph = self.graph();
         let seed_id = match self.resolve_id(&seed) {
@@ -2070,20 +2073,21 @@ impl GrapheniumServer {
         };
         let max_depth = depth.unwrap_or(3).max(1).min(6) as usize;
         let dir = direction.as_deref().unwrap_or("forward");
+        let budget_chars = (budget.unwrap_or(2000) as usize).max(200);
 
         let results = crate::serve::traversal::query_transitive_with_direction(
             &graph, &seed_id, dir, max_depth, None,
         );
 
-        let mut depth_map: std::collections::HashMap<String, usize> = results.into_iter().collect();
+        let depth_map: std::collections::HashMap<String, usize> = results.into_iter().collect();
+        let total_nodes = depth_map.len();
 
         let mut out = format!(
             "# Transitive Closure from '{}'\n\n- Reachable nodes: {}\n- Max depth: {}\n\n",
-            seed,
-            depth_map.len(),
-            max_depth
+            seed, total_nodes, max_depth
         );
 
+        let mut displayed = 0usize;
         for depth in 0..=max_depth {
             let at_depth: Vec<&str> = depth_map
                 .iter()
@@ -2093,13 +2097,33 @@ impl GrapheniumServer {
             if at_depth.is_empty() {
                 continue;
             }
-            out.push_str(&format!("## Depth {}\n", depth));
-            for id in at_depth {
+
+            // Estimate cost of this whole depth block before adding it
+            let depth_header = format!("## Depth {}\n", depth);
+            let mut lines_cost = 0usize;
+            let mut depth_entries = Vec::new();
+            for id in &at_depth {
                 if let Some(n) = graph.node_data(id) {
-                    out.push_str(&format!("  - {} (`{}`)\n", n.label, n.id));
+                    let entry = format!("  - {} (`{}`)\n", n.label, n.id);
+                    lines_cost += entry.len();
+                    depth_entries.push(entry);
                 }
             }
+            let block_cost = depth_header.len() + lines_cost + 1; // +1 for trailing '\n'
+
+            if out.len() + block_cost > budget_chars {
+                out.push_str(&format!(
+                    "... showing {displayed} of {total_nodes} reachable nodes. Increase budget or reduce depth."
+                ));
+                break;
+            }
+
+            out.push_str(&depth_header);
+            for entry in depth_entries {
+                out.push_str(&entry);
+            }
             out.push('\n');
+            displayed += at_depth.len();
         }
 
         out

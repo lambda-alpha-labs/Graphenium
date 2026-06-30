@@ -501,9 +501,10 @@ pub fn subgraph_to_text_with_match_details(
             .map(|c| format!(" [community {c}]"))
             .unwrap_or_default();
 
+        let node_display_label = display_label_with_collisions(graph, node);
         let mut entry = format!(
             "## {} ({}{})\nFile: {}\n",
-            node.label, node.file_type, comm_tag, rel_file
+            node_display_label, node.file_type, comm_tag, rel_file
         );
         if !node.source_location.is_empty() {
             entry.push_str(&format!("Span: {}\n", node.source_location));
@@ -531,9 +532,10 @@ pub fn subgraph_to_text_with_match_details(
                         (Some(ext), None) => format!(" [{ext}]"),
                         _ => String::new(),
                     };
+                    let nb_display_label = display_label_with_collisions(graph, nb);
                     connections.push_str(&format!(
                         "- {} `{}` {}{}\n",
-                        node.label, edge.relation, nb.label, provenance
+                        node_display_label, edge.relation, nb_display_label, provenance
                     ));
                 }
             }
@@ -569,6 +571,28 @@ pub fn subgraph_to_text_with_match_details(
     }
 
     out
+}
+
+/// Determine the display label for a node in query output.
+///
+/// If the node has a `qualified_label` AND its short `label` has collisions
+/// (multiple nodes share the same label), returns `"qualified_label (label)"`.
+/// Otherwise returns just the plain `label`.
+fn display_label_with_collisions(graph: &GrapheniumGraph, node: &Node) -> String {
+    match &node.qualified_label {
+        Some(qual) => {
+            let collision_count = graph
+                .nodes()
+                .filter(|n| n.id != node.id && n.label.to_lowercase() == node.label.to_lowercase())
+                .count();
+            if collision_count > 0 {
+                format!("{} ({})", qual, node.label)
+            } else {
+                node.label.clone()
+            }
+        }
+        None => node.label.clone(),
+    }
 }
 
 fn format_rank_explanation(ranked: &RankedNode) -> String {
