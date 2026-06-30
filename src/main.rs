@@ -1251,10 +1251,45 @@ fn cmd_setup(target: &str, gm_path: Option<PathBuf>, graph: &Path) -> graphenium
     let graph_str = graph_abs.display();
 
     match target.to_lowercase().as_str() {
-        "claude" | "claude-desktop" | "claude_code" | "claude-code" => {
-            println!("Add this to your Claude Desktop config (claude_desktop_config.json):");
+        "claude" => {
+            println!("Available Claude targets:");
+            println!("  claude-desktop   — Claude Desktop app config (claude_desktop_config.json)");
+            println!("  claude-code      — Claude Code CLI (uses `claude mcp add` command)");
+            println!();
+            println!("Run `gm setup claude-desktop` or `gm setup claude-code` for details.");
+        }
+        "claude-desktop" | "claude_desktop" => {
+            println!("Claude Desktop MCP Configuration");
+            println!("================================");
+            println!();
+            println!("Add this to your claude_desktop_config.json:");
             println!();
             println!("{{\n  \"mcpServers\": {{\n    \"graphenium\": {{\n      \"command\": \"{gm_str}\",\n      \"args\": [\"serve\", \"--graph\", \"{graph_str}\"]\n    }}\n  }}\n}}");
+            println!();
+            println!("Config file locations:");
+            println!("  macOS:   ~/Library/Application Support/Claude/claude_desktop_config.json");
+            println!("  Windows: %APPDATA%\\Claude\\claude_desktop_config.json");
+            println!("  Linux:   ~/.config/Claude/claude_desktop_config.json");
+        }
+        "claude-code" | "claude_code" => {
+            println!("Claude Code MCP Configuration");
+            println!("=============================");
+            println!();
+            println!(
+                "Claude Code uses the `claude mcp add` command instead of a JSON config file."
+            );
+            println!();
+            println!("Register Graphenium as an MCP server:");
+            println!("  claude mcp add graphenium --scope user -- {gm_str} serve");
+            println!();
+            println!("Verify registration:");
+            println!("  claude mcp list");
+            println!();
+            println!("The server will start with an empty graph. Run `gm run . --no-semantic`");
+            println!("in your project directory to generate the codebase map.");
+            println!();
+            println!("You can also install the Graphenium skill for Claude Code:");
+            println!("  Copy skills/graphenium/SKILL.md to ~/.claude/skills/graphenium/SKILL.md");
         }
         "cursor" => {
             println!("Add this to ~/.cursor/mcp.json:");

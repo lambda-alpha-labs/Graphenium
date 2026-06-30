@@ -29,20 +29,38 @@ pub async fn serve(graph_path: &Path) -> crate::Result<()> {
 }
 
 pub async fn serve_with_watch(graph_path: &Path, watch: bool) -> crate::Result<()> {
-    eprintln!("[graphenium] Loading graph: {}", graph_path.display());
+    let (graph, watch_path, watch_parent) = match crate::export::json::load_graph(graph_path) {
+        Ok(g) => {
+            eprintln!(
+                "[graphenium] Loaded graph: {} ({} nodes, {} edges)",
+                graph_path.display(),
+                g.node_count(),
+                g.edge_count()
+            );
+            (g, graph_path.to_path_buf(), false)
+        }
+        Err(e) if graph_path.exists() => {
+            return Err(e);
+        }
+        Err(_) => {
+            eprintln!(
+                "[graphenium] Status: Graph file not found at {}. Starting server with empty state.",
+                graph_path.display()
+            );
+            eprintln!(
+                "[graphenium] Run `gm run . --no-semantic` in your workspace to generate the codebase map."
+            );
+            let mut g = crate::model::GrapheniumGraph::new();
+            g.metadata.ast_only = true;
+            (g, graph_path.to_path_buf(), true)
+        }
+    };
 
-    let graph = crate::export::json::load_graph(graph_path)?;
-    eprintln!(
-        "[graphenium] Graph: {} nodes, {} edges",
-        graph.node_count(),
-        graph.edge_count()
-    );
-
-    let server = GrapheniumServer::with_path(graph, graph_path.to_path_buf());
+    let server = GrapheniumServer::with_path(graph, watch_path.clone());
 
     if watch {
-        let graph_path = graph_path.to_path_buf();
         let srv = server.clone();
+        let w_path = watch_path.clone();
         std::thread::spawn(move || {
             use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
             use std::sync::mpsc;
@@ -55,22 +73,47 @@ pub async fn serve_with_watch(graph_path: &Path, watch: bool) -> crate::Result<(
                     return;
                 }
             };
-            if let Err(e) = watcher.watch(&graph_path, RecursiveMode::NonRecursive) {
+
+            // If graph file doesn't exist yet, watch the parent directory instead
+            let watch_target = if w_path.exists() {
+                w_path.clone()
+            } else if let Some(parent) = w_path.parent() {
+                parent.to_path_buf()
+            } else {
+                eprintln!(
+                    "[graphenium] Cannot watch: no parent directory for {}",
+                    w_path.display()
+                );
+                return;
+            };
+
+            let mode = if w_path.exists() {
+                RecursiveMode::NonRecursive
+            } else {
+                RecursiveMode::NonRecursive
+            };
+
+            if let Err(e) = watcher.watch(&watch_target, mode) {
                 eprintln!("[graphenium] File watch failed: {e}");
                 return;
             }
             eprintln!(
-                "[graphenium] Watching graph file for changes: {}",
-                graph_path.display()
+                "[graphenium] Watching {} for changes",
+                w_path.file_name().unwrap_or_default().to_string_lossy()
             );
+
             for event in rx {
                 if let Ok(Event {
-                    kind: EventKind::Modify(_),
+                    kind: EventKind::Modify(_) | EventKind::Create(_),
                     ..
                 }) = event
                 {
+                    // When watching a parent directory, only reload if the specific file changed
+                    if !w_path.exists() {
+                        continue;
+                    }
                     std::thread::sleep(Duration::from_millis(200));
-                    if let Err(err) = GrapheniumServer::reload_from_file(&graph_path, &srv) {
+                    if let Err(err) = GrapheniumServer::reload_from_file(&w_path, &srv) {
                         eprintln!("[graphenium] Failed to reload changed graph: {err}");
                     }
                 }

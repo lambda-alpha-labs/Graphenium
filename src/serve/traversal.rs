@@ -5,9 +5,16 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use crate::model::{GrapheniumGraph, Node};
 use crate::ranking::{self, RankedNode};
 
+/// Strip the Windows extended-length prefix (`\\?\`) from a path.
+pub fn clean_windows_path(path: &str) -> String {
+    path.strip_prefix(r"\\?\")
+        .unwrap_or(path)
+        .replace('\\', "/")
+}
+
 /// Convert an absolute path to a project-relative path using graph metadata.
 pub fn relative_path(path: &str, project_root: Option<&str>) -> String {
-    let clean_path = path.replace('\\', "/");
+    let clean_path = clean_windows_path(path);
     if let Some(root) = project_root {
         let clean_root = root.replace('\\', "/");
         if let Some(stripped) = clean_path.strip_prefix(&clean_root) {
