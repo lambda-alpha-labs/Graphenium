@@ -139,8 +139,14 @@ Agent-facing output should make this visible:
 
 ### Install
 
+**macOS / Linux:**
 ```sh
 curl -fsSL https://raw.githubusercontent.com/lambda-alpha-labs/Graphenium/main/install.sh | sh
+```
+
+**Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 ### Or build from source
@@ -191,25 +197,23 @@ See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for a guided first work
 Graphenium exposes your repository graph through an MCP stdio server.
 
 ```sh
-gm setup claude
+gm setup claude              # Shows available Claude targets
+gm setup claude-desktop      # Claude Desktop app config
+gm setup claude-code         # Claude Code CLI (recommended for CLI users)
 gm setup cursor
 gm setup codewhale
 ```
 
-Manual configuration example:
-
-```json
-{
-  "mcpServers": {
-    "graphenium": {
-      "command": "gm",
-      "args": ["serve", "--graph", "/absolute/path/to/graphenium-out/graph.json"]
-    }
-  }
-}
+**Claude Code** uses the `claude mcp add` command:
+```bash
+claude mcp add graphenium --scope user -- gm serve
 ```
 
-After updating MCP config, fully quit and relaunch the AI tool. On macOS, use `Cmd+Q` rather than closing the window.
+**Claude Desktop** uses `claude_desktop_config.json` (see `gm setup claude-desktop`).
+**Cursor / CodeWhale** use JSON / TOML config (see `gm setup cursor` / `gm setup codewhale`).
+
+The server starts gracefully even before a graph exists — run `gm run .` after
+setup and the server will automatically load the graph when it appears.
 
 ---
 

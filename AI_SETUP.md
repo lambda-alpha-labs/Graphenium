@@ -53,6 +53,7 @@ If verification fails, stop and report the error. Do not proceed.
 
 ## Step 3: Clone and build Graphenium
 
+**macOS / Linux:**
 ```sh
 # Clone to a stable location (not inside the project being analyzed)
 git clone https://github.com/lambda-alpha-labs/Graphenium "$HOME/.graphenium"
@@ -61,6 +62,19 @@ cd "$HOME/.graphenium"
 # Build and install. This compiles tree-sitter grammars for 9 languages;
 # it may take 2-5 minutes on the first build.
 cargo install --path .
+```
+
+**Windows (PowerShell):**
+```powershell
+# Install Graphenium from source (requires Rust)
+git clone https://github.com/lambda-alpha-labs/Graphenium "$env:USERPROFILE\.graphenium"
+cd "$env:USERPROFILE\.graphenium"
+cargo install --path .
+```
+
+Or use the automated installer:
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 Verify:
@@ -136,8 +150,9 @@ Ask the user: "Which AI coding tool are you using?"
 |--------|------|--------------------------------|
 | 1 | CodeWhale | `~/.codewhale/mcp.json` |
 | 2 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `~/.config/Claude/claude_desktop_config.json` (Linux) |
-| 3 | Cursor | `~/.cursor/mcp.json` |
-| 4 | Other / not sure | Skip MCP config; the `gm query` CLI and the Skill work without it |
+| 3 | Claude Code | `claude mcp add graphenium --scope user -- gm serve` |
+| 4 | Cursor | `~/.cursor/mcp.json` |
+| 5 | Other / not sure | Skip MCP config; the `gm query` CLI and the Skill work without it |
 
 If the user picks option 4, skip to Step 7.
 

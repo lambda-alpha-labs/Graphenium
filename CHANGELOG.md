@@ -2,6 +2,22 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.10.0 (2026-06-30) — Windows onboarding, Claude Code setup, graceful startup
+
+### Added
+- **Graceful server startup**: `gm serve` now starts with an empty graph when `graph.json` is missing — no more "Failed to connect" on first launch. Watches parent directory for file creation; auto-reloads when graph appears.
+- **`gm setup claude-code`**: New target printing `claude mcp add` command for Claude Code CLI, with skill installation instructions. `gm setup claude-desktop` now shows platform-specific config paths (macOS/Windows/Linux).
+- **`install.ps1`**: PowerShell installer for Windows — detects Cargo, builds from source, installs the Claude Code skill, verifies installation.
+- **Empty graph MCP guidance**: `query_graph` returns a helpful "run `gm run .`" message when the graph is empty.
+- **Windows path normalization**: `clean_windows_path()` strips `\\?\` extended-length prefix from all displayed paths.
+
+### Changed
+- `gm setup claude` now prints available sub-targets (`claude-desktop`, `claude-code`) instead of a single snippet.
+- `graph_info` MCP tool now displays clean (UNC-stripped) project root paths.
+
+### Performance
+- 342 tests pass, zero clippy warnings.
+
 ## v0.9.0 (2026-06-28) — Modular documentation restructuring
 
 ### Added
