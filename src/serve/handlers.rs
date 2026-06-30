@@ -681,6 +681,9 @@ impl GrapheniumServer {
     ) -> String {
         let include_tests = include_tests.unwrap_or(false);
         let min_degree_val = min_degree.unwrap_or(0).max(0) as usize;
+        if self.graph().node_count() == 0 {
+            return "The knowledge graph is currently empty. Please run `gm run . --no-semantic` in your project directory to generate the codebase map.".to_string();
+        }
         let depth = (depth.unwrap_or(3) as usize).clamp(1, 6);
         let budget = (budget.unwrap_or(2000) as usize).max(200);
         let use_dfs = dfs.unwrap_or(false);
@@ -3072,7 +3075,8 @@ impl GrapheniumServer {
             out.push_str(&format!("**Schema:** {v}\n"));
         }
         if let Some(ref v) = meta.project_root {
-            out.push_str(&format!("**Project root:** {v}\n"));
+            let clean = crate::serve::traversal::clean_windows_path(v);
+            out.push_str(&format!("**Project root:** {clean}\n"));
         }
         if let Some(ref v) = meta.created_at {
             out.push_str(&format!("**Built at:** {v}\n"));
