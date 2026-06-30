@@ -2,6 +2,22 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.11.0 (2026-06-30) — Large-repo robustness, pre-scan planning, JSON output
+
+### Added
+- **Progress heartbeats**: Extraction now prints progress every 500 files
+- **`gm run --plan`**: Pre-scan mode reporting file stats and vendored/library directories without full extraction
+- **`gm query --json`**: Machine-parseable JSON output for CLI tools
+- **Trust banner in `graph_info`**: Shows graph mode, call resolution status, and edge-type guidance at session start
+- **`query_transitive --budget`**: Character-budget parameter with depth-grouped truncation
+- **Qualified labels in subgraph output**: Collision-aware display showing `qualified_label (label)`
+- **`gm init` ignore patterns**: Now includes C++ (`obj/`, `.vs/`, `ipch/`) and C# (`*.Designer.cs`) build artifacts
+- **`quality.json` fully populated**: `by_relation` (edge-type counts), `top_risks` (high-degree unresolved nodes)
+- **`scripts/verify_robustness.sh`**: Automated robustness checks for server startup, warnings, typos
+
+### Fixed
+- `graphemium-snapshots` typo in `what_changed` (corrected to `graphenium-snapshots`)
+
 ## v0.10.0 (2026-06-30) — Windows onboarding, Claude Code setup, graceful startup
 
 ### Added
