@@ -1911,7 +1911,7 @@ impl GrapheniumServer {
     ) -> String {
         let name = snapshot_name.unwrap_or_else(|| "backup".to_string());
 
-        // Try graphemium-snapshots/<name>.json first, then <name>.json
+        // Try graphenium-snapshots/<name>.json first, then <name>.json
         let candidate_paths = [
             PathBuf::from(format!("graphenium-snapshots/{name}.json")),
             PathBuf::from(format!("{name}.json")),
@@ -1922,7 +1922,7 @@ impl GrapheniumServer {
             None => {
                 return format!(
                     "Snapshot '{name}' not found. Looked in:\n\
-                     - graphemium-snapshots/{name}.json\n\
+                     - graphenium-snapshots/{name}.json\n\
                      - {name}.json"
                 );
             }

@@ -236,12 +236,57 @@ pub fn generate_quality_report(graph: &GrapheniumGraph) -> serde_json::Value {
         1.0
     };
 
+    // Build by_relation: count edges grouped by relation type
+    let mut relation_counts: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+    for edge in graph.edges_iter() {
+        *relation_counts.entry(edge.relation.clone()).or_default() += 1;
+    }
+    let by_relation: Vec<serde_json::Value> = relation_counts
+        .into_iter()
+        .map(|(rel, count)| serde_json::json!({"relation": rel, "count": count}))
+        .collect();
+
+    // Build top_risks: high-degree nodes with unresolved calls
+    let mut risk_scores: Vec<(String, f64)> = Vec::new();
+    for node in graph.nodes() {
+        let degree = graph.degree(&node.id);
+        if degree < 3 {
+            continue;
+        }
+        let total_edges = graph
+            .edges_iter()
+            .filter(|e| e.source == node.id || e.target == node.id)
+            .count() as f64;
+        let unresolved = graph
+            .edges_iter()
+            .filter(|e| {
+                (e.source == node.id || e.target == node.id)
+                    && e.relation == "calls"
+                    && e.resolution_status.as_deref() == Some("unresolved")
+            })
+            .count() as f64;
+        if unresolved > 0.0 && total_edges > 0.0 {
+            let risk = (unresolved / total_edges) * degree as f64;
+            risk_scores.push((node.id.clone(), risk));
+        }
+    }
+    risk_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    risk_scores.truncate(10);
+    let top_risks: Vec<serde_json::Value> = risk_scores
+        .into_iter()
+        .map(|(id, score)| serde_json::json!({"node_id": id, "risk_score": score}))
+        .collect();
+
     let mut recommended_commands = Vec::new();
     if total_unresolved > 0 {
         recommended_commands.push("gm doctor --resolution".to_string());
     }
     if total_ambiguous > 0 {
         recommended_commands.push("gm check".to_string());
+    }
+    if !top_risks.is_empty() {
+        recommended_commands.push("gm query <node_id> --mode structural".to_string());
     }
 
     serde_json::json!({
@@ -259,8 +304,8 @@ pub fn generate_quality_report(graph: &GrapheniumGraph) -> serde_json::Value {
             "ambiguous_edges": total_ambiguous,
         },
         "by_file": by_file,
-        "by_relation": [],
-        "top_risks": [],
+        "by_relation": by_relation,
+        "top_risks": top_risks,
         "recommended_commands": recommended_commands,
     })
 }

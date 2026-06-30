@@ -38,9 +38,25 @@ pub fn extract_all(files: &[DetectedFile], opts: &ExtractOptions) -> ExtractionR
         .filter(|f| f.file_type == FileType::Code)
         .collect();
 
+    let total = code_files.len();
+    if total >= 500 {
+        eprintln!("[graphenium] Extracting AST from {total} files...");
+    }
+
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    let progress = Arc::new(AtomicUsize::new(0));
+
     let results: Vec<ExtractionResult> = code_files
         .par_iter()
-        .map(|f| extract_file(f, opts))
+        .map(|f| {
+            let res = extract_file(f, opts);
+            let count = progress.fetch_add(1, Ordering::SeqCst) + 1;
+            if count % 500 == 0 || count == total {
+                eprintln!("[graphenium] Extracting AST: {count} / {total} files completed...");
+            }
+            res
+        })
         .collect();
 
     let mut combined = ExtractionResult::merge_all(results);
