@@ -158,7 +158,13 @@ fn full_rebuild(root: &Path, out_dir: &Path) -> crate::Result<(usize, usize, usi
     let (files, corpus_warnings) = detect::detect(root, &DetectOptions::default())?;
 
     // 2. AST extraction (rayon-parallel, code files only)
-    let ast_result = extract::extract_all(&files, &ExtractOptions::default());
+    let ast_result = extract::extract_all(
+        &files,
+        &ExtractOptions {
+            mode: extract::ExtractMode::default(),
+            cache_dir: Some(out_dir.join("cache")),
+        },
+    );
 
     // 3. Build graph
     let (mut graph, _stats) = build::build_merged([ast_result]);
@@ -250,7 +256,13 @@ fn try_incremental(
             file_type: FileType::Code,
             path: file_path.to_path_buf(),
         };
-        let result = extract::extract_file(&file, &ExtractOptions::default());
+        let result = extract::extract_file(
+            &file,
+            &ExtractOptions {
+                mode: extract::ExtractMode::default(),
+                cache_dir: Some(out_dir.join("cache")),
+            },
+        );
         if result.is_empty() {
             continue; // unrecognised or empty file — skip
         }

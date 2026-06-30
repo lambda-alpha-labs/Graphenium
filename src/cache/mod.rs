@@ -30,9 +30,39 @@ pub fn file_hash(path: &Path) -> crate::Result<String> {
     Ok(hex::encode(digest))
 }
 
-/// Canonical path for a cache entry.
+/// Canonical path for a general cache entry (semantic extraction).
 pub fn cache_path(cache_dir: &Path, hash: &str) -> PathBuf {
     cache_dir.join(format!("{hash}.json"))
+}
+
+/// Canonical path for an AST cache entry, kept under a dedicated subdirectory
+/// so it does not collide with semantic/LLM cache entries.
+pub fn ast_cache_path(cache_dir: &Path, hash: &str) -> PathBuf {
+    cache_dir.join("ast").join(format!("{hash}.json"))
+}
+
+/// Load a cached AST [`ExtractionResult`] by hash. Returns `None` on cache
+/// miss or if the stored JSON is malformed.
+pub fn load_ast_cached(cache_dir: &Path, hash: &str) -> Option<ExtractionResult> {
+    let path = ast_cache_path(cache_dir, hash);
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+/// Persist an AST [`ExtractionResult`] under `hash` using atomic write.
+pub fn save_ast_cached(
+    cache_dir: &Path,
+    hash: &str,
+    result: &ExtractionResult,
+) -> crate::Result<()> {
+    let dir = cache_dir.join("ast");
+    std::fs::create_dir_all(&dir)?;
+    let target = dir.join(format!("{hash}.json"));
+    let tmp = target.with_extension("tmp");
+    let content = serde_json::to_string(result)?;
+    std::fs::write(&tmp, &content)?;
+    std::fs::rename(&tmp, &target)?;
+    Ok(())
 }
 
 /// Load a cached [`ExtractionResult`] by hash.  Returns `None` on cache miss

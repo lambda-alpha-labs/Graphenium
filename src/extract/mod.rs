@@ -25,6 +25,9 @@ pub enum ExtractMode {
 #[derive(Debug, Clone, Default)]
 pub struct ExtractOptions {
     pub mode: ExtractMode,
+    /// Optional path to the cache directory (graphenium-out/cache).
+    /// When set, extract_file will skip tree-sitter parsing on cache hits.
+    pub cache_dir: Option<std::path::PathBuf>,
 }
 
 /// Extract AST structure from all code files in `files`, using rayon for
@@ -69,10 +72,19 @@ pub fn extract_all(files: &[DetectedFile], opts: &ExtractOptions) -> ExtractionR
 
 /// Extract AST structure from a single file.  Returns an empty result on
 /// read failure or unsupported extension.
-pub fn extract_file(file: &DetectedFile, _opts: &ExtractOptions) -> ExtractionResult {
+pub fn extract_file(file: &DetectedFile, opts: &ExtractOptions) -> ExtractionResult {
     let Ok(source) = std::fs::read(&file.path) else {
         return ExtractionResult::new();
     };
+
+    // Try AST cache when cache_dir is set
+    if let Some(ref cache_dir) = opts.cache_dir {
+        if let Ok(hash) = crate::cache::file_hash(&file.path) {
+            if let Some(cached) = crate::cache::load_ast_cached(cache_dir, &hash) {
+                return cached;
+            }
+        }
+    }
 
     let path_str = file.path.to_string_lossy();
     let ext = file
@@ -82,7 +94,18 @@ pub fn extract_file(file: &DetectedFile, _opts: &ExtractOptions) -> ExtractionRe
         .unwrap_or("")
         .to_ascii_lowercase();
 
-    dispatch(&source, &ext, &path_str)
+    let result = dispatch(&source, &ext, &path_str);
+
+    // Save to AST cache when cache_dir is set
+    if let Some(ref cache_dir) = opts.cache_dir {
+        if !result.is_empty() {
+            if let Ok(hash) = crate::cache::file_hash(&file.path) {
+                let _ = crate::cache::save_ast_cached(cache_dir, &hash, &result);
+            }
+        }
+    }
+
+    result
 }
 
 /// Extension-dispatch: choose the right extractor for the given extension.

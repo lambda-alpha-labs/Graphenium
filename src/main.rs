@@ -587,6 +587,7 @@ async fn cmd_run(
     eprintln!("[graphenium] Extracting AST structure...");
     let ast_opts = ExtractOptions {
         mode: extract_mode.clone(),
+        cache_dir: Some(out_dir.join("cache")),
     };
     let ast_result = extract::extract_all(&files_to_process, &ast_opts);
     eprintln!(
