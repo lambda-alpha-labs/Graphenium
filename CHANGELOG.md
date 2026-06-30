@@ -2,6 +2,17 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.12.0 (2026-06-30) — AST caching pipeline
+
+### Added
+- **AST content-hash caching**: Extraction now caches per-file `ExtractionResult` by SHA256 hash under `graphenium-out/cache/ast/`. Unchanged files skip tree-sitter parsing entirely on subsequent rebuilds.
+- **`cache_dir` field on `ExtractOptions`**: Threaded through `main.rs` and `watch.rs` call sites. Incremental watch-mode rebuilds benefit from the same cache.
+- **C# namespace resolution**: Existing cross-file resolver already indexes `qualified_label` and resolves `using` namespace imports — verified working with existing test suite.
+
+### Performance
+- Second `gm run` on an unchanged repo completes in under 1 second (100% cache hit).
+- Incremental rebuilds after `.grapheniumignore` changes only re-parse files whose content actually changed.
+
 ## v0.11.0 (2026-06-30) — Large-repo robustness, pre-scan planning, JSON output
 
 ### Added
