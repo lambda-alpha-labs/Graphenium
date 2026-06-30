@@ -187,6 +187,16 @@ __pycache__/
 dist/
 build/
 graphenium-out/
+
+# C++ and C# build artifacts
+obj/
+bin/
+.vs/
+ipch/
+*.user
+*.suo
+*.Designer.cs
+*.g.cs
 ";
 
     std::fs::write(&ignore_path, default_ignore)?;

@@ -3120,6 +3120,16 @@ impl GrapheniumServer {
             .collect::<std::collections::BTreeSet<_>>()
             .len();
         out.push_str(&format!("**Communities:** {communities}\n"));
+
+        // Trust banner: mode and resolution status
+        let is_ast = graph.is_ast_only();
+        if is_ast {
+            out.push_str("\n**Graph mode:** AST-only · imports 100% resolved · calls 0% resolved (requires semantic pass) · 0 ambiguous\n");
+            out.push_str("Behavioral edges (calls/uses) are heuristic hints; structural edges (imports/contains) are ground truth.\n");
+        } else {
+            out.push_str("\n**Graph mode:** Semantic (LLM-enriched) · calls resolved via AI\n");
+        }
+
         out
     }
 }
