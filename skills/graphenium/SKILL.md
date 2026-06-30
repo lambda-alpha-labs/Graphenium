@@ -135,10 +135,23 @@ The following MCP tools provide trust, verification, and impact analysis:
 | `blast_radius` | Downstream impact analysis via reverse reachability |
 | `graph_info` | Full graph metadata: schema version, project root, build timestamp, languages, counts |
 | `recluster` | Re-run community detection after manual node/edge edits |
+| `query_transitive` | BFS transitive closure from a seed symbol with depth/direction control |
 
 Use these when the user asks about trust quality, change safety, or
 verification — especially in CI or review contexts. For CI integration,
 `gm check` enforces trust quality gates from the CLI (see AI_SETUP.md).
+
+Before running `gm run`, use `gm run --plan` to pre-scan the workspace
+(file count by extension, estimated extraction cost). For machine-readable
+output, use `gm query --json` or `gm diff --json`.
+
+For Windows users, guide them through `install.ps1`:
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+Note that `.NET`/C# repositories are supported — the extractor handles
+`using` directives, `namespace` declarations, and `.csproj`/`.sln` files.
 
 ## CLI fallback (`gm query`)
 

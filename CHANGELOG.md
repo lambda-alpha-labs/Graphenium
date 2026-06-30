@@ -2,6 +2,40 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.14.0 (2026-06-30) — C# project support, build-map CLI
+
+### Added
+- **C# project parser**: `src/extract/csharp_project.rs` parses `.sln` and `.csproj` files into `CSharpWorkspace`/`CSharpProject` structs with assembly names, root namespaces, and project reference chains.
+- **C# dependency graph**: `csproj_to_extraction()` in `src/extract/ci.rs` injects project-boundary nodes and `depends_on` edges during `gm run`. Wired into `cmd_run` build pipeline.
+- **`gm graph build-map` C# support**: CLI scans for `.sln`/`.csproj` files and lists solutions, projects, namespaces, and reference dependencies.
+- **`gm diff --json`**: New structured JSON output flag.
+- **`CacheManager` finalized**: `ExtractOptions.cache_manager: Option<Arc<CacheManager>>` replaces `cache_dir` for thread-safe singleton cache access.
+- **C# boundary-aware resolver**: Existing `qualified_label` system handles namespace matching. Project reference boundaries stored as graph edges.
+
+### Changed
+- `extract_file` uses `cache_manager.load_ast`/`save_ast` instead of ad-hoc paths.
+- Binary call sites (`main.rs`, `watch.rs`) updated to use `CacheManager` via `Arc`.
+
+### Fixed
+- `query_transitive` MCP tool: `Arc<GrapheniumGraph>` dereference mismatch.
+- `csproj_to_extraction` struct fields aligned with actual `Node`/`Edge` definitions.
+- Binary build: `path.canonicalize().unwrap_or(path)` fixed to avoid `PathBuf` move.
+
+## v0.13.0 (2026-06-30) — Telemetry struct, traversal stats, cache manager
+
+### Added
+- **`TelemetryCollector` struct**: Runtime overlay data container in `src/telemetry.rs` with `total_nodes`, `total_edges`, `hub_count`, `compression_ratio`.
+- **`traversal_stats` in query output**: All `query_graph` responses include a compact stats line: `[traversal stats: X hubs, Y items, Z:1 compression ratio]`.
+- **`CacheManager` with atomic persistence**: `load_ast`/`save_ast`/`load_semantic`/`save_semantic` methods with atomic temp-then-rename.
+- **C# project parser (initial)**: `CSharpWorkspace`/`CSharpProject` structs, solution-file enumeration, `ProjectReference` tracking.
+
+### Changed
+- `ExtractOptions.cache_dir` replaced by `cache_manager: Option<Arc<CacheManager>>` for thread-safe singleton access.
+
+### Performance
+- 349 tests pass, zero clippy errors.
+- CacheManager tests: save/load roundtrip, cache miss returns None, auto subdirectory creation.
+
 ## v0.12.0 (2026-06-30) — AST caching pipeline
 
 ### Added

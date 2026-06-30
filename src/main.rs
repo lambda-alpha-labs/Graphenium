@@ -510,7 +510,7 @@ async fn cmd_run(
     exclude_dirs: Option<String>,
     no_report: bool,
 ) -> graphenium::Result<()> {
-    let root = path.canonicalize().unwrap_or(path);
+    let root = path.canonicalize().unwrap_or_else(|_| path.clone());
     let out_dir = root.join("graphenium-out");
     let cache_dir = out_dir.join("cache");
     let manifest_path = out_dir.join("manifest.json");
@@ -587,7 +587,9 @@ async fn cmd_run(
     eprintln!("[graphenium] Extracting AST structure...");
     let ast_opts = ExtractOptions {
         mode: extract_mode.clone(),
-        cache_dir: Some(out_dir.join("cache")),
+        cache_manager: Some(std::sync::Arc::new(graphenium::cache::CacheManager::new(
+            out_dir.join("cache"),
+        ))),
     };
     let ast_result = extract::extract_all(&files_to_process, &ast_opts);
     eprintln!(
@@ -661,9 +663,48 @@ async fn cmd_run(
     let total_input_tokens = ast_result.input_tokens + semantic_result.input_tokens;
     let total_output_tokens = ast_result.output_tokens + semantic_result.output_tokens;
 
+    // ── 4b. C#/CI build config extraction ──────────────────────────────────────
+    let mut ci_result = ExtractionResult::default();
+    // Scan for C# project files and CI configs in the project root
+    if let Ok(entries) = std::fs::read_dir(&path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                if let Ok(sub) = std::fs::read_dir(&p) {
+                    for s in sub.flatten() {
+                        let sp = s.path();
+                        let ext = sp.extension().and_then(|e| e.to_str()).unwrap_or("");
+                        if ext == "csproj" || ext == "sln" {
+                            eprintln!("[graphenium] Parsing C# project: {}", sp.display());
+                            if ext == "sln" {
+                                let ws = graphenium::extract::csharp_project::CSharpWorkspace::parse_solution(&sp);
+                                ci_result.merge(ci::csproj_to_extraction(&ws));
+                            } else {
+                                let ws = graphenium::extract::csharp_project::CSharpWorkspace::parse_csproj(&sp);
+                                let mut single =
+                                    graphenium::extract::csharp_project::CSharpWorkspace::default();
+                                single.projects.insert(sp.clone(), ws);
+                                ci_result.merge(ci::csproj_to_extraction(&single));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // ── 5. Build graph ─────────────────────────────────────────────────────────
     eprintln!("[graphenium] Building graph...");
-    let (mut graph, build_stats) = build::build_merged([ast_result, semantic_result]);
+    let (mut graph, build_stats) = if ci_result.nodes.is_empty() {
+        build::build_merged([ast_result, semantic_result])
+    } else {
+        eprintln!(
+            "[graphenium] CI/C# extraction: {} nodes, {} edges",
+            ci_result.nodes.len(),
+            ci_result.edges.len()
+        );
+        build::build_merged([ast_result, semantic_result, ci_result])
+    };
     graph.set_ast_only(ast_only_graph);
 
     // Populate graph metadata.
@@ -1547,6 +1588,50 @@ fn cmd_graph_build_map(graph_path: &Path) -> graphenium::Result<()> {
                 }
             }
         }
+    }
+
+    // Scan for C# project files
+    println!("\n=== C# Projects ===");
+    let mut csharp_found = false;
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                    for sub in sub_entries.flatten() {
+                        let sub_path = sub.path();
+                        if sub_path
+                            .extension()
+                            .map_or(false, |e| e == "csproj" || e == "sln")
+                        {
+                            if sub_path.extension().unwrap() == "sln" {
+                                let ws = graphenium::extract::csharp_project::CSharpWorkspace::parse_solution(&sub_path);
+                                println!("Solution: {}", sub_path.display());
+                                for (_p, proj) in &ws.projects {
+                                    println!(
+                                        "  Project: {} (ns: {})",
+                                        proj.name, proj.root_namespace
+                                    );
+                                    for ref_path in &proj.project_references {
+                                        println!("    -> depends on: {}", ref_path.display());
+                                    }
+                                }
+                            } else {
+                                let proj = graphenium::extract::csharp_project::CSharpWorkspace::parse_csproj(&sub_path);
+                                println!("Project: {} (ns: {})", proj.name, proj.root_namespace);
+                                for ref_path in &proj.project_references {
+                                    println!("  -> depends on: {}", ref_path.display());
+                                }
+                            }
+                            csharp_found = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if !csharp_found {
+        println!("  (none found)");
     }
     Ok(())
 }

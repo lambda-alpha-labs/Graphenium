@@ -1,6 +1,7 @@
 pub mod ci;
 pub mod config;
 pub mod cross_file;
+pub mod csharp_project;
 pub mod go;
 pub mod import_handlers;
 pub mod rust_lang;
@@ -8,6 +9,9 @@ pub mod walker;
 
 use rayon::prelude::*;
 
+use std::sync::Arc;
+
+use crate::cache::CacheManager;
 use crate::detect::DetectedFile;
 use crate::model::{ExtractionResult, FileType};
 
@@ -25,9 +29,9 @@ pub enum ExtractMode {
 #[derive(Debug, Clone, Default)]
 pub struct ExtractOptions {
     pub mode: ExtractMode,
-    /// Optional path to the cache directory (graphenium-out/cache).
-    /// When set, extract_file will skip tree-sitter parsing on cache hits.
-    pub cache_dir: Option<std::path::PathBuf>,
+    /// Optional cache manager. When set, extract_file will skip tree-sitter
+    /// parsing on cache hits and persist results on cache misses.
+    pub cache_manager: Option<Arc<CacheManager>>,
 }
 
 /// Extract AST structure from all code files in `files`, using rayon for
@@ -77,10 +81,10 @@ pub fn extract_file(file: &DetectedFile, opts: &ExtractOptions) -> ExtractionRes
         return ExtractionResult::new();
     };
 
-    // Try AST cache when cache_dir is set
-    if let Some(ref cache_dir) = opts.cache_dir {
+    // Try AST cache when a cache manager is available
+    if let Some(ref cache) = opts.cache_manager {
         if let Ok(hash) = crate::cache::file_hash(&file.path) {
-            if let Some(cached) = crate::cache::load_ast_cached(cache_dir, &hash) {
+            if let Some(cached) = cache.load_ast(&hash) {
                 return cached;
             }
         }
@@ -96,11 +100,11 @@ pub fn extract_file(file: &DetectedFile, opts: &ExtractOptions) -> ExtractionRes
 
     let result = dispatch(&source, &ext, &path_str);
 
-    // Save to AST cache when cache_dir is set
-    if let Some(ref cache_dir) = opts.cache_dir {
+    // Save to AST cache when a cache manager is available
+    if let Some(ref cache) = opts.cache_manager {
         if !result.is_empty() {
             if let Ok(hash) = crate::cache::file_hash(&file.path) {
-                let _ = crate::cache::save_ast_cached(cache_dir, &hash, &result);
+                let _ = cache.save_ast(&hash, &result);
             }
         }
     }

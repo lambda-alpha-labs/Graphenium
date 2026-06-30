@@ -9,9 +9,11 @@
 /// The SHA256 hash of the file's raw bytes is used as the cache key, so a
 /// file is automatically reused if its content is unchanged, and a new entry
 /// is written whenever the content changes.
+pub mod manager;
 pub mod manifest;
 pub mod semantic_cache;
 
+pub use self::manager::CacheManager;
 pub use manifest::Manifest;
 pub use semantic_cache::check_semantic_cache;
 

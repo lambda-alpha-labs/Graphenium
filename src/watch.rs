@@ -162,7 +162,9 @@ fn full_rebuild(root: &Path, out_dir: &Path) -> crate::Result<(usize, usize, usi
         &files,
         &ExtractOptions {
             mode: extract::ExtractMode::default(),
-            cache_dir: Some(out_dir.join("cache")),
+            cache_manager: Some(std::sync::Arc::new(crate::cache::CacheManager::new(
+                out_dir.join("cache"),
+            ))),
         },
     );
 
@@ -260,7 +262,9 @@ fn try_incremental(
             &file,
             &ExtractOptions {
                 mode: extract::ExtractMode::default(),
-                cache_dir: Some(out_dir.join("cache")),
+                cache_manager: Some(std::sync::Arc::new(crate::cache::CacheManager::new(
+                    out_dir.join("cache"),
+                ))),
             },
         );
         if result.is_empty() {

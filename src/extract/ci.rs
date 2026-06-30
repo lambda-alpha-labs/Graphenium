@@ -313,6 +313,54 @@ fn parse_makefile(content: &str) -> Vec<CiTarget> {
     targets
 }
 
+// ── C# Project integration ───────────────────────────────────────────────────
+
+/// Inject C# project boundary nodes and dependency edges from a parsed workspace.
+pub fn csproj_to_extraction(
+    workspace: &crate::extract::csharp_project::CSharpWorkspace,
+) -> ExtractionResult {
+    let mut result = ExtractionResult::new();
+
+    for (_path, project) in &workspace.projects {
+        let proj_id = format!("csproj_{}", project.name);
+        let node = Node {
+            id: proj_id.clone(),
+            label: project.name.clone(),
+            file_type: FileType::Code,
+            source_file: project.source_root.to_string_lossy().to_string(),
+            source_location: String::new(),
+            qualified_label: Some(project.root_namespace.clone()),
+            community: None,
+            extractor: Some("csproj-parser".to_string()),
+            resolution_status: Some("resolved".to_string()),
+        };
+        result.nodes.push(node);
+
+        for reference in &project.project_references {
+            if let Some(ref_name) = reference.file_stem() {
+                let ref_id = format!("csproj_{}", ref_name.to_string_lossy());
+                let edge = Edge {
+                    source: proj_id.clone(),
+                    target: ref_id,
+                    relation: "depends_on".to_string(),
+                    confidence: crate::model::Confidence::Extracted,
+                    confidence_score: 1.0,
+                    source_file: project.source_root.to_string_lossy().to_string(),
+                    source_location: None,
+                    extractor: Some("csproj-parser".to_string()),
+                    resolution_status: Some("resolved".to_string()),
+                    weight: 1.0,
+                    src_original: String::new(),
+                    tgt_original: String::new(),
+                };
+                result.edges.push(edge);
+            }
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
