@@ -187,7 +187,7 @@ Run structural-only first. Use semantic extraction selectively for architecture 
 
 Read:
 
-- `AGENT_WORKFLOWS.md` for prompts and MCP usage patterns.
-- `MCP_TOOLS.md` for the complete agent tool surface.
-- `BENCHMARKING.md` before making public token-reduction claims.
-- `COMMAND_REFERENCE.md` when wiring Graphenium into CI.
+- [`AGENT_WORKFLOWS.md`](AGENT_WORKFLOWS.md) for prompts and MCP usage patterns.
+- [`MCP_TOOLS.md`](MCP_TOOLS.md) for the complete agent tool surface.
+- [`BENCHMARKING.md`](BENCHMARKING.md) before making public token-reduction claims.
+- [`COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md) when wiring Graphenium into CI.
