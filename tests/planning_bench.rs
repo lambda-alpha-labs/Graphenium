@@ -6,9 +6,18 @@ use graphenium::model::{Edge, FileType, Node};
 fn test_planning_workspace_lifecycle() {
     let mut graph = GrapheniumGraph::new();
 
-    // 1. Setup real baseline node
+    // 1. Setup planned nodes — the baseline node is part of the plan too
+    let mut existing_planned = Node::new(
+        "existing_svc_planned",
+        "ExistingService",
+        FileType::Code,
+        "src/service.rs",
+    );
+    existing_planned.plan_id = Some("plan-1".to_string());
+    graph.upsert_node(existing_planned);
+    // Also add a real version of the baseline node
     graph.upsert_node(Node::new(
-        "existing_svc",
+        "existing_svc_real",
         "ExistingService",
         FileType::Code,
         "src/service.rs",
