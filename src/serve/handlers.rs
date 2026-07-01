@@ -2002,6 +2002,9 @@ impl GrapheniumServer {
         #[tool(param)]
         #[schemars(description = "Snapshot name (default: 'backup')")]
         snapshot_name: Option<String>,
+        #[tool(param)]
+        #[schemars(description = "Output character budget (default 10000)")]
+        budget: Option<usize>,
     ) -> String {
         let name = snapshot_name.unwrap_or_else(|| "backup".to_string());
 
@@ -2026,6 +2029,7 @@ impl GrapheniumServer {
         let changes = crate::analyze::impact::symbol_inventory_diff(&old_graph, &new_graph);
         let impact = crate::analyze::impact::downstream_impact(&new_graph, &changes);
 
+        let budget_max = budget.unwrap_or(10000);
         let mut out = format!("# What Changed (snapshot: `{name}`)\n\n");
 
         // Separate changes by type

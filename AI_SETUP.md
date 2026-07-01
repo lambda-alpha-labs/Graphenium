@@ -61,7 +61,7 @@ cd "$HOME/.graphenium"
 
 # Build and install. This compiles tree-sitter grammars for 9 languages;
 # it may take 2-5 minutes on the first build.
-cargo install --path .
+cargo install --locked --path .
 ```
 
 **Windows (PowerShell):**
@@ -69,7 +69,7 @@ cargo install --path .
 # Install Graphenium from source (requires Rust)
 git clone https://github.com/lambda-alpha-labs/Graphenium "$env:USERPROFILE\.graphenium"
 cd "$env:USERPROFILE\.graphenium"
-cargo install --path .
+cargo install --locked --path .
 ```
 
 Or use the automated installer:
@@ -87,7 +87,7 @@ gm --version        # should print a version number
 If the user wants a smaller binary (only specific languages), rebuild:
 
 ```sh
-cargo install --path . --no-default-features --features lang-python,lang-rust
+cargo install --locked --path . --no-default-features --features lang-python,lang-rust
 ```
 
 Available language features: `lang-python`, `lang-js`, `lang-ts`,

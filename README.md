@@ -156,7 +156,7 @@ Requires Rust 1.75+.
 ```sh
 git clone https://github.com/lambda-alpha-labs/Graphenium
 cd Graphenium
-cargo install --path .
+cargo install --locked --path .
 ```
 
 The binary is installed as `gm`.
