@@ -224,6 +224,45 @@ pub fn chokepoint_with_confidence(
     }
 }
 
+/// Safe diff formatting for large diffs — truncates above a budget threshold.
+/// Prioritizes: removed symbols > community moves > additions.
+pub fn format_safe_diff(changes: &[SymbolChange], budget_limit: usize) -> String {
+    let mut out = String::new();
+    let total = changes.len();
+    out.push_str(&format!("## Graph Diff Summary ({} changes)\n\n", total));
+    if total > budget_limit {
+        out.push_str(&format!("[WARNING] Diff too large ({} changes). Showing high-risk summary only.\n\n", total));
+        let removed: Vec<_> = changes.iter().filter(|c| matches!(c, SymbolChange::Removed { .. })).collect();
+        let moved: Vec<_> = changes.iter().filter(|c| matches!(c, SymbolChange::CommunityChanged { .. })).collect();
+        let added: Vec<_> = changes.iter().filter(|c| matches!(c, SymbolChange::Added { .. })).collect();
+        out.push_str(&format!("### Totals:\n- Removed: {}\n- Community moves: {}\n- Added: {}\n\n", removed.len(), moved.len(), added.len()));
+        if !removed.is_empty() {
+            out.push_str("### High-Risk Removals (Sample):\n");
+            for ch in removed.iter().take(10) {
+                if let SymbolChange::Removed { id, file, .. } = ch {
+                    out.push_str(&format!("- `{}` (from: `{}`)\n", id, file));
+                }
+            }
+            if removed.len() > 10 { out.push_str(&format!("  [... {} more omitted]\n", removed.len() - 10)); }
+        }
+        if !moved.is_empty() {
+            out.push_str("\n### Community Drifts (Sample):\n");
+            for ch in moved.iter().take(10) {
+                if let SymbolChange::CommunityChanged { id, old_community, new_community, .. } = ch {
+                    out.push_str(&format!("- `{}` (community {:?} -> {:?})\n", id, old_community, new_community));
+                }
+            }
+            if moved.len() > 10 { out.push_str(&format!("  [... {} more omitted]\n", moved.len() - 10)); }
+        }
+    } else {
+        out.push_str("### Changed Symbols:\n");
+        for change in changes {
+            out.push_str(&format!("  {}\n", change.format()));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
