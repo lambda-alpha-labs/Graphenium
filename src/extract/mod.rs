@@ -176,6 +176,32 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "lang-csharp")]
+    #[test]
+    fn extract_csharp_file() {
+        let src = b"namespace N \n{\n    public class Greeter \n    {\n        public string Greet() { return \"hi\"; }\n    }\n}";
+        let r = dispatch(src, "cs", "Greeter.cs");
+
+        // 1. Assert nodes are extracted
+        assert!(!r.nodes.is_empty(), "C# extraction produced 0 nodes");
+
+        // 2. Verify class node extraction
+        let class_node = r.nodes.iter().find(|n| n.label == "Greeter")
+            .expect("C# class 'Greeter' was not extracted");
+        assert_eq!(class_node.file_type, FileType::Code);
+        assert!(!class_node.source_location.is_empty(), "Class source location is empty");
+
+        // 3. Verify method node extraction
+        let method_node = r.nodes.iter().find(|n| n.label == "Greet")
+            .expect("C# method 'Greet' was not extracted");
+        assert_eq!(method_node.file_type, FileType::Code);
+        assert!(!method_node.source_location.is_empty(), "Method source location is empty");
+
+        // 4. Verify structural edge linking class to its method
+        let has_method_edge = r.edges.iter().any(|e| e.relation == "method");
+        assert!(has_method_edge, "Missing 'method' edge — C# extraction may not have linked class to method (expected at minimum a 'method' relation edge)");
+    }
+
     #[test]
     fn unsupported_extension_returns_empty() {
         let r = dispatch(b"data", "bin", "data.bin");

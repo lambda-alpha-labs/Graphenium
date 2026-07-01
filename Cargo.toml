@@ -86,7 +86,7 @@ tree-sitter-c          = { version = "0.23", optional = true }
 tree-sitter-cpp        = { version = "0.23", optional = true }
 # NOTE: tree-sitter-c-sharp may be at a different version than the others.
 # Adjust if `cargo check` reports a resolution error for this crate.
-tree-sitter-c-sharp    = { version = "0.23", optional = true }
+tree-sitter-c-sharp    = { version = "0.23.1", optional = true }
 
 # MCP Server (Phase 11) — official Rust MCP SDK
 # NOTE: Verify the latest version at https://crates.io/crates/rmcp
@@ -117,5 +117,5 @@ predicates = "3"
 
 [profile.release]
 lto = true
-strip = true
+strip = "debuginfo"
 opt-level = 3

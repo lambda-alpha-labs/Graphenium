@@ -149,6 +149,51 @@ fn check_graph_metadata(graph: &GrapheniumGraph) {
         print!("  detected languages ........... ");
         println!("{}", langs.join(", "));
     }
+
+    // Cross-check: language extraction integrity
+    check_language_extraction_integrity(graph);
+}
+
+fn check_language_extraction_integrity(graph: &GrapheniumGraph) {
+    let Some(ref langs) = graph.metadata.languages else {
+        return;
+    };
+
+    for lang in langs {
+        let extensions: &[&str] = match lang.as_str() {
+            "rust" => &["rs"],
+            "python" => &["py", "pyw"],
+            "go" => &["go"],
+            "javascript" => &["js", "mjs", "cjs", "jsx"],
+            "typescript" => &["ts", "tsx"],
+            "c" => &["c", "h"],
+            "cpp" => &["cpp", "cc", "cxx", "hh", "hpp", "hxx"],
+            "java" => &["java"],
+            "csharp" => &["cs"],
+            _ => &[],
+        };
+
+        if extensions.is_empty() {
+            continue;
+        }
+
+        let count = graph
+            .nodes()
+            .filter(|n| {
+                let path = std::path::Path::new(&n.source_file);
+                let ext = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                extensions.contains(&ext.as_str())
+            })
+            .count();
+
+        if count == 0 {
+            println!("  WARN ......................... '{lang}' files were detected in workspace, but 0 symbols were extracted. Check for tree-sitter linking anomalies.");
+        }
+    }
 }
 
 fn check_graph_quality(graph: &GrapheniumGraph) {

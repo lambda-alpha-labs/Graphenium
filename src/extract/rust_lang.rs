@@ -34,13 +34,18 @@ pub fn extract(source: &[u8], file_path: &str) -> ExtractionResult {
 #[cfg(feature = "lang-rust")]
 fn extract_inner(source: &[u8], file_path: &str) -> ExtractionResult {
     let mut parser = Parser::new();
-    if parser
-        .set_language(&tree_sitter_rust::LANGUAGE.into())
-        .is_err()
-    {
+    if let Err(e) = parser.set_language(&tree_sitter_rust::LANGUAGE.into()) {
+        eprintln!(
+            "[graphenium] warn: failed to set native Rust grammar for file '{}': {:?}",
+            file_path, e
+        );
         return ExtractionResult::new();
     }
     let Some(tree) = parser.parse(source, None) else {
+        eprintln!(
+            "[graphenium] warn: tree-sitter failed to parse Rust file '{}'",
+            file_path
+        );
         return ExtractionResult::new();
     };
 

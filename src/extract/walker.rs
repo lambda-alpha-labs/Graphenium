@@ -45,11 +45,19 @@ pub fn located_node(
 /// the populated `ExtractionResult`.
 pub fn walk_file(source: &[u8], config: &LanguageConfig, file_path: &str) -> ExtractionResult {
     let mut parser = Parser::new();
-    if parser.set_language(&config.language).is_err() {
+    if let Err(e) = parser.set_language(&config.language) {
+        eprintln!(
+            "[graphenium] warn: failed to set tree-sitter language for file '{}': {:?}",
+            file_path, e
+        );
         return ExtractionResult::new();
     }
 
     let Some(tree) = parser.parse(source, None) else {
+        eprintln!(
+            "[graphenium] warn: tree-sitter failed to parse file '{}'",
+            file_path
+        );
         return ExtractionResult::new();
     };
 
