@@ -287,11 +287,24 @@ pub fn format_safe_diff(changes: &[SymbolChange], budget_limit: usize) -> String
     } else {
         out.push_str("### Changed Symbols:\n");
         for change in changes {
-            out.push_str(&format!("  {}\n", match change {
-                SymbolChange::Added { id, file, .. } => format!("[ADDED] `{}` (in `{}`)", id, file),
-                SymbolChange::Removed { id, file, .. } => format!("[REMOVED] `{}` (from `{}`)", id, file),
-                SymbolChange::CommunityChanged { id, old_community, new_community, .. } => format!("[MOVED] `{}` (community {:?} -> {:?})", id, old_community, new_community),
-            }));
+            out.push_str(&format!(
+                "  {}\n",
+                match change {
+                    SymbolChange::Added { id, file, .. } =>
+                        format!("[ADDED] `{}` (in `{}`)", id, file),
+                    SymbolChange::Removed { id, file, .. } =>
+                        format!("[REMOVED] `{}` (from `{}`)", id, file),
+                    SymbolChange::CommunityChanged {
+                        id,
+                        old_community,
+                        new_community,
+                        ..
+                    } => format!(
+                        "[MOVED] `{}` (community {:?} -> {:?})",
+                        id, old_community, new_community
+                    ),
+                }
+            ));
         }
     }
     out
