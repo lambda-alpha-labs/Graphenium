@@ -1962,6 +1962,30 @@ impl GrapheniumServer {
         None
     }
 
+    // ── explain_change ────────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Composite orientation tool: returns hierarchy, community context, \
+        entry points, must-read files, and test scaffolding for a seed symbol in a single call."
+    )]
+    fn explain_change(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Node ID or label to explain")]
+        symbol: String,
+    ) -> String {
+        let graph = self.graph();
+        let (resolved_ids, _) = self.resolve_symbols_to_ids(&graph, &symbol);
+        let Some(target_id) = resolved_ids.first() else {
+            return format!("Error: Could not resolve symbol '{}' to a node in the graph.", symbol);
+        };
+        let Some(explanation) = crate::serve::traversal::explain_subsystem(&graph, target_id)
+        else {
+            return format!("Error: Failed to generate architectural explanation for '{}'.", symbol);
+        };
+        crate::serve::traversal::format_explanation_report(&graph, &explanation)
+    }
+
     // ── what_changed ──────────────────────────────────────────────────────────
 
     #[tool(description = "Compare current graph against a stored snapshot. \
@@ -3203,6 +3227,81 @@ impl GrapheniumServer {
         output.push_str(&crate::analyze::verifier::format_plan(&plan));
         output
     }
+
+    // ── Planning workspace tools (k) ────────────────────────────────────────
+
+    #[tool(
+        description = "Creates a new virtual planning workspace to group intended changes."
+    )]
+    fn create_planning_workspace(&self, plan_id: String, description: String) -> String {
+        let mut graph = (*self.graph()).clone();
+        if graph.metadata.extraction_modes.is_none() {
+            graph.metadata.extraction_modes = Some(Vec::new());
+        }
+        let mode_str = format!("plan:{}:{}", plan_id, description);
+        graph.metadata.extraction_modes.as_mut().unwrap().push(mode_str);
+        self.graph_store.store(Arc::new(graph));
+        let _persist = self.persist_graph().ok();
+        format!("Planning workspace '{}' successfully created.", plan_id)
+    }
+
+    #[tool(
+        description = "Registers an intended new or modified symbol and links it to an existing node."
+    )]
+    fn add_planned_symbol(
+        &self,
+        plan_id: String,
+        label: String,
+        file_path: String,
+        relation: String,
+        target_symbol: String,
+    ) -> String {
+        let graph = self.graph();
+        let (resolved_targets, _) = self.resolve_symbols_to_ids(&graph, &target_symbol);
+        let Some(target_id) = resolved_targets.first() else {
+            return format!("Error: Target symbol '{}' not found in graph.", target_symbol);
+        };
+
+        let planned_node_id = crate::model::make_id(&[&plan_id, &label]);
+        let mut p_node = crate::model::Node::new(&planned_node_id, &label, crate::model::FileType::Code, &file_path);
+        p_node.plan_id = Some(plan_id.clone());
+        p_node.extractor = Some("virtual-planner".to_string());
+        p_node.resolution_status = Some("planned".to_string());
+
+        let mut graph = (*self.graph()).clone();
+        graph.upsert_node(p_node);
+
+        let mut p_edge = crate::model::Edge::new(&planned_node_id, target_id, &relation, crate::model::Confidence::Inferred, &file_path);
+        p_edge.plan_id = Some(plan_id);
+        p_edge.extractor = Some("virtual-planner".to_string());
+        p_edge.resolution_status = Some("planned".to_string());
+        graph.add_edge(p_edge);
+
+        self.graph_store.store(Arc::new(graph));
+        let _persist = self.persist_graph().ok();
+        format!("Planned symbol '{}' registered and linked to '{}'.", label, target_symbol)
+    }
+
+    #[tool(
+        description = "Returns the full virtual subgraph of the plan."
+    )]
+    fn get_plan_details(&self, plan_id: String) -> String {
+        let graph = self.graph();
+        let planned_ids: Vec<String> = graph
+            .nodes()
+            .filter(|n| n.plan_id.as_deref() == Some(&plan_id))
+            .map(|n| n.id.clone())
+            .collect();
+
+        if planned_ids.is_empty() {
+            return format!("No planned nodes found for plan ID '{}'.", plan_id);
+        }
+
+        crate::serve::traversal::subgraph_to_text_with_match_details(
+            &graph, &planned_ids, 4000, &[], &[], &[], None,
+        )
+    }
+
     // ── Meta tools ──────────────────────────────────────────────────────────
 
     #[tool(

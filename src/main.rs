@@ -232,6 +232,20 @@ enum Commands {
         /// Exit with non-zero if any check fails
         #[arg(long)]
         strict: bool,
+
+        /// [k.4] Plan ID for plan compliance verification
+        #[arg(long)]
+        plan: Option<String>,
+    },
+
+    /// Generate a pre-edit orientation overview for a symbol
+    Explain {
+        /// Symbol to explain
+        symbol: String,
+
+        /// Path to the graph to use
+        #[arg(long, default_value = "graphenium-out/graph.json")]
+        graph: PathBuf,
     },
 
     /// Diff two graph snapshots and show symbol-level changes
@@ -422,7 +436,10 @@ async fn main() {
             min_resolution,
             max_ambiguous,
             strict,
-        } => cmd_check(&graph, min_resolution, max_ambiguous, strict),
+            plan,
+        } => cmd_check(&graph, min_resolution, max_ambiguous, strict, plan),
+
+        Commands::Explain { symbol, graph } => cmd_explain(&symbol, &graph),
 
         Commands::Diff {
             before,
@@ -1110,8 +1127,30 @@ fn cmd_check(
     min_resolution: f64,
     max_ambiguous: usize,
     strict: bool,
+    plan: Option<String>,
 ) -> graphenium::Result<()> {
     let graph = export::json::load_graph(graph_path)?;
+
+    // Handle plan compliance verification
+    if let Some(plan_id) = plan {
+        println!("=== Graphenium Plan Compliance Gate ===");
+        let report = harness::verify_plan(&graph, &plan_id);
+        println!("Plan ID: {}", report.plan_id);
+        println!("Compliance: {}", if report.passes_compliance { "PASS" } else { "FAIL" });
+        if !report.implemented_nodes.is_empty() {
+            println!("\nImplemented: {:?}", report.implemented_nodes);
+        }
+        if !report.missing_nodes.is_empty() {
+            println!("Missing: {:?}", report.missing_nodes);
+        }
+        if !report.unplanned_modified_files.is_empty() {
+            println!("Unplanned changes: {:?}", report.unplanned_modified_files);
+        }
+        if !report.passes_compliance && strict {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
 
     // Check if this is an AST-only pre-resolver graph
     let has_resolver_edges: bool = graph
@@ -1198,6 +1237,24 @@ fn cmd_check(
         println!("\n✓ Trust check PASSED");
     }
 
+    Ok(())
+}
+
+// ── `explain` command ─────────────────────────────────────────────────────────
+
+fn cmd_explain(symbol: &str, graph_path: &Path) -> graphenium::Result<()> {
+    let graph = export::json::load_graph(graph_path)?;
+    let (resolved, _) = serve_traversal::resolve_symbols_to_ids(&graph, symbol);
+    if let Some(target_id) = resolved.first() {
+        if let Some(explanation) = serve_traversal::explain_subsystem(&graph, target_id) {
+            let report = serve_traversal::format_explanation_report(&graph, &explanation);
+            println!("{}", report);
+        } else {
+            eprintln!("Error: Failed to generate subsystem explanation.");
+        }
+    } else {
+        eprintln!("Error: Symbol '{}' not found in the graph.", symbol);
+    }
     Ok(())
 }
 

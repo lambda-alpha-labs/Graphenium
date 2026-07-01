@@ -3,7 +3,8 @@
 //! Use this to gate CI pipelines on trust quality:
 //!   gm check --min-resolution 90 --max-stale 5
 
-use crate::model::GrapheniumGraph;
+use crate::model::graph::GrapheniumGraph;
+use crate::model::Node;
 use crate::trust::ResolutionReport;
 
 /// Result of a trust check, suitable for CI gate logic.
@@ -120,6 +121,67 @@ pub fn check_resolution_quality(
 
     result.details = details;
     result
+}
+
+// ── Plan Verification Engine (k) ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PlanVerificationReport {
+    pub plan_id: String,
+    pub implemented_nodes: Vec<String>,
+    pub missing_nodes: Vec<String>,
+    pub unplanned_modified_files: Vec<String>,
+    pub passes_compliance: bool,
+}
+
+/// Verify that a planning workspace's declared changes match the real graph.
+pub fn verify_plan(graph: &GrapheniumGraph, plan_id: &str) -> PlanVerificationReport {
+    let mut implemented_nodes = Vec::new();
+    let mut missing_nodes = Vec::new();
+    let mut planned_files = std::collections::HashSet::new();
+
+    let planned_nodes: Vec<&Node> = graph
+        .nodes()
+        .filter(|n| n.plan_id.as_deref() == Some(plan_id))
+        .collect();
+
+    for p_node in &planned_nodes {
+        planned_files.insert(p_node.source_file.clone());
+
+        let has_real_impl = graph.nodes().any(|n| {
+            n.label == p_node.label && n.id != p_node.id && n.plan_id.is_none()
+        });
+
+        if has_real_impl {
+            implemented_nodes.push(p_node.label.clone());
+        } else {
+            missing_nodes.push(p_node.label.clone());
+        }
+    }
+
+    let actual_files: std::collections::HashSet<String> = graph
+        .nodes()
+        .filter(|n| n.plan_id.is_none())
+        .map(|n| n.source_file.clone())
+        .collect();
+
+    let mut unplanned_modified_files: Vec<String> = actual_files
+        .difference(&planned_files)
+        .filter(|f| !crate::serve::traversal::is_test_like_path(f))
+        .cloned()
+        .collect();
+    unplanned_modified_files.sort();
+    unplanned_modified_files.truncate(20);
+
+    let passes_compliance = missing_nodes.is_empty() && unplanned_modified_files.is_empty();
+
+    PlanVerificationReport {
+        plan_id: plan_id.to_string(),
+        implemented_nodes,
+        missing_nodes,
+        unplanned_modified_files,
+        passes_compliance,
+    }
 }
 
 #[cfg(test)]

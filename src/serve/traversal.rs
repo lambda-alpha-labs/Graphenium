@@ -143,6 +143,11 @@ pub fn filtered_node_ids(
                     return None;
                 }
 
+                // Block virtual/planned nodes — they are not real source code
+                if node.plan_id.is_some() {
+                    return None;
+                }
+
                 (path_matches_scope(&node.source_file, include.as_deref(), exclude.as_deref())
                     && node_matches_type(node, &node_types)
                     && generated_code_matches(&node.source_file, generated_code_mode))
@@ -343,6 +348,41 @@ pub fn dfs(
     dfs_in_scope(graph, seeds, max_nodes, max_depth, None)
 }
 
+/// Resolve a comma-separated input string to node IDs, supporting exact ID
+/// match then case-insensitive label search fallback. Standalone version
+/// for CLI use (does not require a GrapheniumServer instance).
+pub fn resolve_symbols_to_ids(
+    graph: &GrapheniumGraph,
+    input: &str,
+) -> (Vec<String>, Vec<String>) {
+    let mut resolved_ids = Vec::new();
+    let mut unresolved_terms = Vec::new();
+
+    let terms: Vec<&str> = input
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    for term in terms {
+        if graph.contains_node(term) {
+            resolved_ids.push(term.to_string());
+            continue;
+        }
+        let matches: Vec<String> = graph
+            .nodes()
+            .filter(|n| n.label.eq_ignore_ascii_case(term))
+            .map(|n| n.id.clone())
+            .collect();
+        if !matches.is_empty() {
+            resolved_ids.extend(matches);
+        } else {
+            unresolved_terms.push(term.to_string());
+        }
+    }
+    (resolved_ids, unresolved_terms)
+}
+
 /// Find structural references to a symbol — containers, imports, inheritance,
 /// and implementations. These are 100% resolved in AST-only mode.
 pub fn find_structural_references(
@@ -391,6 +431,186 @@ pub fn find_structural_references(
     }
 
     refs
+}
+
+// ── Subsystem Explanation Engine (l) ─────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct SubsystemExplanation {
+    pub symbol_id: String,
+    pub label: String,
+    pub source_file: String,
+    pub parents: Vec<(String, String)>,
+    pub community_id: Option<usize>,
+    pub community_focus: Option<String>,
+    pub community_hubs: Vec<String>,
+    pub direct_callers: Vec<String>,
+    pub production_files: Vec<String>,
+    pub test_files: Vec<String>,
+}
+
+/// Build a comprehensive subsystem explanation for a symbol.
+pub fn explain_subsystem(graph: &GrapheniumGraph, symbol_id: &str) -> Option<SubsystemExplanation> {
+    let node = graph.node_data(symbol_id)?;
+    let mut parents = Vec::new();
+    let mut direct_callers = Vec::new();
+    let mut production_files = std::collections::HashSet::new();
+    let mut test_files = std::collections::HashSet::new();
+
+    production_files.insert(node.source_file.clone());
+
+    for (neighbor_id, edge) in graph.node_edges(symbol_id) {
+        if let Some(neighbor) = graph.node_data(neighbor_id) {
+            let is_test = is_test_like_path(&neighbor.source_file);
+            if is_test {
+                test_files.insert(neighbor.source_file.clone());
+            } else {
+                production_files.insert(neighbor.source_file.clone());
+            }
+
+            let is_outgoing = edge.src_original == symbol_id
+                || (edge.src_original.is_empty() && edge.source == symbol_id);
+            if is_outgoing
+                && matches!(
+                    edge.relation.as_str(),
+                    "inherits" | "implements" | "contains" | "method"
+                )
+            {
+                parents.push((neighbor.label.clone(), edge.relation.clone()));
+            }
+
+            let is_incoming = edge.tgt_original == symbol_id
+                || (edge.tgt_original.is_empty() && edge.target == symbol_id);
+            if is_incoming
+                && matches!(edge.relation.as_str(), "calls" | "imports" | "uses")
+            {
+                direct_callers.push(neighbor.label.clone());
+            }
+        }
+    }
+
+    let mut community_hubs = Vec::new();
+    let mut community_focus = None;
+    if let Some(c_id) = node.community {
+        let comm_files: Vec<String> = graph
+            .nodes()
+            .filter(|n| n.community == Some(c_id))
+            .map(|n| n.source_file.clone())
+            .collect();
+        community_focus = crate::cluster::focus::focus_label(&comm_files);
+
+        let mut same_comm_nodes: Vec<(&Node, usize)> = graph
+            .nodes()
+            .filter(|n| {
+                n.community == Some(c_id)
+                    && n.id != symbol_id
+                    && !crate::ranking::is_framework_noise_node(graph, n)
+            })
+            .map(|n| (n, graph.degree(&n.id)))
+            .collect();
+        same_comm_nodes.sort_by_key(|&(_, deg)| std::cmp::Reverse(deg));
+        community_hubs = same_comm_nodes
+            .into_iter()
+            .take(3)
+            .map(|(n, _)| n.label.clone())
+            .collect();
+    }
+
+    Some(SubsystemExplanation {
+        symbol_id: symbol_id.to_string(),
+        label: node.label.clone(),
+        source_file: node.source_file.clone(),
+        parents,
+        community_id: node.community,
+        community_focus,
+        community_hubs,
+        direct_callers,
+        production_files: production_files.into_iter().collect(),
+        test_files: test_files.into_iter().collect(),
+    })
+}
+
+/// Format a subsystem explanation as a structured Markdown report.
+pub fn format_explanation_report(graph: &GrapheniumGraph, exp: &SubsystemExplanation) -> String {
+    let mut out = String::new();
+    let root = graph.metadata.project_root.as_deref();
+
+    out.push_str(&format!("# Subsystem Orientation: `{}`\n", exp.label));
+    out.push_str(&format!(
+        "Primary File: `{}`\n\n",
+        relative_path(&exp.source_file, root)
+    ));
+
+    // 1. Type Hierarchy & Containment
+    if !exp.parents.is_empty() {
+        out.push_str("## 1. Type Hierarchy & Containment\n");
+        for (parent, rel) in &exp.parents {
+            out.push_str(&format!("- `{}` via relationship: `{}`\n", parent, rel));
+        }
+        out.push('\n');
+    }
+
+    // 2. Community Context
+    if let Some(c_id) = exp.community_id {
+        out.push_str(&format!("## 2. Community Context (Group {})\n", c_id));
+        if let Some(ref focus) = exp.community_focus {
+            out.push_str(&format!("- Directory Focus: `{}`\n", focus));
+        }
+        let hubs_shown = if exp.community_hubs.len() > 3 {
+            &exp.community_hubs[..3]
+        } else {
+            &exp.community_hubs
+        };
+        out.push_str(&format!("- Co-located Hubs: {:?}\n\n", hubs_shown));
+    }
+
+    // 3. Direct Callers
+    if !exp.direct_callers.is_empty() {
+        out.push_str("## 3. Direct Callers / Importers\n");
+        for caller in exp.direct_callers.iter().take(10) {
+            out.push_str(&format!("- `{}`\n", caller));
+        }
+        if exp.direct_callers.len() > 10 {
+            out.push_str(&format!(
+                "  [... and {} more direct callers omitted]\n",
+                exp.direct_callers.len() - 10
+            ));
+        }
+        out.push('\n');
+    }
+
+    // 4. Production Files to Inspect
+    out.push_str("## 4. Production Files to Inspect (Prioritized)\n");
+    for (i, file) in exp.production_files.iter().take(5).enumerate() {
+        out.push_str(&format!(
+            "  {}. `{}`\n",
+            i + 1,
+            relative_path(file, root)
+        ));
+    }
+    if exp.production_files.len() > 5 {
+        out.push_str(&format!(
+            "  [... and {} more production files omitted]\n",
+            exp.production_files.len() - 5
+        ));
+    }
+    out.push('\n');
+
+    // 5. Test & Verification Scaffolding (Demoted)
+    if !exp.test_files.is_empty() {
+        out.push_str("## 5. Test & Verification Scaffolding\n");
+        for file in exp.test_files.iter().take(5) {
+            out.push_str(&format!("  - `{}`\n", relative_path(file, root)));
+        }
+        if exp.test_files.len() > 5 {
+            out.push_str(&format!(
+                "  [... and {} more test files omitted]\n",
+                exp.test_files.len() - 5
+            ));
+        }
+    }
+
+    out
 }
 
 /// Depth-first traversal constrained to nodes in `allowed` when provided.

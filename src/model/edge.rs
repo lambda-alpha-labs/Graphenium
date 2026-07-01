@@ -104,6 +104,12 @@ pub struct Edge {
     /// Resolution status: "resolved", "unresolved", "ambiguous", "heuristic", "inferred".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolution_status: Option<String>,
+
+    /// Optional plan_id for virtual/planned entities. When set, this edge
+    /// represents an intended relationship in a planning workspace rather
+    /// than extracted source code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_id: Option<String>,
 }
 
 fn default_weight() -> f64 {
