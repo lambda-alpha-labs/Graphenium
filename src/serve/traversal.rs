@@ -351,10 +351,7 @@ pub fn dfs(
 /// Resolve a comma-separated input string to node IDs, supporting exact ID
 /// match then case-insensitive label search fallback. Standalone version
 /// for CLI use (does not require a GrapheniumServer instance).
-pub fn resolve_symbols_to_ids(
-    graph: &GrapheniumGraph,
-    input: &str,
-) -> (Vec<String>, Vec<String>) {
+pub fn resolve_symbols_to_ids(graph: &GrapheniumGraph, input: &str) -> (Vec<String>, Vec<String>) {
     let mut resolved_ids = Vec::new();
     let mut unresolved_terms = Vec::new();
 
@@ -406,7 +403,11 @@ pub fn find_structural_references(
             )
         {
             if let Some(neighbor) = graph.node_data(neighbor_id) {
-                refs.push((neighbor.label.clone(), edge.relation.clone(), neighbor.source_file.clone()));
+                refs.push((
+                    neighbor.label.clone(),
+                    edge.relation.clone(),
+                    neighbor.source_file.clone(),
+                ));
             }
         }
     }
@@ -424,7 +425,11 @@ pub fn find_structural_references(
                 || (edge.tgt_original.is_empty() && edge.target == file_node_id);
             if is_incoming && edge.relation == "imports" {
                 if let Some(neighbor) = graph.node_data(neighbor_id) {
-                    refs.push((neighbor.label.clone(), "imports_file".to_string(), neighbor.source_file.clone()));
+                    refs.push((
+                        neighbor.label.clone(),
+                        "imports_file".to_string(),
+                        neighbor.source_file.clone(),
+                    ));
                 }
             }
         }
@@ -481,9 +486,7 @@ pub fn explain_subsystem(graph: &GrapheniumGraph, symbol_id: &str) -> Option<Sub
 
             let is_incoming = edge.tgt_original == symbol_id
                 || (edge.tgt_original.is_empty() && edge.target == symbol_id);
-            if is_incoming
-                && matches!(edge.relation.as_str(), "calls" | "imports" | "uses")
-            {
+            if is_incoming && matches!(edge.relation.as_str(), "calls" | "imports" | "uses") {
                 direct_callers.push(neighbor.label.clone());
             }
         }
@@ -582,11 +585,7 @@ pub fn format_explanation_report(graph: &GrapheniumGraph, exp: &SubsystemExplana
     // 4. Production Files to Inspect
     out.push_str("## 4. Production Files to Inspect (Prioritized)\n");
     for (i, file) in exp.production_files.iter().take(5).enumerate() {
-        out.push_str(&format!(
-            "  {}. `{}`\n",
-            i + 1,
-            relative_path(file, root)
-        ));
+        out.push_str(&format!("  {}. `{}`\n", i + 1, relative_path(file, root)));
     }
     if exp.production_files.len() > 5 {
         out.push_str(&format!(

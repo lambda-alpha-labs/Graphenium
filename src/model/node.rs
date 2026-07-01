@@ -104,8 +104,8 @@ impl Node {
             qualified_label: None,
             extractor: None,
             resolution_status: None,
-                    plan_id: None,
-        
+            plan_id: None,
+        }
     }
 
     pub fn with_source_location(mut self, source_location: impl Into<String>) -> Self {

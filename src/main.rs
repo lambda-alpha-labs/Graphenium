@@ -1136,7 +1136,14 @@ fn cmd_check(
         println!("=== Graphenium Plan Compliance Gate ===");
         let report = harness::verify_plan(&graph, &plan_id);
         println!("Plan ID: {}", report.plan_id);
-        println!("Compliance: {}", if report.passes_compliance { "PASS" } else { "FAIL" });
+        println!(
+            "Compliance: {}",
+            if report.passes_compliance {
+                "PASS"
+            } else {
+                "FAIL"
+            }
+        );
         if !report.implemented_nodes.is_empty() {
             println!("\nImplemented: {:?}", report.implemented_nodes);
         }

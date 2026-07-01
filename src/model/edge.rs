@@ -142,6 +142,7 @@ impl Edge {
             source_location: None,
             extractor: None,
             resolution_status: None,
+            plan_id: None,
         }
     }
 
@@ -157,8 +158,7 @@ impl Edge {
         e.extractor = Some("tree-sitter".to_string());
         e.resolution_status = Some("resolved".to_string());
         e
-                plan_id: None,
-        
+    }
 
     /// Construct an INFERRED call-graph edge (weight 0.8, score 0.5).
     /// Resolution is considered "heuristic" since the AST makes a best guess.

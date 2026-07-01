@@ -148,9 +148,9 @@ pub fn verify_plan(graph: &GrapheniumGraph, plan_id: &str) -> PlanVerificationRe
     for p_node in &planned_nodes {
         planned_files.insert(p_node.source_file.clone());
 
-        let has_real_impl = graph.nodes().any(|n| {
-            n.label == p_node.label && n.id != p_node.id && n.plan_id.is_none()
-        });
+        let has_real_impl = graph
+            .nodes()
+            .any(|n| n.label == p_node.label && n.id != p_node.id && n.plan_id.is_none());
 
         if has_real_impl {
             implemented_nodes.push(p_node.label.clone());
