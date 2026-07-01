@@ -3,7 +3,24 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use crate::analyze::rank::DirectedProjection;
-use crate::model::{GrapheniumGraph, Node};
+use crate::model::{FileType, GrapheniumGraph, Node};
+
+/// A namespace/import aggregation hub: reached only via `imports` edges and
+/// fanned out wide enough that it is clearly a grouping node, not a real symbol.
+/// Used by multiple fix phases to exclude namespace hubs from impact/structural tools.
+pub fn is_namespace_aggregation_node(node: &Node, graph: &GrapheniumGraph) -> bool {
+    if node.file_type != FileType::Code {
+        return false;
+    }
+    let incident_edges: Vec<_> = graph
+        .edges_iter()
+        .filter(|e| e.source == node.id || e.target == node.id)
+        .collect();
+    if incident_edges.len() <= 1 {
+        return false;
+    }
+    incident_edges.iter().all(|e| e.relation == "imports")
+}
 
 /// Query ranking mode for hybrid retrieval.
 #[derive(Debug, Clone, Copy, PartialEq)]

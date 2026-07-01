@@ -37,6 +37,13 @@ pub fn graph_to_value(graph: &GrapheniumGraph) -> Value {
             if let Some(ref v) = n.resolution_status {
                 obj["resolution_status"] = json!(v);
             }
+            // Must round-trip optional fields for planning workspace, disambiguation, etc.
+            if let Some(ref v) = n.qualified_label {
+                obj["qualified_label"] = json!(v);
+            }
+            if let Some(ref v) = n.plan_id {
+                obj["plan_id"] = json!(v);
+            }
             obj
         })
         .collect();
@@ -58,6 +65,15 @@ pub fn graph_to_value(graph: &GrapheniumGraph) -> Value {
             }
             if let Some(ref v) = e.resolution_status {
                 obj["resolution_status"] = json!(v);
+            }
+            if !e.src_original.is_empty() {
+                obj["src_original"] = json!(&e.src_original);
+            }
+            if !e.tgt_original.is_empty() {
+                obj["tgt_original"] = json!(&e.tgt_original);
+            }
+            if let Some(ref v) = e.plan_id {
+                obj["plan_id"] = json!(v);
             }
             obj
         })

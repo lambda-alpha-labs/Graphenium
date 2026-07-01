@@ -2223,6 +2223,38 @@ impl GrapheniumServer {
         out
     }
 
+    // ── references_to ─────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Structural reference lookup: returns containers, imports,         inheritance, and implementations for a given symbol. 100% AST-only safe.         Does not require an LLM call."
+    )]
+    fn references_to(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Node ID or label to find references for")]
+        symbol: String,
+    ) -> String {
+        let graph = self.graph();
+        let resolved = match self.resolve_id(&symbol) {
+            Some(id) => id,
+            None => return format!("Symbol '{}' not found in the graph.", symbol),
+        };
+        let refs = crate::serve::traversal::find_structural_references(&graph, &resolved);
+        if refs.is_empty() {
+            return format!("No structural references found for '{}'.", symbol);
+        }
+        let mut out = String::new();
+        out.push_str(&format!("# Structural References for '{}'\n\n", symbol));
+        for (rel, _sf, ref_id) in &refs {
+            let label = graph
+                .node_data(ref_id)
+                .map(|n| n.label.as_str())
+                .unwrap_or(ref_id);
+            out.push_str(&format!("- `{}` — `{}` ({})\n", label, rel, ref_id));
+        }
+        out
+    }
+
     // ── Write-back tools ────────────────────────────────────────────────────
 
     /// Write the current in-memory graph to disk so mutations survive restarts.
@@ -3127,13 +3159,29 @@ impl GrapheniumServer {
             return msg;
         }
 
-        // 4. Return successful file recommendations
+        // 4. Post-process: deduplicate by file and filter namespace hubs
+        let plan = plan;
+        let mut seen_files: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let filtered: Vec<&crate::analyze::verifier::VerificationStep> = plan
+            .must_read
+            .iter()
+            .filter(|step| seen_files.insert(step.file.clone()))
+            .filter(|step| {
+                if let Some(node) = graph.node_data(&step.target) {
+                    !crate::ranking::is_namespace_aggregation_node(node, &graph)
+                } else {
+                    true
+                }
+            })
+            .collect();
+
+        // 5. Return successful file recommendations
         let mut output = String::new();
         output.push_str(&format!(
             "## Files to Read ({} resolved symbol(s))\n\n",
             resolved_ids.len()
         ));
-        for step in &plan.must_read {
+        for step in &filtered {
             output.push_str(&format!("- `{}` — {}\n", step.file, step.reason));
         }
         output
