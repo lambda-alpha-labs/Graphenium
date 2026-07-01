@@ -343,6 +343,56 @@ pub fn dfs(
     dfs_in_scope(graph, seeds, max_nodes, max_depth, None)
 }
 
+/// Find structural references to a symbol — containers, imports, inheritance,
+/// and implementations. These are 100% resolved in AST-only mode.
+pub fn find_structural_references(
+    graph: &GrapheniumGraph,
+    symbol_id: &str,
+) -> Vec<(String, String, String)> {
+    let mut refs = Vec::new();
+    let target_node = match graph.node_data(symbol_id) {
+        Some(n) => n,
+        None => return refs,
+    };
+
+    // 1. Gather direct incoming structural edges pointing to our symbol
+    for (neighbor_id, edge) in graph.node_edges(symbol_id) {
+        let is_incoming = edge.tgt_original == symbol_id
+            || (edge.tgt_original.is_empty() && edge.target == symbol_id);
+        if is_incoming
+            && matches!(
+                edge.relation.as_str(),
+                "contains" | "method" | "inherits" | "implements"
+            )
+        {
+            if let Some(neighbor) = graph.node_data(neighbor_id) {
+                refs.push((neighbor.label.clone(), edge.relation.clone(), neighbor.source_file.clone()));
+            }
+        }
+    }
+
+    // 2. Gather file-level imports of the symbol's containing file
+    let target_file_stem = std::path::Path::new(&target_node.source_file)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&target_node.source_file);
+    let file_node_id = crate::model::make_id(&[target_file_stem]);
+
+    if file_node_id != symbol_id {
+        for (neighbor_id, edge) in graph.node_edges(&file_node_id) {
+            let is_incoming = edge.tgt_original == file_node_id
+                || (edge.tgt_original.is_empty() && edge.target == file_node_id);
+            if is_incoming && edge.relation == "imports" {
+                if let Some(neighbor) = graph.node_data(neighbor_id) {
+                    refs.push((neighbor.label.clone(), "imports_file".to_string(), neighbor.source_file.clone()));
+                }
+            }
+        }
+    }
+
+    refs
+}
+
 /// Depth-first traversal constrained to nodes in `allowed` when provided.
 pub fn dfs_in_scope(
     graph: &GrapheniumGraph,
