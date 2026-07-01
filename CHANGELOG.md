@@ -2,7 +2,7 @@
 
 All notable changes to Graphenium are documented in this file.
 
-## v0.14.0 (2026-06-30) — C# project support, build-map CLI
+## v0.14.0 (2026-07-01) — C# project support, build-map CLI, planning workspaces
 
 ### Added
 - **C# project parser**: `src/extract/csharp_project.rs` parses `.sln` and `.csproj` files into `CSharpWorkspace`/`CSharpProject` structs with assembly names, root namespaces, and project reference chains.
@@ -11,6 +11,17 @@ All notable changes to Graphenium are documented in this file.
 - **`gm diff --json`**: New structured JSON output flag.
 - **`CacheManager` finalized**: `ExtractOptions.cache_manager: Option<Arc<CacheManager>>` replaces `cache_dir` for thread-safe singleton cache access.
 - **C# boundary-aware resolver**: Existing `qualified_label` system handles namespace matching. Project reference boundaries stored as graph edges.
+- **Parser failure logger**: `walker.rs`, `rust_lang.rs`, `go.rs` emit `eprintln!` on `set_language`/`parse` failures
+- **C# extraction regression test**: `extract_csharp_file` unit test under `lang-csharp` feature
+- **Language integrity check**: `check_language_extraction_integrity` in `gm doctor`
+- **`references_to` MCP tool**: Structural reference lookup — containers, imports, inheritance (100% AST-only safe)
+- **`explain_change` MCP + `gm explain` CLI**: Composite pre-edit orientation (hierarchy + community + callers + files)
+- **Persistent planning workspaces**: `plan_id` on `Node`/`Edge` + `verify_plan` compliance engine + 3 MCP tools + `gm check --plan`
+- **AST-only `blast_radius` warnings**: Safety guardrail for zero call-resolution graphs
+- **Clearer `next_files_to_read`**: `resolve_symbols_to_ids` with fuzzy/comma-separated support, 3-state error messaging
+- **Namespace-aware `module_dependencies`**: `is_node_in_module` with path + qualified_label matching
+- **CPython noise filter**: Python stdlib labels in `FRAMEWORK_LABELS`; Windows backslash path normalization
+- **Diff truncation**: `format_safe_diff` at 500-change budget, prevents server OOM on large deltas
 
 ### Changed
 - `extract_file` uses `cache_manager.load_ast`/`save_ast` instead of ad-hoc paths.

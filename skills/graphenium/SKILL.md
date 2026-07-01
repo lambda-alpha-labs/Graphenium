@@ -136,6 +136,15 @@ The following MCP tools provide trust, verification, and impact analysis:
 | `graph_info` | Full graph metadata: schema version, project root, build timestamp, languages, counts |
 | `recluster` | Re-run community detection after manual node/edge edits |
 | `query_transitive` | BFS transitive closure from a seed symbol with depth/direction control |
+| `references_to` | Structural reference lookup (containers, imports, inheritance) — 100% AST-only safe |
+| `explain_change` | Composite pre-edit orientation: hierarchy + community + callers + files |
+
+**Planning workspace tools (v0.14.0):**
+| Tool | Purpose |
+|---|---|
+| `create_planning_workspace` | Create a virtual workspace to group intended changes |
+| `add_planned_symbol` | Register an intended new/modified symbol linked to existing nodes |
+| `get_plan_details` | Return the full virtual subgraph of a plan |
 
 Use these when the user asks about trust quality, change safety, or
 verification — especially in CI or review contexts. For CI integration,
