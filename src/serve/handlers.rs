@@ -141,6 +141,58 @@ impl GrapheniumServer {
         explicit.unwrap_or_else(|| self.graph().is_ast_only())
     }
 
+    /// Check if a node belongs to a module by path OR namespace/qualified_label.
+    fn is_node_in_module(node: &crate::model::Node, fragment_lower: &str) -> bool {
+        if fragment_lower.is_empty() {
+            return false;
+        }
+        let source_file_normalized = node.source_file.replace('\\', "/").to_lowercase();
+        if source_file_normalized.contains(fragment_lower) {
+            return true;
+        }
+        if let Some(ref qualified) = node.qualified_label {
+            if qualified.to_lowercase().contains(fragment_lower) {
+                return true;
+            }
+        }
+        if node.label.to_lowercase().contains(fragment_lower) {
+            return true;
+        }
+        false
+    }
+
+    /// Resolve a comma-separated input string to node IDs, supporting
+    /// exact ID match, then case-insensitive label search fallback.
+    fn resolve_symbols_to_ids(&self, input: &str) -> (Vec<String>, Vec<String>) {
+        let graph = self.graph_store.load();
+        let mut resolved_ids = Vec::new();
+        let mut unresolved_terms = Vec::new();
+
+        let terms: Vec<&str> = input
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        for term in terms {
+            if graph.contains_node(term) {
+                resolved_ids.push(term.to_string());
+                continue;
+            }
+            let matches: Vec<String> = graph
+                .nodes()
+                .filter(|n| n.label.eq_ignore_ascii_case(term))
+                .map(|n| n.id.clone())
+                .collect();
+            if !matches.is_empty() {
+                resolved_ids.extend(matches);
+            } else {
+                unresolved_terms.push(term.to_string());
+            }
+        }
+        (resolved_ids, unresolved_terms)
+    }
+
     fn resolve_generated_code_mode(
         &self,
         generated_code_mode: Option<&str>,
@@ -1811,6 +1863,7 @@ impl GrapheniumServer {
         Iterates over all edges and groups them by modules containing \
         the given path fragments."
     )]
+
     fn module_dependencies(
         &self,
         #[tool(param)]
@@ -1837,10 +1890,13 @@ impl GrapheniumServer {
                 None => continue,
             };
 
-            let src_file = src_node.source_file.to_lowercase();
-            let tgt_file = tgt_node.source_file.to_lowercase();
+            // Check dual: path-based OR namespace/qualified_label matching
+            // Also include depends_on edges for C# project references
+            let src_matches = Self::is_node_in_module(src_node, &a_lower);
+            let tgt_matches = Self::is_node_in_module(tgt_node, &b_lower)
+                || (a_lower == b_lower && Self::is_node_in_module(tgt_node, &a_lower));
 
-            if src_file.contains(&a_lower) && tgt_file.contains(&b_lower) {
+            if src_matches && tgt_matches {
                 total += 1;
                 grouped
                     .entry(edge.relation.clone())
@@ -1864,6 +1920,14 @@ impl GrapheniumServer {
 
         if total == 0 {
             out.push_str("\nNo direct dependencies found between these modules.\n");
+            if graph.is_ast_only() {
+                out.push_str(
+                    "[NOTE] This graph is in AST-only mode (calls 0% resolved). Cross-module coupling \
+                    relying on function calls or implicit references cannot be detected. If these modules \
+                    rely on implicit runtime coupling, run Graphenium with a semantic pass (`gm run .`).\n\
+                    Additionally, verify that namespace queries match the project namespace labels.\n"
+                );
+            }
             return out;
         }
 
@@ -2735,7 +2799,26 @@ impl GrapheniumServer {
             }
         }
 
+        // 1. Check if we are in AST-only mode and inject a loud safety guardrail
+        if graph.is_ast_only() {
+            output.push_str("⚠️  [SAFETY WARNING — AST-ONLY MODE ACTIVE]\n");
+            output.push_str(
+                "This graph was built in AST-only mode. Behavioral cross-file call resolution is 0%.\n\
+                The blast radius shown below is strictly limited to static import/include directories \n\
+                and DOES NOT reflect true runtime function call sites.\n\n\
+                DO NOT rely on this result as a guarantee of change safety. To resolve call-graph coupling,\n\
+                re-run Graphenium with a semantic pass: `gm run . --provider <provider>`.\n\n\
+                ------------------------------------------------------------------------\n\n"
+            );
+        }
+
         output.push_str(&format!("## Blast Radius\n\n"));
+        if affected_files.is_empty() && graph.is_ast_only() {
+            output.push_str(
+                "Result: 0 affected symbols found.\n\
+                (Note: This empty result is highly likely an artifact of AST-only mode rather than true decoupling.)\n\n"
+            );
+        }
         output.push_str(&format!("- Changed nodes: {}\n", ids.len()));
         output.push_str(&format!("- Affected files: {}\n", affected_files.len()));
         output.push_str(&format!(
@@ -2969,21 +3052,56 @@ impl GrapheniumServer {
         changed_nodes: String,
     ) -> String {
         let graph = self.graph_store.load();
-        let ids: Vec<String> = changed_nodes
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect();
 
-        let plan = crate::analyze::verifier::plan_verification(&graph, &ids, None);
-
-        if plan.must_read.is_empty() {
-            return "No files to read — no changed nodes found or graph is empty.".to_string();
+        // 1. Check if the graph is entirely empty
+        if graph.node_count() == 0 {
+            return "Error: The Graphenium graph is empty. Please run a codebase scan first using `gm run .` to generate the index.".to_string();
         }
 
+        // 2. Resolve input symbols with fuzzy matching
+        let (resolved_ids, unresolved) = self.resolve_symbols_to_ids(&changed_nodes);
+
+        if !unresolved.is_empty() && resolved_ids.is_empty() {
+            return format!(
+                "Error: Could not resolve the symbol(s) {:?} to any nodes in the graph.\n\n\
+                Suggestions:\n\
+                - Check spelling and casing.\n\
+                - Run `query_graph` to search for similar symbol names.\n\
+                - Ensure the language extractor for this file type is active in `gm doctor`.",
+                unresolved
+            );
+        }
+
+        // 3. Generate verification plan
+        let plan = crate::analyze::verifier::plan_verification(&graph, &resolved_ids, None);
+
+        if plan.must_read.is_empty() {
+            let mut msg = format!(
+                "No files recommended to read for resolved symbols: {:?}.\n\n",
+                resolved_ids
+            );
+
+            if graph.is_ast_only() {
+                msg.push_str(
+                    "WARNING: AST-Only Mode Limitation —\n\
+                    Because the graph is currently in AST-only mode, cross-file behavioral calls are 0% resolved.\n\
+                    Graphenium cannot trace callers or downstream dependents to recommend files.\n\
+                    To enable this, run a semantic scan: `gm run . --provider <provider>`.\n"
+                );
+            } else {
+                msg.push_str(
+                    "These symbols appear completely isolated. They have no incoming or outgoing connections \
+                    registered in the graph.\n"
+                );
+            }
+            return msg;
+        }
+
+        // 4. Return successful file recommendations
         let mut output = String::new();
         output.push_str(&format!(
-            "## Files to Read ({} changed nodes)\n\n",
-            plan.changed_nodes.len()
+            "## Files to Read ({} resolved symbol(s))\n\n",
+            resolved_ids.len()
         ));
         for step in &plan.must_read {
             output.push_str(&format!("- `{}` — {}\n", step.file, step.reason));

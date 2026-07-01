@@ -82,7 +82,9 @@ pub fn detect(
         if let Some(ref gs) = graphenium_ignore {
             // Match relative path from root.
             if let Ok(rel) = path.strip_prefix(root) {
-                if gs.is_match(rel) {
+                // Convert Windows backslashes to forward slashes for cross-platform glob matching
+                let normalized_rel = rel.to_string_lossy().replace('\\', "/");
+                if gs.is_match(&normalized_rel) {
                     continue;
                 }
             }
