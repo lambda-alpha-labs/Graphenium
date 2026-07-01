@@ -257,7 +257,7 @@ pub fn format_safe_diff(changes: &[SymbolChange], budget_limit: usize) -> String
     } else {
         out.push_str("### Changed Symbols:\n");
         for change in changes {
-            out.push_str(&format!("  {}\n", change.format()));
+            out.push_str(&format!("  {}\n", format_change(change)));
         }
     }
     out

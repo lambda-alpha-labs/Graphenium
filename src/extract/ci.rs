@@ -330,6 +330,7 @@ pub fn csproj_to_extraction(
             source_file: project.source_root.to_string_lossy().to_string(),
             source_location: String::new(),
             qualified_label: Some(project.root_namespace.clone()),
+            plan_id: None,
             community: None,
             extractor: Some("csproj-parser".to_string()),
             resolution_status: Some("resolved".to_string()),
@@ -352,6 +353,7 @@ pub fn csproj_to_extraction(
                     weight: 1.0,
                     src_original: String::new(),
                     tgt_original: String::new(),
+                    plan_id: None,
                 };
                 result.edges.push(edge);
             }

@@ -1975,7 +1975,7 @@ impl GrapheniumServer {
         symbol: String,
     ) -> String {
         let graph = self.graph();
-        let (resolved_ids, _) = self.resolve_symbols_to_ids(&graph, &symbol);
+        let (resolved_ids, _) = self.resolve_symbols_to_ids(&symbol);
         let Some(target_id) = resolved_ids.first() else {
             return format!("Error: Could not resolve symbol '{}' to a node in the graph.", symbol);
         };
@@ -3233,7 +3233,15 @@ impl GrapheniumServer {
     #[tool(
         description = "Creates a new virtual planning workspace to group intended changes."
     )]
-    fn create_planning_workspace(&self, plan_id: String, description: String) -> String {
+    fn create_planning_workspace(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Unique identifier for the planning workspace")]
+        plan_id: String,
+        #[tool(param)]
+        #[schemars(description = "Human-readable description of the plan's purpose")]
+        description: String,
+    ) -> String {
         let mut graph = (*self.graph()).clone();
         if graph.metadata.extraction_modes.is_none() {
             graph.metadata.extraction_modes = Some(Vec::new());
@@ -3250,14 +3258,24 @@ impl GrapheniumServer {
     )]
     fn add_planned_symbol(
         &self,
+        #[tool(param)]
+        #[schemars(description = "Planning workspace ID")]
         plan_id: String,
+        #[tool(param)]
+        #[schemars(description = "Label for the new planned symbol")]
         label: String,
+        #[tool(param)]
+        #[schemars(description = "File path where the symbol will be added")]
         file_path: String,
+        #[tool(param)]
+        #[schemars(description = "Relation type (calls, depends_on, implements, etc.)")]
         relation: String,
+        #[tool(param)]
+        #[schemars(description = "ID or label of the existing node to link to")]
         target_symbol: String,
     ) -> String {
         let graph = self.graph();
-        let (resolved_targets, _) = self.resolve_symbols_to_ids(&graph, &target_symbol);
+        let (resolved_targets, _) = self.resolve_symbols_to_ids(&target_symbol);
         let Some(target_id) = resolved_targets.first() else {
             return format!("Error: Target symbol '{}' not found in graph.", target_symbol);
         };
@@ -3285,7 +3303,12 @@ impl GrapheniumServer {
     #[tool(
         description = "Returns the full virtual subgraph of the plan."
     )]
-    fn get_plan_details(&self, plan_id: String) -> String {
+    fn get_plan_details(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "Planning workspace ID")]
+        plan_id: String,
+    ) -> String {
         let graph = self.graph();
         let planned_ids: Vec<String> = graph
             .nodes()
@@ -3298,7 +3321,7 @@ impl GrapheniumServer {
         }
 
         crate::serve::traversal::subgraph_to_text_with_match_details(
-            &graph, &planned_ids, 4000, &[], &[], &[], None,
+            &graph, &planned_ids, 4000, &[], &[], &[],
         )
     }
 
