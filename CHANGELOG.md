@@ -2,6 +2,25 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.15.0 (2026-07-01) — Planning workspace persist, references_to tool, quality-of-life hardening
+
+### Added
+- **`is_namespace_aggregation_node` predicate** — Degree-based filter for import-only hub nodes. Used by `next_files_to_read` and `god_nodes` to filter namespace-hub noise
+- **`references_to` MCP tool** — Structural reference lookup (containers, imports, inheritance). 100% AST-only safe
+- **Planning workspace persist round-trip** — `plan_id` and `qualified_label` fields now serialized in `graph_to_value()` so planning data survives graph reload
+- **`next_files_to_read` dedup + namespace filtering** — File-level deduplication and post-processing filter against namespace aggregation hubs
+- **`what_changed` budget param** — New `budget` parameter caps output at a configurable character limit (default 10000) to prevent server OOM
+- **`module_dependencies` hub bridging** — When both modules import the same namespace hub, crossing edges are now reported instead of "0 connections"
+- **`god_nodes` test-hub filtering** — Namespace aggregation hubs and test-anchored paths are filtered from hub results with filtered count in output header
+- **`ambiguous_symbols` collision detection** — Now reports label collisions (same label, different node IDs) alongside ambiguous edges
+- **All `cargo install` commands now use `--locked`** — Prevents tree-sitter ABI drift, critical for C# support
+
+### Fixed
+- **16 CI compilation errors** across 5 categories: missing `#[tool(param)]` on planning workspace tools, missing `plan_id` fields in constructors, wrong arg counts in `resolve_symbols_to_ids`/`subgraph_to_text_with_match_details`, missing `format()` method on `SymbolChange`, formatting diffs
+
+### Performance
+- 350 tests pass, 0 clippy errors, formatting clean
+
 ## v0.14.0 (2026-07-01) — C# project support, build-map CLI, planning workspaces
 
 ### Added

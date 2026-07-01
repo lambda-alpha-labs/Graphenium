@@ -63,6 +63,7 @@ Use these to narrow the agent's reading set before it opens source files.
 |---|---|
 | `shortest_path` | Path between any two components |
 | `safest_path` | Confidence-aware pathfinding between nodes, preferring `EXTRACTED` edges |
+| `references_to` | Structural reference lookup — containers, imports, inheritance, implementations (100% AST-only safe) |
 | `blast_radius` | Downstream impact analysis for affected files and symbols |
 | `verification_plan` | Prioritized verification plan based on impact and risk |
 | `next_files_to_read` | Reading-order recommendation derived from a verification plan |
@@ -79,7 +80,7 @@ Use these before editing, before review, and when explaining architecture connec
 | Tool | Purpose |
 |---|---|
 | `resolution_report` | Resolution quality statistics: resolved vs unresolved reference counts and ratios |
-| `ambiguous_symbols` | List low-trust edges with `AMBIGUOUS` confidence for manual review |
+| `ambiguous_symbols` | List ambiguous/low-trust edges AND label collisions (same label, different node IDs) |
 | `unresolved_references` | Missing dependencies the resolver could not bind |
 | `agent_change_gate` | Policy-based gate checks for CI pipelines |
 

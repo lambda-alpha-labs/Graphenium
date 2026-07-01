@@ -128,7 +128,7 @@ The following MCP tools provide trust, verification, and impact analysis:
 | Tool | Purpose |
 |------|---------|
 | `resolution_report` | Confidence breakdown, unresolved/ambiguous ratios, trust quality summary |
-| `ambiguous_symbols` | Lists symbols with multiple conflicting definitions |
+| `ambiguous_symbols` | Lists ambiguous edges and label collisions (same label, different node IDs) |
 | `unresolved_references` | Lists dangling references that could not be resolved |
 | `safest_path` | Pathfinding that prefers high-trust (`resolved`/`EXTRACTED`) edges |
 | `verification_plan` | 7-tier prioritized verification plan from a graph diff |
