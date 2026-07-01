@@ -1096,7 +1096,8 @@ impl GrapheniumServer {
             return "No hub nodes found in the selected filter scope.".to_string();
         }
 
-        let result = crate::analyze::god_nodes_in_scope(&self.graph(), top_n, scoped.as_ref());
+        let self_g = self.graph();
+        let result = crate::analyze::god_nodes_in_scope(&self_g, top_n, scoped.as_ref());
 
         if result.is_empty() {
             return if scoped.is_some() {
@@ -1113,10 +1114,31 @@ impl GrapheniumServer {
         if let Some(header) = Self::generated_mode_header(generated_code_mode) {
             out.push_str(header);
         }
-        out.push_str(&format!("# Top {} Hub Nodes\n\n", result.len()));
-        let self_g = self.graph();
+        // Filter out namespace aggregation hubs and test-anchored nodes
+        let total_before = result.len();
+        let filtered: Vec<_> = result
+            .into_iter()
+            .filter(|gn| {
+                let node = self_g.node_data(&gn.node_id);
+                if let Some(n) = node {
+                    if crate::ranking::is_namespace_aggregation_node(n, &self_g) {
+                        return false;
+                    }
+                    if crate::serve::traversal::is_test_like_path(&n.source_file) {
+                        return false;
+                    }
+                }
+                true
+            })
+            .collect();
+
+        out.push_str(&format!(
+            "# Top {} Hub Nodes ({} filtered)\n\n",
+            filtered.len(),
+            total_before.saturating_sub(filtered.len())
+        ));
         let root = self_g.metadata.project_root.as_deref();
-        for gn in &result {
+        for gn in &filtered {
             let comm = gn
                 .community
                 .map(|c| format!(" [community {c}]"))
@@ -1919,14 +1941,66 @@ impl GrapheniumServer {
         );
 
         if total == 0 {
-            out.push_str("\nNo direct dependencies found between these modules.\n");
-            if graph.is_ast_only() {
-                out.push_str(
-                    "[NOTE] This graph is in AST-only mode (calls 0% resolved). Cross-module coupling \
-                    relying on function calls or implicit references cannot be detected. If these modules \
-                    rely on implicit runtime coupling, run Graphenium with a semantic pass (`gm run .`).\n\
-                    Additionally, verify that namespace queries match the project namespace labels.\n"
-                );
+            // Try namespace-hub bridging: edges through import aggregation hubs
+            let mut bridged = 0usize;
+            for n in graph.nodes() {
+                if !crate::ranking::is_namespace_aggregation_node(n, &graph) {
+                    continue;
+                }
+                let mut a_nodes: Vec<String> = Vec::new();
+                let mut b_nodes: Vec<String> = Vec::new();
+                for edge in graph.edges_iter() {
+                    let src_node = match graph.node_data(&edge.source) {
+                        Some(node) => node,
+                        None => continue,
+                    };
+                    let tgt_node = match graph.node_data(&edge.target) {
+                        Some(node) => node,
+                        None => continue,
+                    };
+                    // Hub is target of import: edge.source imports the hub
+                    if edge.target == n.id && edge.relation == "imports" {
+                        if Self::is_node_in_module(src_node, &a_lower) {
+                            a_nodes.push(format!(
+                                "{} ({})",
+                                src_node.display_label(),
+                                src_node.source_file
+                            ));
+                        }
+                        if Self::is_node_in_module(src_node, &b_lower) {
+                            b_nodes.push(format!(
+                                "{} ({})",
+                                src_node.display_label(),
+                                src_node.source_file
+                            ));
+                        }
+                    }
+                }
+                if !a_nodes.is_empty() && !b_nodes.is_empty() {
+                    bridged += 1;
+                    out.push_str(&format!(
+                        "- `imports` bridging via namespace **{}**: {} cross-module edges\n",
+                        n.label,
+                        a_nodes.len() * b_nodes.len()
+                    ));
+                }
+            }
+
+            if bridged > 0 {
+                out.push_str(&format!(
+                    "\nTotal: {} cross-module connections via {} bridging hubs.\n",
+                    bridged, bridged
+                ));
+            } else {
+                out.push_str("\nNo direct dependencies found between these modules.\n");
+                if graph.is_ast_only() {
+                    out.push_str(
+                        "[NOTE] This graph is in AST-only mode (calls 0% resolved). Cross-module coupling \
+                        relying on function calls or implicit references cannot be detected. If these modules \
+                        rely on implicit runtime coupling, run Graphenium with a semantic pass (`gm run .`).\n\
+                        Additionally, verify that namespace queries match the project namespace labels.\n"
+                    );
+                }
             }
             return out;
         }
@@ -2683,33 +2757,89 @@ impl GrapheniumServer {
         before being used as evidence for decisions.")]
     fn ambiguous_symbols(&self) -> String {
         let graph = self.graph_store.load();
-        let ambiguous: Vec<_> = graph
+
+        // 1. Check ambiguous edges (existing behavior)
+        let ambiguous_edges: Vec<_> = graph
             .edges_iter()
             .filter(|e| e.confidence == crate::model::Confidence::Ambiguous)
             .collect();
 
-        if ambiguous.is_empty() {
-            return "No ambiguous symbols found.".to_string();
+        // 2. Check label collisions: same label, different node IDs
+        let mut label_counts: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for n in graph.nodes() {
+            label_counts
+                .entry(n.label.clone())
+                .or_default()
+                .push(n.id.clone());
+        }
+        let colliding_labels: Vec<&String> = label_counts
+            .iter()
+            .filter(|(_, ids)| ids.len() > 1)
+            .map(|(label, _)| label)
+            .collect();
+
+        let mut output = String::new();
+        if ambiguous_edges.is_empty() && colliding_labels.is_empty() {
+            return "No ambiguous symbols or label collisions found.\n                    Every node has a unique label, and every edge has EXTRACTED or INFERRED confidence."
+                .to_string();
         }
 
-        let mut output = format!("## Ambiguous Edges ({})\n\n", ambiguous.len());
-        for e in &ambiguous {
-            let src_label = graph
-                .node_data(&e.source)
-                .map(|n| n.label.as_str())
-                .unwrap_or(e.source.as_str());
-            let tgt_label = graph
-                .node_data(&e.target)
-                .map(|n| n.label.as_str())
-                .unwrap_or(e.target.as_str());
-            let root = graph.metadata.project_root.as_deref();
+        if !ambiguous_edges.is_empty() {
             output.push_str(&format!(
-                "- {} `{}` {} [{}]\n",
-                src_label,
-                e.relation,
-                tgt_label,
-                crate::serve::traversal::relative_path(&e.source_file, root)
+                "## Inferred/Ambiguous Edges ({})\n\n",
+                ambiguous_edges.len()
             ));
+            for e in &ambiguous_edges {
+                let src_label = graph
+                    .node_data(&e.source)
+                    .map(|n| n.label.as_str())
+                    .unwrap_or(e.source.as_str());
+                let tgt_label = graph
+                    .node_data(&e.target)
+                    .map(|n| n.label.as_str())
+                    .unwrap_or(e.target.as_str());
+                let root = graph.metadata.project_root.as_deref();
+                output.push_str(&format!(
+                    "- {} `{}` {} [{}]\n",
+                    src_label,
+                    e.relation,
+                    tgt_label,
+                    crate::serve::traversal::relative_path(&e.source_file, root)
+                ));
+            }
+            output.push('\n');
+        }
+
+        if !colliding_labels.is_empty() {
+            output.push_str(&format!(
+                "## Label Collisions ({})\n\n",
+                colliding_labels.len()
+            ));
+            for label in colliding_labels.iter().take(20) {
+                if let Some(ids) = label_counts.get(*label) {
+                    let entries: Vec<String> = ids
+                        .iter()
+                        .map(|id| {
+                            let n = graph.node_data(id);
+                            let sf = n.map(|n| n.source_file.as_str()).unwrap_or("?");
+                            format!("`{}` ({})", id, sf)
+                        })
+                        .collect();
+                    output.push_str(&format!(
+                        "- **{}** — {} occurrences: {}\n",
+                        label,
+                        ids.len(),
+                        entries.join(", ")
+                    ));
+                }
+            }
+            if colliding_labels.len() > 20 {
+                output.push_str(&format!(
+                    "  ... and {} more colliding labels\n",
+                    colliding_labels.len() - 20
+                ));
+            }
         }
         output
     }
