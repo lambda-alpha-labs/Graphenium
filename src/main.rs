@@ -452,7 +452,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 graphenium::doctor::run_doctor(g);
             }
-            Ok::<(), Box<dyn std::error::Error>>(())
+            Ok::<(), grapheneium::error::GrapheniumError>(())
         }
 
         Commands::Check {
@@ -504,7 +504,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Graph { command } => match command {
             GraphCommands::Migrate { graph } => {
                 eprintln!("not yet implemented: migrate {}", graph.display());
-                Ok::<(), Box<dyn std::error::Error>>(())
+                Ok::<(), grapheneium::error::GrapheniumError>(())
             }
             GraphCommands::Schema { graph } => cmd_graph_schema(&graph),
             GraphCommands::BuildMap { graph } => cmd_graph_build_map(&graph),
@@ -526,7 +526,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 eprintln!("not yet implemented: gate");
             }
-            Ok::<(), Box<dyn std::error::Error>>(())
+            Ok::<(), grapheneium::error::GrapheniumError>(())
         }
     };
 
