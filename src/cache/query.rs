@@ -129,6 +129,30 @@ pub fn salsa_extract_file(path: &std::path::Path, file_type: FileType) -> Extrac
     })
 }
 
+/// Extract all files using Salsa-backed extraction with memoization.
+///
+/// On the first call, each file is parsed and cached. On subsequent calls,
+/// Salsa re-parses only files whose content has changed. This is the Salsa
+/// equivalent of `extract::extract_all()` for use in `full_rebuild`.
+///
+/// Files are processed in parallel via rayon for performance; the Salsa DB
+/// is thread-local so each rayon worker gets its own DB instance.
+pub fn salsa_extract_all(files: &[crate::detect::DetectedFile]) -> ExtractionResult {
+    use rayon::prelude::*;
+
+    let results: Vec<ExtractionResult> = files
+        .par_iter()
+        .filter(|f| f.file_type == FileType::Code)
+        .map(|f| salsa_extract_file(&f.path, f.file_type.clone()))
+        .collect();
+
+    let mut merged = ExtractionResult::new();
+    for r in results {
+        merged.merge(r);
+    }
+    merged
+}
+
 /// Materialize the full workspace graph from the Salsa database.
 pub fn materialize_full_graph(
     db: &salsa::DatabaseImpl,

@@ -157,16 +157,8 @@ fn full_rebuild(root: &Path, out_dir: &Path) -> crate::Result<(usize, usize, usi
     // 1. Detect files
     let (files, corpus_warnings) = detect::detect(root, &DetectOptions::default())?;
 
-    // 2. AST extraction (rayon-parallel, code files only)
-    let ast_result = extract::extract_all(
-        &files,
-        &ExtractOptions {
-            mode: extract::ExtractMode::default(),
-            cache_manager: Some(std::sync::Arc::new(crate::cache::CacheManager::new(
-                out_dir.join("cache"),
-            ))),
-        },
-    );
+    // 2. AST extraction via Salsa (memoized — unchanged files skip re-parsing)
+    let ast_result = crate::cache::query::salsa_extract_all(&files);
 
     // 3. Build graph
     let (mut graph, _stats) = build::build_merged([ast_result]);
