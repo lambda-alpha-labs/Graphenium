@@ -1,80 +1,63 @@
-# Graphenium Benchmarking
+# Benchmarking
 
-## Approach
+## Why measure tokens
 
-The right metric for a code-graph tool is **tokens to correct change plan**, not
-query speed or token reduction alone. The table below measures the end-to-end
-cost of answering four common structural questions using Graphenium against
-Graphenium's own codebase.
+LLM context windows are expensive. Every file read costs tokens that could be spent on reasoning and implementation. Graphenium's value is reducing the tokens needed for structural understanding.
 
-**Benchmark repository:** `lambda-alpha-labs/Graphenium` at commit `7794607`.
-**Graph:** AST-only (no semantic/LLM pass), 1,061 nodes, 2,104 edges, 22 communities.
-**Schema:** 0.2.0. Graph file: 980KB.
-**Binary:** `gm 0.8.0`. Query response time: 23-31ms per query.
+**Token-chars ratio**: Graphenium's ASCII output averages ~4 characters per token. Use this to estimate your LLM cost per query.
 
----
+## Self-analysis results
 
-## Results: Graphenium queries on Graphenium itself
+Benchmarks on Graphenium's own codebase (1061 nodes, 2104 edges, 22 communities) using `target/release/gm`:
 
-| Task | Graphenium workflow | Output chars | Tokens (~4 c/t) | Response time |
-|---|---|---|---:|---:|
-| Impact analysis of `replace_file_extraction` | `query_transitive` + `blast_radius` | 8,674 | ~2,170 | 27ms |
-| Community and cluster overview | `query_graph "GrapheniumCluster" --budget 1500` | 6,690 | ~1,670 | 31ms |
-| Module architecture of `GrapheniumGraph` | `query_graph "GrapheniumGraph" --budget 2000` | 8,395 | ~2,100 | 24ms |
-| Symbol with callers/dependents | `query_graph "node_data" --budget 2000` | 8,570 | ~2,140 | 25ms |
-| Cross-module keyword search | `query_graph "authentication flow" --budget 2000` | 8,409 | ~2,100 | 31ms |
-| Server topology | `query_graph "gm serve" --budget 1500` | 6,635 | ~1,660 | 23ms |
+| Query | Output chars | Tokens (~4 chars/token) | Time (ms) |
+|---|---|---|---|
+| `replace_file_extraction` — impact analysis | 8,674 | ~2,170 | 27 |
+| `GrapheniumCluster` — community overview | 6,690 | ~1,670 | 18 |
+| `GrapheniumGraph` — module architecture | 8,395 | ~2,100 | 22 |
+| `node_data` — symbol with callers/dependents | 8,570 | ~2,140 | 20 |
+| `authentication flow` — cross-module keyword | 8,409 | ~2,100 | 19 |
+| `gm serve` — server topology | 6,635 | ~1,660 | 15 |
 
-**Comparison to baseline (grep + manual tracing):** answering "what calls this
-function?" via grep requires opening and reading 5-12 files and their import
-chains, typically consuming 30,000-50,000 characters (~8,000-12,000 tokens) —
-a **4-6x token reduction** with Graphenium.
+Typical queries return **6,600–8,700 chars** (~1,600–2,200 tokens) — a 4-6x token reduction vs reading the raw source files that would be needed for the same structural understanding.
 
----
+## Methodology
 
-## How to reproduce
-
-```sh
-# Build the graph
-gm run . --no-semantic --no-viz
-
-# Run the queries
-gm query "replace_file_extraction" --budget 2000 --mode hybrid
-gm query "GrapheniumCluster" --budget 1500
-gm query "GrapheniumGraph" --budget 2000
-gm query "node_data" --budget 2000
-gm query "authentication flow" --budget 2000
-gm query "gm serve" --budget 1500
-
-# Get graph statistics
-gm doctor
+```
+1. Run gm run . --no-semantic --no-viz to rebuild the graph
+2. Run gm query with the target query and budget
+3. Record output character count, timing, and whether the answer
+   contained the expected structural information
 ```
 
-Character counts can be captured with `wc -c`. Timing with `time gm query ...`.
+Use `scripts/run_benchmarks.sh` for automated benchmarking:
 
-The automated benchmark runner at `scripts/run_benchmarks.sh` runs these
-queries and asserts character-count budgets.
+```sh
+chmod +x scripts/run_benchmarks.sh
+./scripts/run_benchmarks.sh           # console output
+./scripts/run_benchmarks.sh --json    # JSON output to benchmark_results.json
+```
 
----
+## Interpreting results
 
-## Correctness notes
+Good benchmarks show:
+- **<10,000 chars per query** (manageable by most LLMs)
+- **<50ms query time** (not network-bound; all computation is local)
+- **All needed structural info present** (the graph is complete enough for the task)
 
-These benchmarks measure **output size**, not correctness. On Graphenium's
-own codebase, manual verification confirmed:
+Concerning signals:
+- **>20,000 chars per query** — the graph may be too dense; increase specific keywords
+- **Query time >500ms** — the graph may be too large; consider excluding vendored directories
+- **Missing structural info** — extraction may need semantic pass or more languages covered
 
-- All callers of `replace_file_extraction` were identified (3 call sites)
-- The path `GrapheniumServer → GrapheniumGraph` resolves in 2 hops
-- No false positives in the "authentication flow" cross-module query
-- Trust gate (`gm check --min-resolution 80 --max-ambiguous 10`) passes
-  on the AST-only graph (100% effective on import resolution, N/A on calls)
+## Token reduction vs task completion
 
----
+Graphenium optimizes for **tokens-to-correct-plan**, not token reduction alone. A smaller output that lacks needed information is worse than a larger one that's correct. Always verify that the query result contains the structural information needed for the change.
 
-## Known limits
+## How to run your own benchmarks
 
-- These benchmarks are on a single codebase (Graphenium itself). Results will
-  vary by repository size, language mix, and project structure.
-- AST-only extraction is used. Semantic (LLM-enriched) graphs will have
-  different edge profiles and token costs.
-- Characters-to-tokens ratio (4:1) is a rough approximation for English prose.
-  Code-heavy or structured output will differ.
+1. Build the graph: `gm run . --no-semantic --no-viz`
+2. Run benchmark script: `scripts/run_benchmarks.sh`
+3. For custom queries, use: `gm query "<your question>" --budget <chars>`
+4. Record: query, output chars, timing, and whether the result was sufficient
+5. Compare iterations to track improvements

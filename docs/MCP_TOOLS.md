@@ -1,170 +1,153 @@
-# Graphenium MCP Tool Reference
+# MCP Tools Reference
 
-Graphenium exposes compact graph tools through MCP so AI agents can ask structural questions without reading unrelated source files.
-
-The tools are intended to support a disciplined loop:
-
-```text
-orient -> resolve target -> inspect trust -> select files -> read source -> plan change -> gate
-```
+Graphenium exposes **22 MCP tools** across 5 categories: Read, Composite, Trust, Write, and Diff. Each tool accepts parameters as JSON and returns formatted Markdown text.
 
 ---
 
-## Recommended agent sequence
+## Read Tools (11)
 
-For architectural or pre-edit tasks:
+### `graph_info`
+- **Returns**: Project root, schema version, build timestamp, extraction mode, languages, node/edge counts
+- **Use when**: Confirming which graph the server has loaded before acting on results
 
-1. `graph_info` or `architecture_summary`
-2. `query_graph` or `analyse_symbol`
-3. `get_neighbors`, `query_transitive`, `shortest_path`, or `safest_path`
-4. `blast_radius` or `verification_plan`
-5. `next_files_to_read`
-6. Source-code reading in the selected files
-7. `diff_graph`, `what_changed`, or `agent_change_gate` before review
+### `graph_stats`
+- **Returns**: Node/edge/hyperedge counts, communities, node-type breakdown, edge confidence distribution
+- **Use when**: Getting a quick sense of graph size and quality
 
-Agents should not treat graph output as a replacement for source reading. Graphenium tells the agent what to read first and how much to trust the path that led there.
+### `query_graph(keywords, depth?, budget?, ...)`
+- **Returns**: Matching nodes + connections formatted as Markdown
+- **Use when**: Searching the graph by keyword relevance
+- **Parameters**: `keywords` (required), `depth` (1-6, default 3), `budget` (default 2000), `dfs`, `path_prefix`, `exclude_path`, `include_relations`, `exclude_relations`, `node_types`, `generated_code_mode`, `include_tests`, `min_degree`, `ast_only_tuning`
+
+### `get_node(id)`
+- **Returns**: Node label, file type, source file, source span, community, degree
+- **Use when**: Looking up a specific symbol by ID or label
+
+### `get_neighbors(node_id, relation?, max_neighbors?, extracted_only?)`
+- **Returns**: Direct neighbors with edge relation types, confidence levels, and scores
+- **Use when**: Exploring what a node connects to
+
+### `get_community(community_id, include_members?)`
+- **Returns**: Representative nodes, files, dominant relations; optionally full member list
+- **Use when**: Understanding an architectural community
+
+### `god_nodes(n?, path_prefix?, node_types?, ...)`
+- **Returns**: Top N most connected nodes (hubs), excluding file-level stubs
+- **Use when**: Finding architectural hotspots
+
+### `shortest_path(from, to, mode?, ...)`
+- **Returns**: Path between two nodes with relation details
+- **Use when**: Finding how two symbols are connected
+- **Mode**: `semantic` (prefers meaningful relations) or `strict` (fewest hops)
+
+### `summarize_file(path, group_by?, show_leaves?, min_degree?)`
+- **Returns**: All graph symbols extracted from a file, grouped by kind or community
+- **Use when**: Answering "what's in this file?" without reading source
+- **Token optimization**: Hubs shown by default; low-degree leaves hidden unless `show_leaves=true`
+
+### `architecture_summary(...)`
+- **Returns**: Repository-level summary with major communities, cross-community connectors, and hotspots
+- **Use when**: Orienting on a codebase before digging into specific files
+
+### `query_transitive(seed, depth?, relation?, direction?)`
+- **Returns**: Full transitive closure from a seed symbol (BFS)
+- **Parameters**: `seed` (required), `depth` (1-6, default 3), `direction` (forward/reverse/both)
+- **Use when**: Finding all nodes reachable from a given symbol, or all nodes that can reach it
 
 ---
 
-## Orientation tools
+## Composite Tools (3)
 
-| Tool | Purpose |
+### `analyse_symbol(symbol)`
+- **Returns**: Single-turn composite analysis: node metadata + behavioral connections (calls, uses, inherits, implements) + structural connections (imports, contains) + trust profile
+- **Use when**: Getting a comprehensive understanding of a symbol in one call
+
+### `module_dependencies(module_a, module_b)`
+- **Returns**: Summary of dependency connections between two modules/directories, grouped by relation type
+- **Use when**: Understanding how two parts of the codebase relate
+
+### `what_changed(snapshot_name?)`
+- **Returns**: Risk-sorted delta: removed symbols (highest risk), community moves, added symbols, downstream impact
+- **Use when**: Comparing current graph against a stored snapshot after analyzing changes
+
+---
+
+## Trust Tools (7)
+
+### `resolution_report()`
+- **Returns**: Import resolution %, call resolution %, ambiguous edge count, unresolved references
+- **Use when**: Checking graph trust quality before acting on results
+
+### `ambiguous_symbols()`
+- **Returns**: List of ambiguous (low-confidence) edges
+- **Use when**: Finding edges that need manual verification
+
+### `unresolved_references()`
+- **Returns**: List of import edges where the target symbol was not found
+- **Use when**: Finding potentially missing dependencies
+
+### `safest_path(from, to)`
+- **Returns**: Path with highest-confidence edges, plus a safety score (0.0-1.0)
+- **Use when**: Need a trustworthy path, not necessarily the shortest
+
+### `verification_plan(changed_nodes)`
+- **Returns**: Prioritized 7-tier plan: must-read files → tests → ambiguous edges → risk gates
+- **Use when**: Planning what to verify after symbol changes
+
+### `blast_radius(changed_nodes)`
+- **Returns**: Downstream impact: affected files, communities, edge confidence distribution
+- **Use when**: Understanding the blast radius of proposed changes
+
+### `agent_change_gate(changed_nodes, min_resolution?, max_ambiguous?)`
+- **Returns**: Policy gate evaluations (pass/fail table) with optional threshold overrides
+- **Use when**: Running trust quality gates for CI before committing changes
+
+---
+
+## Write Tools (4)
+
+### `add_node(id, label, file_type, source_file, ...)`
+- **Returns**: Confirmation with total node+edge counts after save
+- **Use when**: Registering architectural concepts, rationale nodes, or other entities the AST extractor doesn't capture
+
+### `add_edge(source, target, relation, confidence, source_file, ...)`
+- **Returns**: Confirmation with total node+edge counts
+- **Use when**: Recording verified relationships between nodes
+
+### `remove_edge(source, target, relation?)`
+- **Returns**: Confirmation of removed edges
+- **Use when**: Correcting false positives or removing stale relationships
+
+### `recluster()`
+- **Returns**: Re-runs Louvain community detection and re-assigns communities
+- **Use when**: After adding nodes/edges via write tools, community assignments may be stale
+
+---
+
+## Diff Tools (2)
+
+### `diff_graph(before_graph, after_graph)`
+- **Returns**: Added/removed nodes and edges between two graph snapshots
+- **Use when**: Comparing two exported graph.json files
+
+### `review_plan(before_graph_path?, after_graph_path?)`
+- **Returns**: Full review plan: symbol inventory changes + prioritized verification plan
+- **Use when**: Generating a complete pre-commit review from graph diffs
+
+---
+
+## Tool Selection Guide
+
+| Goal | Recommended Tool |
 |---|---|
-| `graph_info` | Full graph metadata: schema version, project root, build timestamp, languages, and counts |
-| `graph_stats` | Node/edge counts, file types, confidence and provenance breakdowns |
-| `architecture_summary` | Communities, focus paths, god nodes, and confidence summary |
-| `god_nodes` | Top N most-connected hub nodes |
-| `get_community` | All nodes in a community cluster |
-| `recluster` | Re-run community detection after manual node/edge edits |
-
-Use these at the start of an unfamiliar repository or before a broad refactor.
-
----
-
-## Query and navigation tools
-
-| Tool | Purpose |
-|---|---|
-| `query_graph` | Keyword-scored BFS/DFS traversal within a token budget |
-| `get_node` | Full node details by ID or label |
-| `get_neighbors` | Direct neighbours with edge types and confidence |
-| `summarize_file` | Extracted symbols from a source file |
-| `query_transitive` | BFS transitive closure from a seed symbol with depth, direction, and relation filtering |
-| `module_dependencies` | Module-to-module dependency summary between two directory paths |
-| `reload_graph` | Hot-swap the graph without restarting the MCP server |
-| `run_datalog` | Run a Datalog query against the graph: supports rules (`:-`), goals (`?-`), negation (`not`), and recursion |
-
-Use these to narrow the agent's reading set before it opens source files.
-
----
-
-## Path and impact tools
-
-| Tool | Purpose |
-|---|---|
-| `shortest_path` | Path between any two components |
-| `safest_path` | Confidence-aware pathfinding between nodes, preferring `EXTRACTED` edges |
-| `references_to` | Structural reference lookup — containers, imports, inheritance, implementations (100% AST-only safe) |
-| `blast_radius` | Downstream impact analysis for affected files and symbols |
-| `verification_plan` | Prioritized verification plan based on impact and risk |
-| `next_files_to_read` | Reading-order recommendation derived from a verification plan |
-| `what_changed` | Risk-sorted delta against a stored snapshot: removed symbols, community moves, additions |
-| `diff_graph` | Snapshot comparison and symbol-level diff between graph versions |
-| `analyse_symbol` | Single-turn composite: resolves a symbol and groups behavioral/structural connections with trust profile |
-
-Use these before editing, before review, and when explaining architecture connections.
-
----
-
-## Trust and policy tools
-
-| Tool | Purpose |
-|---|---|
-| `resolution_report` | Resolution quality statistics: resolved vs unresolved reference counts and ratios |
-| `ambiguous_symbols` | List ambiguous/low-trust edges AND label collisions (same label, different node IDs) |
-| `unresolved_references` | Missing dependencies the resolver could not bind |
-| `agent_change_gate` | Policy-based gate checks for CI pipelines |
-
-A good agent response should surface trust information explicitly. It should not bury ambiguous relationships in prose.
-
-Example trust profile:
-
-```text
-Trust profile: 42 EXTRACTED, 8 INFERRED, 2 AMBIGUOUS
-Resolution: 91 percent resolved, 9 percent unresolved
-Decision: safe to plan against extracted paths; inspect ambiguous login edge before editing
-```
-
----
-
-## Write tools
-
-| Tool | Purpose |
-|---|---|
-| `add_node` | Register concepts the AST cannot capture |
-| `add_edge` | Record relationships confirmed through inspection |
-| `remove_edge` | Correct false positives or stale relationships |
-
-All writes persist to disk immediately.
-
-Use manual writes for confirmed framework behavior, runtime wiring, architecture concepts, or documentation relationships that static extraction cannot see. Do not use manual writes to make unverified guesses look authoritative.
-
----
-
-## Query behavior worth highlighting
-
-- `summarize_file` supports `show_leaves`; default `false` hides low-degree leaf symbols to save tokens.
-- `query_graph` and related tools support `include_tests`; default `false` excludes test/spec nodes.
-- `get_neighbors` supports `extracted_only` for strict source-backed traversal.
-- Query responses include a trust profile line such as `N EXTRACTED, N INFERRED, N AMBIGUOUS`.
-- `shortest_path` output includes per-hop confidence breakdowns.
-- Query outputs use project-root-relative paths.
-
----
-
-## Example MCP agent prompt
-
-```text
-You are working in a repository with Graphenium available. Before editing
-billing.retry_payment, use Graphenium to:
-
-1. resolve the symbol,
-2. identify direct callers and downstream dependents,
-3. find the safest source-backed paths to affected modules,
-4. list ambiguous or inferred relationships separately,
-5. recommend the first files to read,
-6. produce a change plan.
-
-Do not edit code until the plan is complete.
-```
-
----
-
-## Example MCP answer shape
-
-```text
-Target: billing.retry_payment
-
-Graph summary:
-- Direct callers: payments.webhook_handler, jobs.retry_failed_payment
-- Downstream dependents: ledger.record_charge, notifications.payment_failed
-- Safest path: jobs.retry_failed_payment -> billing.retry_payment -> ledger.record_charge
-- Ambiguous edge: payments.webhook_handler -> billing.retry_payment has two candidate targets
-
-Trust profile:
-- 31 EXTRACTED
-- 6 INFERRED
-- 1 AMBIGUOUS
-
-Read first:
-1. src/billing/retry.py
-2. src/jobs/retry_failed_payment.py
-3. src/ledger/charges.py
-4. tests/billing/test_retry.py
-
-Plan:
-- Inspect retry semantics and idempotency.
-- Verify ledger side effects.
-- Update tests around failed webhook retries.
-- Re-run blast_radius and agent_change_gate before review.
-```
+| "What does this repo look like?" | `graph_info` + `architecture_summary` |
+| "What does X depend on?" | `get_neighbors(X)` |
+| "Find me code related to Y" | `query_graph("Y")` |
+| "How are A and B connected?" | `shortest_path(A, B)` |
+| "What's in this file?" | `summarize_file("path/to/file")` |
+| "What changed since last snapshot?" | `what_changed()` |
+| "What's the impact of changing Z?" | `blast_radius(Z)` |
+| "Is the graph trustworthy?" | `resolution_report()` |
+| "Plan my verification steps" | `verification_plan(nodes)` |
+| "Full analysis of a symbol" | `analyse_symbol(symbol)` |
+| "Multi-hop transitive closure" | `query_transitive(seed)` |

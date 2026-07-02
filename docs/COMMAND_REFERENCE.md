@@ -1,335 +1,213 @@
-# Graphenium Command Reference
+# Command Reference
 
-This reference keeps the front-page README focused on the main value proposition while documenting the CLI in detail.
-
-Start with three commands:
-
-```sh
-gm run . --no-semantic
-gm setup claude
-gm query "symbol or feature" --safe
-```
-
-Then add health checks, diffing, watch mode, and CI gates as your workflow matures.
-
----
+The `gm` binary serves as both a CLI and an MCP server. This reference covers all commands and flags.
 
 ## `gm init`
 
-Initialize a Graphenium workspace with a default `.grapheniumignore` file.
+Initialize a Graphenium workspace. Creates `.grapheniumignore` with sensible defaults.
 
-```text
-gm init [PATH]
+```
+gm init [path]
 ```
 
-Examples:
-
-```sh
-gm init
-gm init ~/projects/my-repo
-```
-
-Use this before the first run so generated files, build output, and vendored dependencies can be excluded.
-
----
+| Flag | Type | Description |
+|------|------|-------------|
+| `path` | PathBuf | Project root (default: current dir) |
 
 ## `gm run`
 
-Run the full analysis pipeline on a directory.
+Run the analysis pipeline: detect files, extract AST, resolve imports, cluster, analyze.
 
-```text
-gm run [PATH] [OPTIONS]
+```
+gm run <path> [flags]
 ```
 
-| Option | Description |
-|---|---|
-| `PATH` | Directory to analyze, default `.` |
-| `--no-semantic` | Skip LLM extraction and use local structural results |
-| `--no-viz` | Skip HTML generation |
-| `--provider NAME` | AI provider: `anthropic`, `openai`, `openrouter`, `deepseek`, or `openai-compatible` |
-| `--model NAME` | Model to use, defaults to provider-specific default |
-| `--api-key KEY` | API key, overrides provider-specific env var |
-| `--api-base URL` | API base URL for `openai-compatible` provider |
-| `--mode deep` | Aggressive LLM inference |
-| `--update` | Incremental mode: only re-extract changed files |
-| `--no-report` | Skip `GRAPH_REPORT.md` generation |
-| `--exclude-dirs DIRS` | Comma-separated directory names to exclude, such as `target,node_modules` |
-
-Examples:
-
-```sh
-gm run . --no-semantic --no-viz
-gm run . --provider openai
-gm run . --update
-gm run . --no-report
-gm run . --exclude-dirs target,node_modules,dist
-```
-
-Recommended first run:
-
-```sh
-gm run . --no-semantic --no-viz
-```
-
----
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| path | PathBuf | — | Project root directory |
+| `--mode` | String | `"ast"` | Extraction mode: `ast`, `semantic` |
+| `--no-semantic` | bool | false | Skip semantic LLM pass |
+| `--no-viz` | bool | false | Skip HTML visualization |
+| `--no-report` | bool | false | Skip GRAPH_REPORT.md generation |
+| `--exclude-dirs` | String | — | Comma-separated directory patterns to skip |
+| `--plan` | bool | false | Dry-run: scan and report file stats only |
+| `--update` | bool | false | Incremental update (re-extract changed files) |
 
 ## `gm query`
 
-Query an existing graph using lexical, structural, or hybrid retrieval.
+Query the knowledge graph with keywords or Datalog programs.
 
-```text
-gm query "<keywords>" [OPTIONS]
+```
+gm query "<keywords>" [flags]
 ```
 
-| Option | Default | Description |
-|---|---:|---|
-| `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
-| `--budget N` | `2000` | Output token budget |
-| `--mode MODE` | `lexical` | Retrieval model: `lexical`, `structural`, or `hybrid` |
-| `--dfs` | off | Use depth-first traversal |
-| `--datalog` | string | Run a Datalog query instead of keyword search (e.g. `--datalog "?- node(X, _, _, _, _)."`) |
-| `--safe` | off | Confidence-aware traversal; skips `AMBIGUOUS` edges |
-| `--min-degree N` | `0` | Minimum node degree to include |
-| `--exclude-test-nodes` | off | Exclude test/spec nodes from results |
-
-Examples:
-
-```sh
-gm query "parser ast walker" --safe
-gm query "authentication login" --mode lexical
-gm query "database connection" --mode structural
-gm query "parser ast walker" --mode hybrid
-gm query "billing retry" --safe --budget 1000
-```
-
-Use `--safe` for pre-edit planning. Use `--mode hybrid` when naming may be inconsistent or the feature spans multiple modules.
-
----
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| keywords | String | — | Search query or Datalog program |
+| `--mode` | String | `lexical` | Retrieval mode: `lexical`, `structural`, `hybrid` |
+| `--datalog` | String | — | Run a Datalog query instead of keyword search |
+| `--budget` | Int | 2000 | Output token budget |
+| `--depth` | Int | 3 | Traversal depth (1-6) |
+| `--dfs` | bool | false | Use DFS instead of BFS |
+| `--safe` | bool | false | Confidence-aware traversal |
+| `--graph` | PathBuf | — | Path to graph.json |
+| `--json` | bool | false | Output as JSON array |
+| `--path-prefix` | String | — | Include only matching paths |
+| `--exclude-path` | String | — | Exclude matching paths |
+| `--generated-code` | String | — | Generated code filter: `include`, `exclude`, `only` |
+| `--ast-only-tuning` | bool | — | Tune for AST-only graphs |
+| `--include-tests` | bool | false | Include test nodes in results |
 
 ## `gm serve`
 
-Start an MCP server exposing the graph over stdio.
+Start the MCP server.
 
-```text
-gm serve [OPTIONS]
+```
+gm serve [--graph <path>] [--watch]
 ```
 
-| Option | Default | Description |
-|---|---:|---|
-| `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
-| `--watch` | off | Watch graph file for changes and auto-reload |
-
-Example:
-
-```sh
-gm serve --graph /absolute/path/to/graphenium-out/graph.json
-```
-
-Use `gm setup` when possible so you do not need to hand-write MCP config.
-
----
-
-## `gm setup`
-
-Print ready-to-paste MCP config for an AI assistant.
-
-```text
-gm setup <claude|cursor|codewhale> [--graph PATH]
-```
-
-Examples:
-
-```sh
-gm setup claude
-gm setup cursor
-gm setup codewhale
-gm setup claude --graph /absolute/path/to/graphenium-out/graph.json
-```
-
-After changing MCP configuration, fully restart the client application.
-
----
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--graph` | PathBuf | — | Path to graph.json |
+| `--watch` | bool | false | Auto-reload graph on file change |
 
 ## `gm watch`
 
-Watch a directory and auto-rebuild the graph on changes.
+Watch mode — re-extract on file changes.
 
-```text
-gm watch [PATH] [OPTIONS]
+```
+gm watch <path> [flags]
 ```
 
-| Option | Default | Description |
-|---|---:|---|
-| `PATH` | `.` | Directory to watch |
-| `--debounce SECS` | `3.0` | Wait after last event before rebuild |
-| `--incremental` | `true` | Patch changed files. Use `false` for full rebuilds |
-
-Example:
-
-```sh
-gm watch . --debounce 2.0
-```
-
-Use watch mode during active agent sessions so MCP queries see recent graph updates.
-
----
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| path | PathBuf | — | Directory to watch |
+| `--graph` | PathBuf | — | Output graph path |
+| `--debounce` | Float | 3.0 | Debounce seconds |
+| `--incremental` | bool | true | Incremental re-extraction |
+| `--impact` | bool | false | Show blast radius on changes |
 
 ## `gm doctor`
 
-Run diagnostic checks on the Graphenium installation and graph health.
+Diagnostic checks for the graph and environment.
 
-```text
-gm doctor [--graph PATH]
-gm doctor --schema
-gm doctor --resolution
-gm doctor --repository
-gm doctor --json
+```
+gm doctor [flags]
 ```
 
-Use cases:
-
-| Option | Use case |
-|---|---|
-| `--schema` | Dump graph schema, node kinds, edge kinds, confidence levels, and provenance metadata |
-| `--resolution` | Report resolved vs unresolved references |
-| `--repository` | Summarize repository metadata |
-| `--json` | Emit machine-readable diagnostics for IDE extensions or CI |
-
-Examples:
-
-```sh
-gm doctor --resolution
-gm doctor --repository
-gm doctor --json
-```
-
----
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--graph` | PathBuf | — | Path to graph.json |
+| `--json` | bool | false | Structured JSON output |
+| `--schema` | bool | false | Show graph schema version |
+| `--resolution` | bool | false | Show resolution quality |
+| `--repository` | bool | false | Show repository metadata |
 
 ## `gm check`
 
-Run trust-quality gates for local development or CI.
+Trust quality gates for CI.
 
-```text
-gm check [OPTIONS]
+```
+gm check [flags]
 ```
 
-| Option | Default | Description |
-|---|---:|---|
-| `--graph PATH` | `graphenium-out/graph.json` | Path to graph file |
-| `--min-resolution N` | `80` | Minimum accepted resolution coverage percentage |
-| `--max-ambiguous N` | `10` | Maximum allowed ambiguous edge count |
-| `--strict` | off | Use stricter policy behavior when available |
-
-Examples:
-
-```sh
-gm check
-gm check --min-resolution 80 --max-ambiguous 10
-gm check --min-resolution 70 --max-ambiguous 20 --strict
-```
-
-Policy advice: start permissive, collect data, then tighten thresholds once graph extraction is stable.
-
----
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--graph` | PathBuf | — | Path to graph.json |
+| `--min-resolution` | Float | 80.0 | Minimum import resolution % |
+| `--max-ambiguous` | Int | 10 | Maximum allowed ambiguous edges |
+| `--strict` | bool | false | Also fail on warnings |
+| `--plan` | String | — | Verify a planning workspace ID |
 
 ## `gm diff`
 
-Diff two graph snapshots and show symbol-level changes.
+Compare graph snapshots.
 
-```text
-gm diff [OPTIONS]
+```
+gm diff [flags]
 ```
 
-| Option | Default | Description |
-|---|---:|---|
-| `--before PATH` | empty graph | Path to the old `graph.json` |
-| `--after PATH` | `graphenium-out/graph.json` | Path to the new `graph.json` |
-| `--impact` | off | Show downstream impact analysis and review order |
-| `--review-plan` | off | Generate a prioritized verification plan |
+| Flag | Type | Description |
+|------|------|-------------|
+| `--before` | PathBuf | Before graph snapshot |
+| `--after` | PathBuf | After graph snapshot |
+| `--impact` | bool | Show downstream impact analysis |
+| `--review-plan` | bool | Generate verification plan |
+| `--json` | bool | Output as JSON |
 
-Examples:
+## `gm explain`
 
-```sh
-gm diff --before old-graph.json --after new-graph.json
-gm diff --after new-graph.json --impact
-gm diff --before old-graph.json --after new-graph.json --review-plan
+Pre-edit architectural orientation for a symbol.
+
+```
+gm explain <symbol> [--graph <path>]
 ```
 
-Use `--impact` when reviewing agent edits to high-degree modules or public interfaces.
+| Flag | Type | Description |
+|------|------|-------------|
+| symbol | String | Node ID or label to explain |
+| `--graph` | PathBuf | Path to graph.json |
 
----
+## `gm setup`
+
+Generate MCP configuration for common tools.
+
+```
+gm setup <target> [--gm-path <path>] [--graph <path>]
+```
+
+| Target | Description |
+|--------|-------------|
+| `claude-desktop` | Claude Desktop (macOS) |
+| `claude-code` | Claude Code (CLI) |
+| `cursor` | Cursor editor |
+| `codewhale` | CodeWhale |
 
 ## `gm graph`
 
-Inspect repository metadata and CI extraction results.
+Graph metadata subcommands.
 
-```text
-gm graph schema [--graph PATH]
-gm graph build-map [--graph PATH]
-gm graph test-map [--graph PATH]
-gm graph migrate <graph.json>
+```
+gm graph <subcommand> [args]
 ```
 
-Examples:
-
-```sh
-gm graph schema
-gm graph build-map
-gm graph test-map
-gm graph migrate old-graph.json
-```
-
----
+| Subcommand | Description |
+|------------|-------------|
+| `migrate` | Migrate graph.json schema version |
+| `schema` | Show graph schema version |
+| `build-map` | Show build dependency map |
+| `test-map` | Show test-to-source map |
 
 ## `gm snapshot`
 
-Manage graph snapshots for diff and drift analysis.
+Snapshot management.
 
-```text
-gm snapshot create --name <name> [--graph PATH]
-gm snapshot list
+```
+gm snapshot <subcommand> [args]
 ```
 
-Examples:
-
-```sh
-gm snapshot create --name before-auth-refactor
-gm snapshot list
-```
-
-Snapshot before major agent-led changes so review planning can compare graph state.
-
----
+| Subcommand | Args | Description |
+|------------|------|-------------|
+| `create` | `<name>` | Create a named snapshot |
+| `list` | — | List all snapshots with sizes |
 
 ## `gm gate`
 
-Run quality gates with diff-based analysis.
+Quality gate subcommands.
 
-```text
-gm gate --diff <before.json> <after.json>
+```
+gm gate --diff <before> <after>
 ```
 
-Example:
+## Common Workflows
 
-```sh
-gm gate --diff old-graph.json graphenium-out/graph.json
 ```
+# Build and query
+gm run . --no-semantic
+gm query "authentication flow"
 
-Use this in CI to prevent graph quality regressions or risky unverified topology changes.
+# CI gate
+gm check --graph graphenium-out/graph.json
 
----
-
-## Command selection guide
-
-| Goal | Command |
-|---|---|
-| First setup | `gm init` |
-| Build graph | `gm run . --no-semantic` |
-| Ask a graph question | `gm query "keywords" --safe` |
-| Connect agent | `gm setup claude` or `gm serve` |
-| Keep graph fresh while coding | `gm watch` |
-| Inspect health | `gm doctor --resolution` |
-| Enforce quality | `gm check` |
-| Review changed topology | `gm diff --impact` |
-| Create a comparison point | `gm snapshot create` |
-| Run CI diff gate | `gm gate --diff` |
+# Incremental development
+gm watch src/ --impact --graph graphenium-out/graph.json

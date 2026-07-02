@@ -1,200 +1,92 @@
-# Graphenium Architecture
+# Architecture
 
-Graphenium models a codebase as nodes, edges, evidence, and topology.
+This document describes Graphenium's architecture at the three-tier model, graph model, extraction pipeline, trust model, and module level.
 
-The architectural goal is not compiler-perfect static analysis. The goal is durable, provenance-aware repository memory that an AI agent can query before reading or changing code.
+## Three-Tier Repository Model
 
----
+Graphenium models a repository as three layers:
 
-## Repository model
+**Tier 1: AST + Resolver — Terrain (Stable)**
+The bottom layer is the physical code structure. Tree-sitter parses each file into an AST. Language extractors pull out symbols (functions, classes, methods, structs, traits, imports). The import resolver links `use`/`import`/`require` statements to their target files. This layer produces the base graph with nodes and edges.
 
-### Nodes
+**Tier 2: Semantic Pass — Road Network (Stable)**
+The middle layer adds LLM-extracted relationships. An optional semantic pass using Claude/etc. identifies behavioural relationships the AST cannot capture: conceptual dependencies, delegation patterns, and architectural intent. These edges carry `extractor: "llm"` and confidence from the model's assessment.
 
-Nodes represent meaningful entities:
+**Tier 3: Telemetry Overlay — Live Traffic (Experimental)**
+The top layer imports OpenTelemetry trace JSON to create a `RuntimeOverlay` with per-node call counts and latency percentiles (P50/P95/P99). This enables runtime-weighted traversal and hot-path queries. This layer is experimental and requires explicit trace data.
 
-- files;
-- modules;
-- functions;
-- methods;
-- classes;
-- structs;
-- traits;
-- documents;
-- images;
-- build targets;
-- CI jobs;
-- test cases;
-- dependencies;
-- architectural concepts.
+## Graph Model
 
-Each node carries metadata such as label, qualified label, file type, source file, source location, confidence, provenance, and community ID.
+Each graph (`schema 0.2.0`) contains:
 
-### Edges
+- **Nodes** — files, modules, functions, classes, methods, structs, traits, tests, documents, build targets, CI jobs, dependencies
+- **Edges** — `imports`, `contains`, `calls`, `uses`, `inherits`, `implements`, `tests`, `depends_on`, `runs_in`
+- **Hyperedges** — n-ary relationships (e.g., group membership)
+- **Communities** — Louvain community detection clusters nodes into architectural groups
+- **Metadata** — schema version, build timestamp, project root, extraction mode, languages
 
-Edges are typed, directed relationships.
+## Provenance and Trust Model
 
-| Relation | Meaning | Source |
-|---|---|---|
-| `imports` | Module-level import/include | AST / resolver |
-| `contains` | Module/class contains a symbol | AST |
-| `method` | Method belongs to a class/type | AST |
-| `calls` | Function calls another function | AST / resolver / semantic |
-| `uses` | Cross-file usage dependency | AST / resolver / semantic |
-| `inherits` | OOP inheritance | AST / semantic |
-| `implements` | Interface/trait implementation | AST / semantic |
-| `depends_on` | Conceptual dependency or package dependency | AST / repository extraction / semantic |
-| `tests` | Test case or test target verifies a symbol or module | AST / repository extraction |
-| `runs_in` | Build target or test target runs in a CI job | CI extraction |
-| `rationale_for` | Document/comment explains code | Semantic / manual |
+Every edge carries:
 
-### Evidence
+| Field | Values | Meaning |
+|-------|--------|---------|
+| `extractor` | `tree-sitter`, `resolver`, `llm`, `csproj-parser` | Which component created this edge |
+| `resolution_status` | `resolved`, `unresolved`, `heuristic` | Whether the edge target was found in the graph |
+| `confidence` | `EXTRACTED`, `INFERRED`, `AMBIGUOUS` | How much to trust this relationship |
 
-Evidence records why a graph fact exists. Evidence should let an agent decide whether a relationship is safe to plan against or merely useful as a lead.
+This lets agents distinguish source-backed facts (`EXTRACTED` + `resolved`) from weak leads (`AMBIGUOUS` + `unresolved`).
 
-Important evidence fields:
+## Extraction Pipeline
 
-- confidence: `EXTRACTED`, `INFERRED`, or `AMBIGUOUS`;
-- extractor: tree-sitter, resolver, LLM, telemetry, manual MCP write, or repository extractor;
-- source span: file path, line, column, and excerpt when available;
-- resolution status: resolved, unresolved, heuristic, inferred, or manually confirmed;
-- timestamp or graph build identifier;
-- stale-evidence flag when applicable.
+1. **File detection** — `detect/mod.rs` walks the directory, classifies files by extension, respects `.grapheniumignore`
+2. **AST parsing** — tree-sitter parses each file; language-specific extractors pull out symbols
+3. **Import resolution** — `resolver.rs` builds a symbol index from all extracted nodes, resolves `imports`/`uses` edges
+4. **Semantic pass** (optional) — LLM analyses code for behavioural relationships
+5. **Graph assembly** — `build.rs` merges all extraction results into a single graph
+6. **Clustering** — Louvain community detection partitions nodes into communities
+7. **Analysis** — degree distribution, PageRank hubs, chokepoints, architecture summary
+8. **Export** — graph exported as JSON, quality report, HTML visualization
 
-### Topology
+## Module Map
 
-Graphenium analyzes the graph to surface:
+| Module | Description |
+|--------|-------------|
+| `analyze/` | Architecture analysis: diff, impact, rank, god nodes, verifier |
+| `build.rs` | Graph assembly pipeline |
+| `cache/` | Manifest tracking, semantic caching |
+| `cluster/` | Louvain community detection, drift analysis |
+| `detect/` | File detection, classification, `.grapheniumignore` |
+| `embed.rs` | TF-based text embeddings, Node2Vec structural embeddings |
+| `export/` | JSON and HTML export |
+| `extract/` | Tree-sitter AST extraction per language |
+| `harness.rs` | Trust check harness for CI |
+| `model/` | Graph, node, edge, hyperedge, extraction result types |
+| `policy.rs` | Trust quality policies |
+| `ranking.rs` | Query ranking: lexical, structural, hybrid |
+| `resolver.rs` | Cross-file import resolution |
+| `semantic/` | LLM-based semantic extraction |
+| `serve/` | MCP server with 22 tools |
+| `telemetry.rs` | Runtime telemetry overlay |
+| `trust.rs` | Evidence span, claims, stale detection |
+| `watch.rs` | File watcher for incremental rebuilds |
+| `doctor.rs` | Diagnostic checks |
+| `error.rs` | Error types |
+| `main.rs` | CLI entry point with clap |
 
-- communities;
-- hub nodes;
-- shortest paths;
-- safest paths;
-- surprising cross-community connections;
-- architectural focus paths;
-- stale evidence;
-- policy drift;
-- change impact.
+## Query Modes
 
----
+| Mode | Algorithm | Best For |
+|------|-----------|----------|
+| Lexical | TF-cosine keyword matching | Finding nodes by name/description |
+| Structural | Graph-distance from keyword seeds | Finding topologically related code |
+| Hybrid | Weighted (0.6 lexical + 0.4 structural) | General-purpose discovery |
+| Datalog | First-order logic fixpoint | Declarative reachability and constraint queries |
 
-## Data pipeline
+## Current Limitations
 
-A typical run follows this sequence:
-
-```text
-repository scan
-  -> ignore and sensitivity filtering
-  -> language-specific extraction
-  -> repository metadata extraction
-  -> resolver pass
-  -> optional semantic extraction
-  -> graph assembly
-  -> confidence and provenance annotation
-  -> clustering and topology analysis
-  -> quality report
-  -> JSON, Markdown, and HTML export
-  -> MCP serving or CLI query
-```
-
-The structural graph should be useful without semantic extraction. Semantic extraction adds concepts, rationale, and framework behavior that local analysis may miss.
-
----
-
-## Internal source layout
-
-```text
-src/
-  extract/     tree-sitter syntax extraction for supported languages plus repository config extraction
-  model/       graph, node, edge, claim, hyperedge schemas, and graph metadata
-  resolver.rs  cross-file import binding and target resolution
-  trust.rs     evidence spans, claim model, resolution reporting
-  harness.rs   trust-gate check for CI
-  policy.rs    policy-based quality gates
-  embed.rs     TF-based cosine similarities and Node2Vec structural embeddings
-  cluster/     Louvain community detection, split/focus clustering, and cohesion scoring
-  detect/      file classification, sensitive skipping, and corpus health checks
-  analyze/     PageRank, chokepoints, dominators, reverse reachability, gates, and surprise edges
-  serve/       MCP server, tool handlers, and mode-aware query traversal
-  semantic/    async LLM batch extraction client and response parser
-  telemetry/   OTEL trace import, EMA percentile estimation, regression compare, and hot paths
-  export/      JSON export, HTML visualization, and schema export
-  cache/       mtime manifest, semantic extraction cache, and graph snapshots
-  watch.rs     file-system watcher with incremental patching and live blast-radius display
-```
-
----
-
-## Confidence model
-
-| Confidence | Intended meaning | Planning behavior |
-|---|---|---|
-| `EXTRACTED` | Directly produced by structural extraction, resolver, telemetry import, or confirmed manual inspection | Safe to use as source-backed orientation, then verify implementation details |
-| `INFERRED` | Produced by semantic extraction, heuristics, or incomplete behavioral evidence | Use as a lead; inspect before depending on it |
-| `AMBIGUOUS` | Conflicting, unresolved, or low-confidence relationship | Do not plan against it until verified |
-
-The confidence model is agent-facing. It should appear in CLI and MCP outputs whenever the result could influence a change plan.
-
----
-
-## Feature flags
-
-Build with only the languages you need:
-
-```sh
-cargo build --release --no-default-features --features lang-python,lang-rust
-```
-
-Available language features:
-
-- `lang-python`
-- `lang-js`
-- `lang-ts`
-- `lang-rust`
-- `lang-go`
-- `lang-java`
-- `lang-c`
-- `lang-cpp`
-- `lang-csharp`
-
-Ruby support may be distributed as part of the default build or behind a feature depending on the release configuration. Keep the README language table aligned with the actual Cargo feature set.
-
----
-
-## Outputs
-
-Graphenium writes outputs to `graphenium-out/` inside the analyzed directory.
-
-| File | Purpose |
-|---|---|
-| `graph.json` | Machine-readable graph for `gm serve` and `gm query` |
-| `GRAPH_REPORT.md` | Markdown architecture report |
-| `graph.html` | Self-contained visual graph inspection page |
-| `manifest.json` | mtime index for incremental updates |
-| `cache/` | Per-file semantic extraction cache, SHA256 keyed |
-| `quality.json` | Structured quality report with resolution ratio, ambiguity, and per-file stats |
-
----
-
-## Current limitations
-
-- Local graphs are structural, not fully behavioral.
-- Dynamic dispatch, reflection, generated code, macros, dependency injection, and framework-specific execution paths may require semantic extraction, manual graph writes, or telemetry overlays.
-- Label collisions can happen for common names such as `new`, `run`, `main`, and `mod`.
-- Large corpora should exclude vendored dependencies and generated artifacts with `.grapheniumignore`.
-- Telemetry is an overlay, not a profiler.
-- Quality gates are only as useful as the graph and policy thresholds behind them.
-- Semantic extraction can introduce plausible but unverified relationships; these should not be treated as source-backed unless confirmed.
-- Graph output should guide source reading, not replace it.
-
----
-
-## Design principle
-
-Graphenium should make uncertainty visible.
-
-The product is most valuable when an agent can say:
-
-```text
-I know these paths are source-backed.
-I think these inferred links are likely but need inspection.
-I will not rely on these ambiguous edges until I verify them.
-```
+- **Label collisions**: 22% of node labels appear ≥2x; `get_node` shows disambiguation warnings
+- **Undirected petgraph**: Relationships are directed but stored in an undirected graph; direction is preserved in edge metadata but requires manual filtering for traversals
+- **Telemetry overlay**: Experimental; requires OTEL trace JSON input
+- **No built-in diff viewer**: Diff output is textual/JSON; no side-by-side visualization
+- **No LSP integration**: Graphenium does not provide IDE completion; it provides MCP tools for agent use
