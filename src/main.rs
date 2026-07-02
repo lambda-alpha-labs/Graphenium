@@ -396,7 +396,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             json,
         } => {
             if let Some(ref dl) = datalog {
-                let graph_path = std::path::Path::new(graph.as_deref().unwrap_or("graphenium-out/graph.json"));
+                let graph_path =
+                    std::path::Path::new(graph.as_deref().unwrap_or("graphenium-out/graph.json"));
                 match graphenium::export::json::load_graph(graph_path) {
                     Ok(g) => match query::run_datalog_query(&g, dl, 1000) {
                         Ok(r) => println!("{}", r),
@@ -406,9 +407,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Ok::<(), graphenium::Error>(())
             } else {
-                cmd_query(question, dfs, safe, budget, graph, &mode,
-                    path_prefix, exclude_path, generated_code_mode, ast_only_tuning, json)
-                    .map_err(Into::into)
+                cmd_query(
+                    question,
+                    dfs,
+                    safe,
+                    budget,
+                    graph,
+                    &mode,
+                    path_prefix,
+                    exclude_path,
+                    generated_code_mode,
+                    ast_only_tuning,
+                    json,
+                )
+                .map_err(Into::into)
             }
         }
 
