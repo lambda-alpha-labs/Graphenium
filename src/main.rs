@@ -344,7 +344,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ),
                 Err(e) => eprintln!("Failed to initialize workspace: {e}"),
             }
-            Ok(())
+            Ok::<(), Box<dyn std::error::Error>>(())
         }
 
         Commands::Run {
@@ -397,7 +397,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             if let Some(ref dl) = datalog {
                 let graph_path =
-                    std::path::Path::new(graph.as_deref().unwrap_or("graphenium-out/graph.json"));
+                    std::path::Path::new(graph.to_str().unwrap_or("graphenium-out/graph.json"));
                 match graphenium::export::json::load_graph(graph_path) {
                     Ok(g) => match query::run_datalog_query(&g, dl, 1000) {
                         Ok(r) => println!("{}", r),
@@ -405,7 +405,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     Err(e) => eprintln!("Failed to load graph: {}", e),
                 }
-                Ok::<(), graphenium::Error>(())
+                Ok::<(), Box<dyn std::error::Error>>(())
             } else {
                 cmd_query(
                     question,
@@ -453,7 +453,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 graphenium::doctor::run_doctor(g);
             }
-            Ok(())
+            Ok::<(), Box<dyn std::error::Error>>(())
         }
 
         Commands::Check {
@@ -505,7 +505,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Graph { command } => match command {
             GraphCommands::Migrate { graph } => {
                 eprintln!("not yet implemented: migrate {}", graph.display());
-                Ok(())
+                Ok::<(), Box<dyn std::error::Error>>(())
             }
             GraphCommands::Schema { graph } => cmd_graph_schema(&graph),
             GraphCommands::BuildMap { graph } => cmd_graph_build_map(&graph),
@@ -527,7 +527,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 eprintln!("not yet implemented: gate");
             }
-            Ok(())
+            Ok::<(), Box<dyn std::error::Error>>(())
         }
     };
 
