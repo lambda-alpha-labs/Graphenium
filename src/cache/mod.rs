@@ -11,6 +11,7 @@
 /// is written whenever the content changes.
 pub mod manager;
 pub mod manifest;
+pub mod query;
 pub mod semantic_cache;
 
 pub use self::manager::CacheManager;

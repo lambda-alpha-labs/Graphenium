@@ -112,6 +112,26 @@ pub struct Edge {
     pub plan_id: Option<String>,
 }
 
+impl PartialEq for Edge {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source
+            && self.target == other.target
+            && self.relation == other.relation
+            && self.confidence == other.confidence
+            && (self.confidence_score - other.confidence_score).abs() < f64::EPSILON
+            && self.source_file == other.source_file
+            && self.source_location == other.source_location
+            && self.extractor == other.extractor
+            && self.resolution_status == other.resolution_status
+            && (self.weight - other.weight).abs() < f64::EPSILON
+            && self.src_original == other.src_original
+            && self.tgt_original == other.tgt_original
+            && self.plan_id == other.plan_id
+    }
+}
+impl Eq for Edge {}
+
+
 fn default_weight() -> f64 {
     1.0
 }

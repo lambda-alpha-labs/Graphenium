@@ -110,6 +110,9 @@ rand = "0.8"
 # Lock-free atomic Arc swaps for the MCP server's hot-reloadable graph state.
 arc-swap = "1"
 
+# Incremental computation / demand-driven queries
+salsa = "0.27"
+
 [dev-dependencies]
 tempfile = "3"
 assert_cmd = "2"

@@ -7,7 +7,7 @@ use crate::model::{Edge, HyperEdge, Node};
 /// Multiple `ExtractionResult` values are merged in the build phase.
 /// When merging, duplicate node IDs are resolved by last-write-wins —
 /// semantic results intentionally override AST results.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExtractionResult {
     #[serde(default)]
     pub nodes: Vec<Node>,
