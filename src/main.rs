@@ -344,7 +344,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ),
                 Err(e) => eprintln!("Failed to initialize workspace: {e}"),
             }
-            Ok::<(), Box<dyn std::error::Error>>(())
+            Ok(())
         }
 
         Commands::Run {
@@ -405,7 +405,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     Err(e) => eprintln!("Failed to load graph: {}", e),
                 }
-                Ok::<(), Box<dyn std::error::Error>>(())
+                Ok(())
             } else {
                 cmd_query(
                     question,
@@ -420,7 +420,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ast_only_tuning,
                     json,
                 )
-                .map_err(Into::into)
             }
         }
 
@@ -531,11 +530,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    if let Err(e) = _result {
+    if let Err(e) = &_result {
         eprintln!("[graphenium] error: {e}");
         process::exit(1);
     }
-    _result
+    _result.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }
 
 // ── `run` command ──────────────────────────────────────────────────────────────
