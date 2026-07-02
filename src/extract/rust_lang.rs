@@ -406,12 +406,24 @@ fn collect_calls<'tree>(
             super::walker::get_call_target(node, source)
         };
 
-        if let Some(label) = callee {
+        if let Some(label) = callee.clone() {
             if let Some(callee_id) = label_to_nid.get(&label) {
                 let pair = (owner_id.to_string(), callee_id.clone());
                 if seen.insert(pair) {
                     out.push(Edge::inferred_call(owner_id, callee_id, ""));
                 }
+            } else {
+                // Emit unresolvable edge for cross-file call
+                let mut edge = Edge::new(
+                    owner_id.to_string(),
+                    label.clone(),
+                    "calls",
+                    crate::model::Confidence::Ambiguous,
+                    "",
+                );
+                edge.extractor = Some("tree-sitter".to_string());
+                edge.resolution_status = Some("unresolved".to_string());
+                out.push(edge);
             }
         }
     }

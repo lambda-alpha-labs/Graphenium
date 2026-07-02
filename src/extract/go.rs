@@ -363,6 +363,18 @@ fn collect_calls<'tree>(
                 if seen.insert(pair) {
                     out.push(Edge::inferred_call(owner_id, callee_id, ""));
                 }
+            } else {
+                // Emit unresolvable edge for cross-file call
+                let mut edge = Edge::new(
+                    owner_id.to_string(),
+                    callee,
+                    "calls",
+                    crate::model::Confidence::Ambiguous,
+                    "",
+                );
+                edge.extractor = Some("tree-sitter".to_string());
+                edge.resolution_status = Some("unresolved".to_string());
+                out.push(edge);
             }
         }
     }

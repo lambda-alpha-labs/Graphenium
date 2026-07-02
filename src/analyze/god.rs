@@ -83,7 +83,7 @@ pub fn god_nodes_in_scope(
         })
         .collect();
 
-    candidates.sort_unstable_by(|a, b| b.degree.cmp(&a.degree));
+    candidates.sort_unstable_by_key(|b| std::cmp::Reverse(b.degree));
     candidates.truncate(top_n);
     candidates
 }
