@@ -1,6 +1,6 @@
 [package]
 name = "graphenium"
-version = "0.15.5"
+version = "0.16.1"
 edition = "2021"
 description = "Graphenium (gm) — the elemental knowledge graph engine for your codebase"
 license = "MIT OR Apache-2.0"
