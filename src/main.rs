@@ -152,6 +152,8 @@ enum Commands {
         /// Safe mode: use structural query mode for safer results
         #[arg(long)]
         safe: bool,
+        #[arg(long)]
+        datalog: Option<String>,
 
         /// Maximum output token budget (rough estimate)
         #[arg(long, default_value = "2000")]
@@ -326,10 +328,10 @@ enum Commands {
 // ── Entry point ────────────────────────────────────────────────────────────────
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let result = match cli.command {
+    let _result = match cli.command {
         Commands::Init { path } => {
             match graphenium::detect::initialize_workspace(&path) {
                 Ok(true) => println!(
@@ -381,6 +383,7 @@ async fn main() {
 
         Commands::Query {
             question,
+            datalog,
             dfs,
             safe,
             budget,
@@ -391,19 +394,33 @@ async fn main() {
             generated_code_mode,
             ast_only_tuning,
             json,
-        } => cmd_query(
-            question,
-            dfs,
-            safe,
-            budget,
-            graph,
-            &mode,
-            path_prefix,
-            exclude_path,
-            generated_code_mode,
-            ast_only_tuning,
-            json,
-        ),
+        } => {
+            if let Some(ref dl) = datalog {
+                let graph_path = graph.to_str().unwrap_or("graphenium-out/graph.json");
+                match graphenium::export::json::load_graph(graph_path) {
+                    Ok(g) => match query::run_datalog_query(&g, dl, 1000) {
+                        Ok(r) => println!("{}", r),
+                        Err(e) => eprintln!("Datalog error: {}", e),
+                    },
+                    Err(e) => eprintln!("Failed to load graph: {}", e),
+                }
+                return Ok(());
+            }
+            cmd_query(
+                question,
+                dfs,
+                safe,
+                budget,
+                graph,
+                &mode,
+                path_prefix,
+                exclude_path,
+                generated_code_mode,
+                ast_only_tuning,
+                json,
+            )
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+        }
 
         Commands::Serve { graph, watch } => {
             if watch {
@@ -507,10 +524,11 @@ async fn main() {
         }
     };
 
-    if let Err(e) = result {
+    if let Err(e) = &_result {
         eprintln!("[graphenium] error: {e}");
         process::exit(1);
     }
+    _result
 }
 
 // ── `run` command ──────────────────────────────────────────────────────────────

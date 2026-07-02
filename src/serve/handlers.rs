@@ -2394,6 +2394,24 @@ impl GrapheniumServer {
         out
     }
 
+    // ── run_datalog ─────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Run a Datalog query against the loaded knowledge graph. Supports rules (:-, ?-), facts, goals, and negation (not). Budget-bounded to prevent runaway evaluation (max 10,000 steps)."
+    )]
+    fn run_datalog(
+        &self,
+        #[tool(param)] query: String,
+        #[tool(param)] step_budget: Option<usize>,
+    ) -> String {
+        let graph = self.graph();
+        let budget = step_budget.unwrap_or(1000).max(100).min(10_000);
+        match crate::analyze::query::run_datalog_query(&graph, &query, budget) {
+            Ok(r) => r,
+            Err(e) => format!("Datalog error: {}", e),
+        }
+    }
+
     // ── Write-back tools ────────────────────────────────────────────────────
 
     /// Write the current in-memory graph to disk so mutations survive restarts.

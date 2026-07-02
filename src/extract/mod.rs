@@ -54,7 +54,7 @@ pub fn extract_all(files: &[DetectedFile], opts: &ExtractOptions) -> ExtractionR
     use std::sync::Arc;
     let progress = Arc::new(AtomicUsize::new(0));
 
-    let results: Vec<ExtractionResult> = code_files
+    let mut results: Vec<ExtractionResult> = code_files
         .par_iter()
         .map(|f| {
             let res = extract_file(f, opts);
@@ -65,6 +65,15 @@ pub fn extract_all(files: &[DetectedFile], opts: &ExtractOptions) -> ExtractionR
             res
         })
         .collect();
+
+    // Resolve cross-file references using Stack Graphs.
+    let resolved_count = crate::resolver::resolve_cross_file_calls(&mut results, None);
+    if resolved_count > 0 {
+        eprintln!(
+            "[graphenium] Stack Graphs: resolved {} cross-file references",
+            resolved_count
+        );
+    }
 
     let mut combined = ExtractionResult::merge_all(results);
 
