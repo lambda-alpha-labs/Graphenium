@@ -404,25 +404,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     Err(e) => eprintln!("Failed to load graph: {}", e),
                 }
+                Ok::<(), grapheneium::Error>(())
+            } else {
                 cmd_query(question, dfs, safe, budget, graph, &mode,
                     path_prefix, exclude_path, generated_code_mode, ast_only_tuning, json)
+                    .map_err(Into::into)
             }
         }
 
-        Commands::Mint { num_tokens, .. } => 
-                question,
-                dfs,
-                safe,
-                budget,
-                graph,
-                &mode,
-                path_prefix,
-                exclude_path,
-                generated_code_mode,
-                ast_only_tuning,
-                json,
-            )
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+        _ => {
+            eprintln!("This command is not available in the current build");
+            Ok(())
         }
 
         Commands::Serve { graph, watch } => {
