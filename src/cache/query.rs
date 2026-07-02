@@ -153,6 +153,90 @@ pub fn salsa_extract_all(files: &[crate::detect::DetectedFile]) -> ExtractionRes
     merged
 }
 
+// ── Phase 6: Tests ─────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::FileType;
+    use std::io::Write;
+
+    /// Verify that salsa_extract_file returns a valid result for a Rust source file.
+    #[test]
+    fn test_salsa_extract_rust_file() {
+        let mut tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("hello.rs");
+        let mut f = std::fs::File::create(&file_path).unwrap();
+        f.write_all(b"fn greet() -> &'static str { \"hello\" }").unwrap();
+        f.flush().unwrap();
+
+        let result = salsa_extract_file(&file_path, FileType::Code);
+        assert!(!result.is_empty(), "Expected non-empty extraction");
+        assert!(!result.nodes.is_empty(), "Expected at least one AST node");
+        let fn_nodes: Vec<_> = result.nodes.iter().filter(|n| n.label == "greet").collect();
+        assert_eq!(fn_nodes.len(), 1, "Expected exactly one function 'greet'");
+        assert!(!result.edges.is_empty(), "Expected edges from extraction");
+    }
+
+    /// Verify that consecutive salsa_extract_file calls with unchanged content
+    /// return identical results (cache hit — same node count).
+    #[test]
+    fn test_salsa_cache_hit_returns_same_result() {
+        let mut tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("module.rs");
+        let mut f = std::fs::File::create(&file_path).unwrap();
+        f.write_all(b"pub struct Cache { pub field: u32 }").unwrap();
+        f.flush().unwrap();
+
+        let result1 = salsa_extract_file(&file_path, FileType::Code);
+        let result2 = salsa_extract_file(&file_path, FileType::Code);
+
+        assert!(!result1.is_empty(), "First extraction should succeed");
+        assert!(!result2.is_empty(), "Second extraction should succeed");
+
+        // Same file, same content → same number of nodes and edges
+        let (nodes1, edges1) = (result1.nodes.len(), result1.edges.len());
+        let (nodes2, edges2) = (result2.nodes.len(), result2.edges.len());
+        assert_eq!(nodes1, nodes2, "Cache hit should return same node count");
+        assert_eq!(edges1, edges2, "Cache hit should return same edge count");
+    }
+
+    /// Verify that salsa_extract_all handles multiple files correctly.
+    #[test]
+    fn test_salsa_extract_all() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        // Write two source files
+        let path1 = dir.path().join("a.rs");
+        let mut f1 = std::fs::File::create(&path1).unwrap();
+        f1.write_all(b"fn alpha() -> i32 { 1 }").unwrap();
+        f1.flush().unwrap();
+
+        let path2 = dir.path().join("b.rs");
+        let mut f2 = std::fs::File::create(&path2).unwrap();
+        f2.write_all(b"fn beta() -> &str { \"two\" }").unwrap();
+        f2.flush().unwrap();
+
+        let files = vec![
+            crate::detect::DetectedFile {
+                file_type: FileType::Code,
+                path: path1,
+            },
+            crate::detect::DetectedFile {
+                file_type: FileType::Code,
+                path: path2,
+            },
+        ];
+
+        let merged = salsa_extract_all(&files);
+        assert!(
+            merged.nodes.len() >= 2,
+            "Expected at least 2 nodes (one per function), got {}",
+            merged.nodes.len()
+        );
+    }
+}
+
 /// Materialize the full workspace graph from the Salsa database.
 pub fn materialize_full_graph(
     db: &salsa::DatabaseImpl,
