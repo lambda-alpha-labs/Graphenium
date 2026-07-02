@@ -131,7 +131,6 @@ impl PartialEq for Edge {
 }
 impl Eq for Edge {}
 
-
 fn default_weight() -> f64 {
     1.0
 }

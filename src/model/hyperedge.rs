@@ -56,5 +56,4 @@ impl HyperEdge {
     }
 }
 
-
 impl Eq for HyperEdge {}

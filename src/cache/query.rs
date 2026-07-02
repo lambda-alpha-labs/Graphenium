@@ -167,7 +167,8 @@ mod tests {
         let mut tmp = tempfile::TempDir::new().unwrap();
         let file_path = tmp.path().join("hello.rs");
         let mut f = std::fs::File::create(&file_path).unwrap();
-        f.write_all(b"fn greet() -> &'static str { \"hello\" }").unwrap();
+        f.write_all(b"fn greet() -> &'static str { \"hello\" }")
+            .unwrap();
         f.flush().unwrap();
 
         let result = salsa_extract_file(&file_path, FileType::Code);

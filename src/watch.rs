@@ -246,10 +246,6 @@ fn try_incremental(
 
     for path_str in &paths_to_extract {
         let file_path = std::path::Path::new(path_str);
-        let file = detect::DetectedFile {
-            file_type: FileType::Code,
-            path: file_path.to_path_buf(),
-        };
         let result = crate::cache::query::salsa_extract_file(file_path, FileType::Code);
         if result.is_empty() {
             continue; // unrecognised or empty file — skip
