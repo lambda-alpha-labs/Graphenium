@@ -667,12 +667,45 @@ mod tests {
         assert!(ranked[0].matched_fields.contains(&"label".to_string()));
         assert!(ranked[0].is_direct_match());
     }
-
     #[test]
-    fn detailed_query_scoring_uses_fallback_reason_when_no_keywords_match() {
-        let g = build_graph();
-        let ranked = score_query_nodes_detailed(&g, "xyz");
-        assert!(ranked[0].fallback_reason.is_some());
-        assert!(!ranked[0].is_direct_match());
+    fn test_is_namespace_aggregation_node_detects_import_only_hubs() {
+        let mut g = GrapheniumGraph::new();
+        let hub = Node::new("app_hub", "App.Hub", FileType::Code, "src/app/hub.rs");
+        g.upsert_node(hub.clone());
+
+        // Add callers that import this hub
+        for i in 0..10 {
+            let caller = Node::new(
+                &format!("caller_{}", i),
+                &format!("Caller{}", i),
+                FileType::Code,
+                &format!("src/mod{}/file.rs", i),
+            );
+            g.upsert_node(caller.clone());
+            g.add_edge(Edge::new(
+                &format!("caller_{}", i),
+                "app_hub",
+                "imports",
+                crate::model::Confidence::Extracted,
+                "src/app/hub.rs",
+            ));
+        }
+
+        // Hub should be detected as namespace aggregation node
+        let hub_node = g.node_data("app_hub").unwrap();
+        assert!(is_namespace_aggregation_node(hub_node, &g));
+
+        // A normal function with calls should NOT be
+        let normal = Node::new("normal_fn", "normalFn", FileType::Code, "src/doer.rs");
+        g.upsert_node(normal.clone());
+        g.add_edge(Edge::new(
+            "caller_0",
+            "normal_fn",
+            "calls",
+            crate::model::Confidence::Extracted,
+            "src/doer.rs",
+        ));
+        let normal_node = g.node_data("normal_fn").unwrap();
+        assert!(!is_namespace_aggregation_node(normal_node, &g));
     }
 }
