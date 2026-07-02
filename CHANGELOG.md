@@ -2,7 +2,21 @@
 
 All notable changes to Graphenium are documented in this file.
 
-## v0.15.0 (2026-07-01) — Planning workspace persist, references_to tool, quality-of-life hardening
+## v0.15.1 (2026-07-02) — Downstream impact gating, degree-based ranking, hub filtering
+
+### Added
+- **downstream_impact gating**: Expensive reverse-reachability analysis now skipped for deltas >200 changes
+- **Degree-based fragment ranking**: explain_change picks highest-degree node, not arbitrary .first()
+- **CI hardening**: 9 commits of fixes since v0.15.0
+
+### Fixed
+- Downstream impact OOM on 18k->98k deltas; gates at 200 changes
+- explain_change partial class fragment selection; now uses degree-ranking
+
+### Performance
+- 350 tests pass, 0 clippy errors, formatting clean
+
+## v0.15.0 (2026-07-01) -- Planning workspace persist, references_to tool, quality-of-life hardening — Planning workspace persist, references_to tool, quality-of-life hardening
 
 ### Added
 - **`is_namespace_aggregation_node` predicate** — Degree-based filter for import-only hub nodes. Used by `next_files_to_read` and `god_nodes` to filter namespace-hub noise
