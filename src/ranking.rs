@@ -25,6 +25,19 @@ pub fn is_namespace_aggregation_node(node: &Node, graph: &GrapheniumGraph) -> bo
     }
     // Broadened check: external nodes (no span) where non-contains edges are all imports
     // with >=5 distinct importers, and a dotted/labeled namespace
+    // Phase 3: Ratio test — if imports dominate (>70%) and degree > 2, treat as aggregation.
+    let import_count = incident_edges
+        .iter()
+        .filter(|e| e.relation == "imports")
+        .count();
+    let total = incident_edges.len();
+    if total > 2 && import_count > 0 {
+        let import_ratio = import_count as f64 / total as f64;
+        if import_ratio > 0.7 {
+            return true;
+        }
+    }
+
     if node.source_location.is_empty() {
         let non_structural: Vec<_> = incident_edges
             .iter()
@@ -42,6 +55,10 @@ pub fn is_namespace_aggregation_node(node: &Node, graph: &GrapheniumGraph) -> bo
                     graph.node_data(other).map(|n| n.source_file.as_str())
                 })
                 .collect();
+            // Phase 4: High fan-in override (C++ PCH hubs like "stdafx.h" or "pch.h")
+            if distinct_importers.len() >= 40 {
+                return true;
+            }
             if distinct_importers.len() >= 5 {
                 let label = node.qualified_label.as_deref().unwrap_or(&node.label);
                 if label.contains('.') || is_framework_label(label) {

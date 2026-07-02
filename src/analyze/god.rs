@@ -68,6 +68,11 @@ pub fn god_nodes_in_scope(
             if ranking::is_framework_noise_node(graph, node) {
                 return None;
             }
+            // Phase 1: Filter out namespace/import aggregation hubs (low-signal hubs that
+            // merely re-export external symbols). This runs BEFORE candidates.truncate().
+            if ranking::is_namespace_aggregation_node(node, graph) {
+                return None;
+            }
             Some(GodNode {
                 node_id: node.id.clone(),
                 label: node.label.clone(),

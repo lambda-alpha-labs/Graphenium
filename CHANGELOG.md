@@ -2,6 +2,19 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.15.5 (2026-07-02) — Hub detection phase-3, ratio heuristics, high-fan-in override
+
+### Fixed
+- **is_namespace_aggregation_node applied in god_nodes_in_scope**: Filter moved into god.rs BEFORE the top-N truncation, so namespace hubs do not occupy slots meant for real architectural hubs. Previously the filter ran in the MCP handler after truncation — hubs were already cut.
+- **Ratio heuristic**: Imports/total_edges > 0.7 now flags a node as aggregation hub, catching dense re-export modules without requiring dotted names or framework labels.
+- **High-fan-in override (40+ distinct importers)**: Nodes imported by 40+ distinct files are unconditionally treated as aggregation hubs, catching C++ PCH patterns (stdafx.h, pch.h) without needing dotted namespace labels.
+
+### Changed
+- Architecture summary hotspots and community top-nodes now benefit from the same pre-truncation filter since all paths go through god_nodes_in_scope().
+
+### Performance
+- 350 tests pass, 0 clippy errors, fmt clean.
+
 ## v0.15.4 (2026-07-02) — Hub detection fix, path disambiguation, installer hardening
 
 ### Fixed
