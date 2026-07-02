@@ -92,9 +92,21 @@ impl GrapheniumServer {
             return Some(id_or_label.to_string());
         }
         let lower = id_or_label.to_lowercase();
-        let resolved = graph
+        let candidates: Vec<_> = graph
             .nodes()
-            .find(|n| n.label.to_lowercase() == lower)
+            .filter(|n| n.label.to_lowercase() == lower)
+            .collect();
+        // When multiple nodes share the same label, pick the one with highest degree
+        // (most likely the real implementation, not a namespace hub or stub)
+        let resolved = candidates
+            .iter()
+            .max_by(|a, b| {
+                graph
+                    .degree(&a.id)
+                    .cmp(&graph.degree(&b.id))
+                    .then_with(|| b.id.len().cmp(&a.id.len()))
+                    .then_with(|| a.id.cmp(&b.id))
+            })
             .map(|n| n.id.clone());
         resolved
     }
@@ -2049,22 +2061,16 @@ impl GrapheniumServer {
         symbol: String,
     ) -> String {
         let graph = self.graph();
-        let (resolved_ids, _) = self.resolve_symbols_to_ids(&symbol);
-        // Pick the candidate with the highest degree (most likely the real implementation)
-        let Some(target_id) = resolved_ids.iter().max_by_key(|id| {
-            graph.node_data(id).map_or(0, |n| {
-                graph
-                    .edges_iter()
-                    .filter(|e| e.source == n.id || e.target == n.id)
-                    .count()
-            })
-        }) else {
-            return format!(
-                "Error: Could not resolve symbol '{}' to a node in the graph.",
-                symbol
-            );
+        let target_id = match self.resolve_id(&symbol) {
+            Some(id) => id,
+            None => {
+                return format!(
+                    "Error: Could not resolve symbol '{}' to a node in the graph.",
+                    symbol
+                )
+            }
         };
-        let Some(explanation) = crate::serve::traversal::explain_subsystem(&graph, target_id)
+        let Some(explanation) = crate::serve::traversal::explain_subsystem(&graph, &target_id)
         else {
             return format!(
                 "Error: Failed to generate architectural explanation for '{}'.",
@@ -2109,6 +2115,28 @@ impl GrapheniumServer {
 
         let new_graph = self.graph();
         let changes = crate::analyze::impact::symbol_inventory_diff(&old_graph, &new_graph);
+        // Short-circuit for very large deltas: count-only summary to prevent OOM
+        let budget_max = budget.unwrap_or(10000);
+        if changes.len() > 5000 {
+            let changes_len = changes.len();
+            let removed = changes
+                .iter()
+                .filter(|c| matches!(c, crate::analyze::impact::SymbolChange::Removed { .. }))
+                .count();
+            let moved = changes
+                .iter()
+                .filter(|c| {
+                    matches!(
+                        c,
+                        crate::analyze::impact::SymbolChange::CommunityChanged { .. }
+                    )
+                })
+                .count();
+            let added = changes.len() - removed - moved;
+            return format!(
+                "# What Changed (snapshot: `{name}`)\n                 **Delta too large to expand** ({changes_len} changes). Summary:\n                 - Removed: {removed}\n- Community moves: {moved}\n- Added: {added}\n\n                 The full diff would require multi-MB output. Increase the `budget` parameter or use a shorter snapshot window."
+            );
+        }
         let impact = if changes.len() > 200 {
             crate::analyze::impact::ImpactReport {
                 changed_symbols: Vec::new(),
@@ -2837,6 +2865,14 @@ impl GrapheniumServer {
             ));
             for label in colliding_labels.iter().take(20) {
                 if let Some(ids) = label_counts.get(*label) {
+                    // Skip same-file collisions (overloads, partial classes — expected)
+                    let files: std::collections::BTreeSet<&str> = ids
+                        .iter()
+                        .filter_map(|id| graph.node_data(id).map(|n| n.source_file.as_str()))
+                        .collect();
+                    if files.len() <= 1 {
+                        continue;
+                    }
                     let entries: Vec<String> = ids
                         .iter()
                         .map(|id| {
@@ -2846,8 +2882,9 @@ impl GrapheniumServer {
                         })
                         .collect();
                     output.push_str(&format!(
-                        "- **{}** — {} occurrences: {}\n",
+                        "- **{}** — {} files, {} nodes: {}\n",
                         label,
+                        files.len(),
                         ids.len(),
                         entries.join(", ")
                     ));

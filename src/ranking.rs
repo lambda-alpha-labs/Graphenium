@@ -19,7 +19,38 @@ pub fn is_namespace_aggregation_node(node: &Node, graph: &GrapheniumGraph) -> bo
     if incident_edges.len() <= 1 {
         return false;
     }
-    incident_edges.iter().all(|e| e.relation == "imports")
+    // Pure import-only hubs
+    if incident_edges.iter().all(|e| e.relation == "imports") {
+        return true;
+    }
+    // Broadened check: external nodes (no span) where non-contains edges are all imports
+    // with >=5 distinct importers, and a dotted/labeled namespace
+    if node.source_location.is_empty() {
+        let non_structural: Vec<_> = incident_edges
+            .iter()
+            .filter(|e| e.relation != "contains" && e.relation != "method")
+            .collect();
+        if !non_structural.is_empty() && non_structural.iter().all(|e| e.relation == "imports") {
+            let distinct_importers: std::collections::HashSet<&str> = non_structural
+                .iter()
+                .filter_map(|e| {
+                    let other = if e.source == node.id {
+                        &e.target
+                    } else {
+                        &e.source
+                    };
+                    graph.node_data(other).map(|n| n.source_file.as_str())
+                })
+                .collect();
+            if distinct_importers.len() >= 5 {
+                let label = node.qualified_label.as_deref().unwrap_or(&node.label);
+                if label.contains('.') || is_framework_label(label) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Query ranking mode for hybrid retrieval.

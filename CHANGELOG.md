@@ -2,6 +2,20 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.15.3 (2026-07-02) — Delta safety, degree-based disambiguation, hub detection
+
+### Added
+- **Large delta short-circuit**: `what_changed` returns count-only summary for diffs exceeding 5,000 changes, preventing server OOM
+- **`resolve_id` degree tie-breaking**: Label collisions now always pick the highest-degree node (most likely the real implementation), via `max_by(degree)` with ID-length and name tie-breakers
+- **Broadened namespace hub detection**: `is_namespace_aggregation_node` now catches external framework/namespace nodes without source spans that are imported by ≥5 distinct files
+
+### Fixed
+- `ambiguous_symbols` no longer reports same-file label collisions (overloads, partial classes — expected behavior)
+- `downstream_impact` computation gated at >200 changes to avoid expensive reverse-reachability on large deltas
+
+### Performance
+- 350 tests pass, 0 clippy errors, formatting clean
+
 ## v0.15.2 (2026-07-02) — Empty section headers, extension-based language detection, test hardening
 
 ### Added
