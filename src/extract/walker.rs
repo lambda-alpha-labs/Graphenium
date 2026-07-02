@@ -302,6 +302,12 @@ fn callgraph_walk<'tree>(
                 if seen.insert(pair) {
                     out.push(Edge::inferred_call(owner_id, callee_id, state.file_path));
                 }
+            } else if seen.insert((owner_id.to_string(), callee_label.clone())) {
+                // Phase 1A: Emit unresolved cross-file call-site
+                let mut edge = Edge::new(owner_id.to_string(), callee_label.clone(), "calls", Confidence::Ambiguous, state.file_path);
+                edge.extractor = Some("tree-sitter".to_string());
+                edge.resolution_status = Some("unresolved".to_string());
+                out.push(edge);
             }
         }
         // Descend into call arguments for nested calls.
