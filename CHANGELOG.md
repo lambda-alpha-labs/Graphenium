@@ -2,6 +2,20 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.15.4 (2026-07-02) — Hub detection fix, path disambiguation, installer hardening
+
+### Fixed
+- **`is_namespace_aggregation_node`** broadened to treat `uses` as a structural edge alongside `contains`/`method`, so framework namespaces with both imports and `uses` edges are correctly excluded from hub rankings
+- **`ambiguous_symbols` headline count** now matches the cross-file-only list — same-file collisions (overloads, partial classes) are excluded at both construction and rendering time
+- **`shortest_path` / `safest_path`** now disambiguate same-label consecutive nodes by appending a file-path hint (e.g. `SceneObject (SceneObject.cs)`), resolving "→" sequences where both endpoints show the same name
+- **`what_changed` large-delta summary** format string cleaned — no more ragged indentation in the output
+
+### Changed
+- `install.sh` and `install.ps1` now use `cargo install --locked` to prevent tree-sitter ABI drift on clean installs
+
+### Performance
+- 350 tests pass, 0 clippy errors, formatting clean
+
 ## v0.15.3 (2026-07-02) — Delta safety, degree-based disambiguation, hub detection
 
 ### Added

@@ -43,10 +43,10 @@ if curl -fsSL --head "$LATEST_URL" > /dev/null 2>&1; then
     install -m 755 "$TMPDIR/$BINARY" "$INSTALL_DIR/$BINARY"
     rm -rf "$TMPDIR"
 elif command -v cargo > /dev/null 2>&1; then
-    cargo install graphenium
+    cargo install --locked graphenium
 else
     echo "No prebuilt binary found and cargo is not installed."
-    echo "Install Rust from https://rustup.rs, then: cargo install graphenium"
+    echo "Install Rust from https://rustup.rs, then: cargo install --locked graphenium"
     exit 1
 fi
 

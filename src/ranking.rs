@@ -28,7 +28,7 @@ pub fn is_namespace_aggregation_node(node: &Node, graph: &GrapheniumGraph) -> bo
     if node.source_location.is_empty() {
         let non_structural: Vec<_> = incident_edges
             .iter()
-            .filter(|e| e.relation != "contains" && e.relation != "method")
+            .filter(|e| e.relation != "contains" && e.relation != "method" && e.relation != "uses")
             .collect();
         if !non_structural.is_empty() && non_structural.iter().all(|e| e.relation == "imports") {
             let distinct_importers: std::collections::HashSet<&str> = non_structural

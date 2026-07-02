@@ -43,9 +43,9 @@ if (Test-Path "$InstallDir") {
 Write-Host "[OK] Repository ready." -ForegroundColor Green
 
 # Step 3: Build and install
-Write-Host "[..] Building Graphenium (cargo install --path .) ..."
+Write-Host "[..] Building Graphenium (cargo install --locked --path .) ..."
 Push-Location "$InstallDir"
-cargo install --path .
+cargo install --locked --path .
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[!] Build failed." -ForegroundColor Red
     Pop-Location

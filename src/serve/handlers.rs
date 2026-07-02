@@ -1538,12 +1538,26 @@ impl GrapheniumServer {
 
         match result {
             Some(result) => {
-                let labels: Vec<String> = result
-                    .path
-                    .iter()
-                    .filter_map(|id| graph.node_data(id))
-                    .map(|node| node.display_label().to_string())
-                    .collect();
+                // Build path labels with disambiguation for same-label consecutive nodes
+                let path_ids: Vec<String> = result.path.clone();
+                let mut labels: Vec<String> = Vec::new();
+                let root = graph.metadata.project_root.as_deref();
+                for (i, id) in path_ids.iter().enumerate() {
+                    let Some(node) = graph.node_data(id) else {
+                        continue;
+                    };
+                    let label = node.display_label().to_string();
+                    // If next hop shares this label, append a file hint
+                    let next_same = path_ids.get(i + 1).and_then(|nid| {
+                        graph.node_data(nid).filter(|next| next.label == node.label)
+                    });
+                    if next_same.is_some() {
+                        let rel = crate::serve::traversal::relative_path(&node.source_file, root);
+                        labels.push(format!("{label} ({rel})"));
+                    } else {
+                        labels.push(label);
+                    }
+                }
                 let mode_label = match result.mode {
                     traversal::PathMode::Semantic => "Semantic path",
                     traversal::PathMode::Strict => "Strict shortest path",
@@ -2134,7 +2148,7 @@ impl GrapheniumServer {
                 .count();
             let added = changes.len() - removed - moved;
             return format!(
-                "# What Changed (snapshot: `{name}`)\n                 **Delta too large to expand** ({changes_len} changes). Summary:\n                 - Removed: {removed}\n- Community moves: {moved}\n- Added: {added}\n\n                 The full diff would require multi-MB output. Increase the `budget` parameter or use a shorter snapshot window."
+                "# What Changed (snapshot: `{name}`)\n**Delta too large to expand** ({changes_len} changes). Summary:\n- Removed: {removed}\n- Community moves: {moved}\n- Added: {added}\n\nThe full diff would require multi-MB output. Increase the `budget` parameter or use a shorter snapshot window."
             );
         }
         let impact = if changes.len() > 200 {
@@ -2822,7 +2836,19 @@ impl GrapheniumServer {
         }
         let colliding_labels: Vec<&String> = label_counts
             .iter()
-            .filter(|(_, ids)| ids.len() > 1)
+            .filter(|(_, ids)| {
+                // Exclude same-file collisions (overloads, partial classes — expected)
+                if ids.len() <= 1 {
+                    return false;
+                }
+                let mut seen_files = std::collections::HashSet::new();
+                for id in ids.iter() {
+                    if let Some(n) = graph.node_data(id) {
+                        seen_files.insert(n.source_file.clone());
+                    }
+                }
+                seen_files.len() > 1
+            })
             .map(|(label, _)| label)
             .collect();
 
