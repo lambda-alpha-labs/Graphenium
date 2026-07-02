@@ -2050,7 +2050,15 @@ impl GrapheniumServer {
     ) -> String {
         let graph = self.graph();
         let (resolved_ids, _) = self.resolve_symbols_to_ids(&symbol);
-        let Some(target_id) = resolved_ids.first() else {
+        // Pick the candidate with the highest degree (most likely the real implementation)
+        let Some(target_id) = resolved_ids.iter().max_by_key(|id| {
+            graph.node_data(id).map_or(0, |n| {
+                graph
+                    .edges_iter()
+                    .filter(|e| e.source == n.id || e.target == n.id)
+                    .count()
+            })
+        }) else {
             return format!(
                 "Error: Could not resolve symbol '{}' to a node in the graph.",
                 symbol
@@ -2101,7 +2109,18 @@ impl GrapheniumServer {
 
         let new_graph = self.graph();
         let changes = crate::analyze::impact::symbol_inventory_diff(&old_graph, &new_graph);
-        let impact = crate::analyze::impact::downstream_impact(&new_graph, &changes);
+        let impact = if changes.len() > 200 {
+            crate::analyze::impact::ImpactReport {
+                changed_symbols: Vec::new(),
+                downstream_nodes: Vec::new(),
+                affected_communities: Vec::new(),
+                extracted_edges: 0,
+                inferred_edges: 0,
+                ambiguous_edges: 0,
+            }
+        } else {
+            crate::analyze::impact::downstream_impact(&new_graph, &changes)
+        };
 
         let budget_max = budget.unwrap_or(10000);
         let mut out = format!("# What Changed (snapshot: `{name}`)\n\n");
