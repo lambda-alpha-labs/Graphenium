@@ -404,9 +404,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     Err(e) => eprintln!("Failed to load graph: {}", e),
                 }
-                return Ok(());
+                cmd_query_log_or_err(question, dfs, safe, budget, graph, &mode,
+                    path_prefix, exclude_path, generated_code_mode, ast_only_tuning, json)
             }
-            cmd_query(
+        }
+
+        Commands::Mint { num_tokens, .. } => 
                 question,
                 dfs,
                 safe,
