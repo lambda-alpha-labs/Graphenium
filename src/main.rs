@@ -4,6 +4,7 @@ use std::process;
 use clap::{Parser, Subcommand};
 
 use graphenium::analyze;
+use graphenium::analyze::query;
 use graphenium::build;
 use graphenium::cache::Manifest;
 use graphenium::cluster::{self, ClusterOptions};

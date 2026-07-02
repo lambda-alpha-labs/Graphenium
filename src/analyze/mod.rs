@@ -1,6 +1,7 @@
 pub mod diff;
 pub mod god;
 pub mod impact;
+pub mod query;
 pub mod questions;
 pub mod rank;
 pub mod surprise;
