@@ -2,6 +2,19 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.15.2 (2026-07-02) — Empty section headers, extension-based language detection, test hardening
+
+### Added
+- **`format_explanation_report` now always emits section headers** — sections 1/3/5 now show "None found." when empty, matching the existing section-4 convention. No more "1, 2, 4" gap when callers section is empty.
+- **Extension-based language integrity check** — `gm doctor` now detects languages from file extensions in the graph when `metadata.languages` is absent, so C#/C++/Python are checked even if the initial detection pass didn't populate the metadata field.
+- **Synthetic test for aggregation predicate** — `test_is_namespace_aggregation_node_detects_import_only_hubs` verifies the degree-based hub detection works correctly.
+
+### Fixed
+- `explain_change` section gaps when "Direct Callers" list is empty — header now always emitted with "None found." message.
+
+### Performance
+- 350 tests pass (1 new), 0 clippy errors, formatting clean
+
 ## v0.15.1 (2026-07-02) — Downstream impact gating, degree-based ranking, hub filtering
 
 ### Added
@@ -16,7 +29,7 @@ All notable changes to Graphenium are documented in this file.
 ### Performance
 - 350 tests pass, 0 clippy errors, formatting clean
 
-## v0.15.0 (2026-07-01) -- Planning workspace persist, references_to tool, quality-of-life hardening — Planning workspace persist, references_to tool, quality-of-life hardening
+## v0.15.0 (2026-07-01) — Planning workspace persist, references_to tool, quality-of-life hardening
 
 ### Added
 - **`is_namespace_aggregation_node` predicate** — Degree-based filter for import-only hub nodes. Used by `next_files_to_read` and `god_nodes` to filter namespace-hub noise
