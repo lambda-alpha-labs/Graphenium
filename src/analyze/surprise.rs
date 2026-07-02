@@ -1,14 +1,11 @@
 /// Surprise-scoring for edges.
-///
 /// An edge is "surprising" when it connects entities that we would not
 /// normally expect to be related.  The score is:
-///
 /// ```text
 /// base  = conf_bonus                      // AMBIGUOUS=3, INFERRED=2, EXTRACTED=1
 ///       + (cross_file_type  ? 2 : 0)      // code ↔ paper is more surprising
 ///       + (cross_repo       ? 2 : 0)      // different top-level directory
 ///       + (cross_community  ? 1 : 0)      // different Louvain community
-///
 /// score = base × (1.5 if semantically_similar_to else 1.0)
 ///       + (peripheral_to_hub ? 1 : 0)     // low-degree node → high-degree node
 /// ```

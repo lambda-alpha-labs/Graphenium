@@ -1,11 +1,9 @@
 /// File-based extraction cache.
-///
 /// Cache layout inside `<out_dir>/cache/`:
 /// ```text
 /// cache/
 ///   <sha256>.json       ← serialised ExtractionResult (atomic write)
 /// ```
-///
 /// The SHA256 hash of the file's raw bytes is used as the cache key, so a
 /// file is automatically reused if its content is unchanged, and a new entry
 /// is written whenever the content changes.

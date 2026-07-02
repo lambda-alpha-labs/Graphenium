@@ -1,13 +1,10 @@
 /// File-watch mode: rebuild the knowledge graph automatically on code changes.
-///
 /// ## Behaviour
-///
 /// | Change type          | Action                                          |
 /// |----------------------|-------------------------------------------------|
 /// | Code file modified   | Fast rebuild: detect → AST extract → build → cluster → JSON export + report |
 /// | Non-code file changed| Write `graphenium-out/needs_update` flag + print notification |
 /// | Both in one batch    | Run fast rebuild AND write flag                 |
-///
 /// The `graphenium-out/` directory and hidden/skip directories are excluded from
 /// the watcher so that writes made by the rebuild itself do not re-trigger
 /// another rebuild.
@@ -24,14 +21,12 @@ use crate::cluster::{self, ClusterOptions};
 use crate::detect::{self, classify, DetectOptions};
 use crate::export;
 use crate::export::json;
-use crate::extract::{self, ExtractOptions};
 use crate::model::{FileType, GrapheniumGraph};
 use crate::report::{self, ReportInput};
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Start watching `root` for file-system changes.
-///
 /// Blocks until the watcher is torn down (process receives a signal or the
 /// parent tokio runtime drops the task).  Intended to be called inside
 /// `tokio::task::spawn_blocking`.
@@ -127,7 +122,6 @@ fn handle_events(root: &Path, out_dir: &Path, events: &[DebouncedEvent], increme
 // ── Path filtering ────────────────────────────────────────────────────────────
 
 /// Returns `true` if an event path should be ignored.
-///
 /// Ignored paths:
 /// - Anything inside the `graphenium-out/` output directory.
 /// - Paths whose components include a hidden entry (starts with `.`) or a
@@ -149,7 +143,6 @@ fn should_skip(path: &Path, out_dir: &Path) -> bool {
 // ── Build (AST-only, no semantic) ────────────────────────────────────────────
 
 /// Full re-detect → AST extract → build → cluster → export JSON + report.
-///
 /// Used on initial startup and as fallback when incremental patching is
 /// not applicable.  Semantic results are intentionally skipped to keep the
 /// rebuild fast (< 2s for most projects).

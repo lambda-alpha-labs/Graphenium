@@ -18,7 +18,6 @@ use super::traversal;
 // ── Server struct ─────────────────────────────────────────────────────────────
 
 /// MCP server backed by a loaded `GrapheniumGraph`.
-///
 /// The graph lives behind an `ArcSwap` so the `reload_graph` tool can
 /// atomically swap it without restarting the server process. Readers
 /// (tool handlers) call `self.graph()` to take a snapshot `Arc` for the
@@ -217,7 +216,7 @@ impl GrapheniumServer {
         }
     }
 
-    fn ast_only_tuning_header(enabled: bool) -> Option<&'static str> {
+    fn ast_only_tuning_header(_enabled: bool) -> Option<&'static str> {
         // Banner suppressed: the filter message already conveys AST-only tuning.
         // Re-enable by returning Some("...") when enabled.
         None
@@ -1611,7 +1610,7 @@ impl GrapheniumServer {
         group_by: Option<String>,
         #[tool(param)]
         #[schemars(description = "Minimum node degree to include (filters low-degree noise)")]
-        min_degree: Option<i32>,
+        _min_degree: Option<i32>,
         #[tool(param)]
         #[schemars(
             description = "Show low-degree leaf symbols (degree <= 5). Default false to save tokens."
@@ -2049,7 +2048,7 @@ impl GrapheniumServer {
     /// Returns Ok(graph) on first success, or None if no path exists.
     fn load_snapshot_graph(
         candidates: &[std::path::PathBuf],
-        name: &str,
+        _name: &str,
     ) -> Option<crate::model::GrapheniumGraph> {
         for path in candidates {
             if path.exists() {
@@ -2130,7 +2129,7 @@ impl GrapheniumServer {
         let new_graph = self.graph();
         let changes = crate::analyze::impact::symbol_inventory_diff(&old_graph, &new_graph);
         // Short-circuit for very large deltas: count-only summary to prevent OOM
-        let budget_max = budget.unwrap_or(10000);
+        let _budget_max = budget.unwrap_or(10000);
         if changes.len() > 5000 {
             let changes_len = changes.len();
             let removed = changes
@@ -2164,7 +2163,7 @@ impl GrapheniumServer {
             crate::analyze::impact::downstream_impact(&new_graph, &changes)
         };
 
-        let budget_max = budget.unwrap_or(10000);
+        let _budget_max = budget.unwrap_or(10000);
         let mut out = format!("# What Changed (snapshot: `{name}`)\n\n");
 
         // Separate changes by type
@@ -2289,7 +2288,7 @@ impl GrapheniumServer {
         depth: Option<i32>,
         #[tool(param)]
         #[schemars(description = "Only follow edges with these relation types (substring match)")]
-        relation: Option<String>,
+        _relation: Option<String>,
         #[tool(param)]
         #[schemars(
             description = "Direction: 'forward' (default, outgoing edges), 'reverse' (incoming edges), or 'both'"
@@ -3565,7 +3564,7 @@ impl GrapheniumServer {
         #[schemars(description = "ID or label of the existing node to link to")]
         target_symbol: String,
     ) -> String {
-        let graph = self.graph();
+        let _graph = self.graph();
         let (resolved_targets, _) = self.resolve_symbols_to_ids(&target_symbol);
         let Some(target_id) = resolved_targets.first() else {
             return format!(

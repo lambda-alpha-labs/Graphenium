@@ -20,7 +20,6 @@ pub struct ExportPaths {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Write `graph.json` and `graph.html` to `out_dir`.
-///
 /// `out_dir` is created if it does not exist.
 pub fn export(graph: &GrapheniumGraph, out_dir: &Path, title: &str) -> crate::Result<ExportPaths> {
     fs::create_dir_all(out_dir)?;

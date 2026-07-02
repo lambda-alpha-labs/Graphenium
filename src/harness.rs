@@ -19,7 +19,6 @@ pub struct TrustCheckResult {
 }
 
 /// Run a trust check against the graph.
-///
 /// Returns a `TrustCheckResult` with pass/fail based on thresholds.
 pub fn check_resolution_quality(
     graph: &GrapheniumGraph,

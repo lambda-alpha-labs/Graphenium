@@ -29,7 +29,6 @@ pub struct DetectOptions {
 
 /// Walk `root`, classify every file, apply the paper heuristic to text files,
 /// skip sensitive files, and return the list together with any corpus warnings.
-///
 /// Respects `.gitignore` automatically (via the `ignore` crate).
 /// Additionally layers any `.grapheniumignore` found in `root`.
 pub fn detect(

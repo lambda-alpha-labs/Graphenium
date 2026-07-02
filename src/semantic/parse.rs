@@ -1,10 +1,8 @@
 /// Multi-layer JSON extraction from Claude's response text.
-///
 /// Parsing layers (tried in order):
 ///   1. Direct `serde_json::from_str` on the full text.
 ///   2. Extract the first ```` ```json … ``` ```` (or ```` ``` … ``` ````) block.
 ///   3. Slice from the first `{` to the last `}` and parse that substring.
-///
 /// After extracting a raw JSON value, each node, edge and hyperedge is
 /// validated individually — items that fail are silently dropped, keeping all
 /// valid portions of a partially-correct response.

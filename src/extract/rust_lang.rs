@@ -1,10 +1,8 @@
 /// Rust custom extractor.
-///
 /// Rust's module structure is richer than the generic walker handles:
 /// - `impl TypeName { fn ... }` — methods grouped by impl block
 /// - `impl TraitName for TypeName { fn ... }` — trait implementations
 /// - `struct`, `enum`, `trait` items at module scope
-///
 /// This extractor handles all of these correctly, building nodes and
 /// `contains` / `method` edges.
 use std::collections::{HashMap, HashSet};

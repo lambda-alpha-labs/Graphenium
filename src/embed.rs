@@ -21,7 +21,6 @@ pub struct TfVector {
 }
 
 /// Build term-frequency vectors for all nodes by tokenizing labels.
-///
 /// Terms are lowercased, split on non-alphanumeric characters, and weighted
 /// by frequency within each node's label + qualified_label.
 pub fn build_text_embeddings(graph: &GrapheniumGraph) -> Vec<TfVector> {
@@ -125,7 +124,6 @@ fn is_stop_word(word: &str) -> bool {
 }
 
 /// Search for nodes whose text embeddings are most similar to a query.
-///
 /// Returns node IDs sorted by similarity descending.
 pub fn search_by_text(graph: &GrapheniumGraph, query: &str, top_k: usize) -> Vec<(String, f64)> {
     let vectors = build_text_embeddings(graph);
@@ -211,7 +209,6 @@ fn random_walks(
 }
 
 /// Train Node2Vec embeddings using random walks and co-occurrence counting.
-///
 /// This is a simplified approach: nodes that frequently co-appear in walks
 /// get similar embeddings. The embedding dimension is controlled by `dim`.
 pub fn train_node2vec(

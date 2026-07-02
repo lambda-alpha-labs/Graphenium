@@ -1,5 +1,4 @@
 /// MCP server for the Graphenium knowledge graph.
-///
 /// Exposes 8 tools over the stdio JSON-RPC transport:
 /// - `query_graph`   — BFS/DFS traversal from keyword-matched seed nodes
 /// - `get_node`      — Full node details by ID or label
@@ -15,21 +14,19 @@ pub mod traversal;
 pub use handlers::GrapheniumServer;
 
 use std::path::Path;
-use std::sync::Arc;
 
 use rmcp::{transport::io::stdio, ServiceExt};
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Load `graph_path` and start the MCP server on stdio.
-///
 /// Blocks until the client disconnects (stdin closes).
 pub async fn serve(graph_path: &Path) -> crate::Result<()> {
     serve_with_watch(graph_path, true).await
 }
 
 pub async fn serve_with_watch(graph_path: &Path, watch: bool) -> crate::Result<()> {
-    let (graph, watch_path, watch_parent) = match crate::export::json::load_graph(graph_path) {
+    let (graph, watch_path, _watch_parent) = match crate::export::json::load_graph(graph_path) {
         Ok(g) => {
             eprintln!(
                 "[graphenium] Loaded graph: {} ({} nodes, {} edges)",

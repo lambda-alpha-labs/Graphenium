@@ -1,5 +1,4 @@
 /// JSON node-link export.
-///
 /// Format:
 /// ```json
 /// {
@@ -139,7 +138,6 @@ pub fn to_json_compact(graph: &GrapheniumGraph) -> crate::Result<String> {
 }
 
 /// Reconstruct a `GrapheniumGraph` from a node-link JSON file produced by [`to_json`].
-///
 /// Unknown or malformed entries are silently skipped so that a partially-updated
 /// file does not prevent the graph from loading.
 pub fn load_graph(path: &Path) -> crate::Result<GrapheniumGraph> {

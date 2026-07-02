@@ -46,7 +46,6 @@ impl Default for ClusterOptions {
 
 /// Detect communities in `graph` using the Louvain algorithm, write the
 /// community ID back onto each node, and return per-community statistics.
-///
 /// After this call, `node.community` is `Some(k)` for every node, where `k`
 /// is 0-indexed and community 0 is the largest.
 pub fn cluster(graph: &mut GrapheniumGraph, opts: &ClusterOptions) -> Vec<CommunityStats> {

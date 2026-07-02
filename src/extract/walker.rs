@@ -1,10 +1,8 @@
 /// Generic two-pass AST walker for all languages covered by `LanguageConfig`.
-///
 /// # Pass 1 – Structure
 /// Walk the tree top-down.  On class/function nodes: emit a `Node` and a
 /// `contains` / `method` `Edge`.  On import nodes: delegate to the language's
 /// `import_handler`.  All other nodes are descended transparently.
-///
 /// # Pass 2 – Call graph
 /// Re-walk each function body collected in Pass 1.  Match call targets against
 /// the `label_to_nid` map built in Pass 1 and emit INFERRED `calls` edges
@@ -359,7 +357,6 @@ fn extract_leaf_identifier(node: Node<'_>, source: &[u8]) -> Option<String> {
 }
 
 /// Get the callee label from a call expression.
-///
 /// Handles:
 /// - `foo()`            → "foo"
 /// - `obj.foo()`        → "foo"

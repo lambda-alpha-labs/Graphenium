@@ -1,5 +1,4 @@
 /// Centralized cache directory abstraction for AST and semantic extraction caches.
-///
 /// Replaces ad-hoc path construction with a tested, single-responsibility struct.
 /// Use `CacheManager::new(cache_root)` where `cache_root` is `graphenium-out/cache`.
 use std::path::{Path, PathBuf};
@@ -7,7 +6,6 @@ use std::path::{Path, PathBuf};
 use crate::model::ExtractionResult;
 
 /// Manages disk-backed extraction caches under a single root directory.
-///
 /// Layout inside `root`:
 /// ```text
 /// root/

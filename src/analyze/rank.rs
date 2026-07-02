@@ -19,7 +19,6 @@ pub struct DirectedEdge {
 }
 
 /// A directed graph projection.
-///
 /// This is a lightweight adjacency list built from the undirected
 /// GrapheniumGraph using `Edge::src_original` / `Edge::tgt_original`
 /// to recover direction.
@@ -113,7 +112,6 @@ impl DirectedProjection {
 }
 
 /// Compute PageRank on a directed projection.
-///
 /// Returns a map from node ID to PageRank score. Uses the standard
 /// PageRank algorithm with damping factor `d` (default 0.85).
 pub fn page_rank(proj: &DirectedProjection, d: f64, max_iter: usize) -> HashMap<String, f64> {
@@ -164,7 +162,6 @@ pub fn page_rank(proj: &DirectedProjection, d: f64, max_iter: usize) -> HashMap<
 }
 
 /// Compute community boundary crossing scores.
-///
 /// For each edge that crosses a community boundary, compute a weighted score.
 /// Returns a list of (source_id, target_id, score) tuples sorted by score descending.
 pub fn community_boundary_crossings(
@@ -203,11 +200,9 @@ pub fn community_boundary_crossings(
 }
 
 /// Compute rooted dominators for a directed projection from a given root node.
-///
 /// Returns a map from node ID to its immediate dominator ID (the node that
 /// must be passed through to reach this node from the root). Uses a simple
 /// iterative algorithm suitable for small to medium graphs.
-///
 /// The root node maps to itself as its own dominator.
 pub fn rooted_dominators(proj: &DirectedProjection, root: &str) -> HashMap<String, Option<String>> {
     use std::collections::BTreeSet;
@@ -352,11 +347,10 @@ fn reverse_reachable_inverse(proj: &DirectedProjection, root: &str) -> Vec<Strin
 }
 
 /// Generate a chokepoints report combining multiple ranking signals.
-///
 /// Returns a ranked list of nodes with scores for each signal.
 pub fn chokepoint_report(
     proj: &DirectedProjection,
-    graph: &GrapheniumGraph,
+    _graph: &GrapheniumGraph,
     page_rank_ranks: &HashMap<String, f64>,
 ) -> Vec<ChokepointEntry> {
     let mut entries: Vec<ChokepointEntry> = Vec::new();
@@ -394,7 +388,6 @@ pub struct ChokepointEntry {
 }
 
 /// Compute reverse reachability: all nodes that can reach `target`.
-///
 /// Uses BFS over the reverse graph (following incoming edges).
 pub fn reverse_reachable(proj: &DirectedProjection, target: &str) -> Vec<String> {
     let mut visited = std::collections::BTreeSet::<&str>::new();

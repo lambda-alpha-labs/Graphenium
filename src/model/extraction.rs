@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use crate::model::{Edge, HyperEdge, Node};
 
 /// The raw output of one extraction pass (AST or semantic) over a set of files.
-///
 /// Multiple `ExtractionResult` values are merged in the build phase.
 /// When merging, duplicate node IDs are resolved by last-write-wins —
 /// semantic results intentionally override AST results.

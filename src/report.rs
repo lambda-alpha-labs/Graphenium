@@ -1,5 +1,4 @@
 /// Markdown `GRAPH_REPORT.md` generation.
-///
 /// Sections (in order):
 ///   1. Corpus Warnings
 ///   2. Summary table

@@ -79,12 +79,10 @@ thread_local! {
 }
 
 /// Extract a file using Salsa's memoized tracked queries.
-///
 /// On first call, creates a persistent `salsa::DatabaseImpl` and a `SourceFile`
 /// input. On subsequent calls with the same content, Salsa returns the cached
 /// `parse_ast` result instantly without re-parsing. When content changes, Salsa
 /// automatically re-runs only the affected queries.
-///
 /// Falls back to direct extraction when Salsa is unavailable (unlikely).
 pub fn salsa_extract_file(path: &std::path::Path, file_type: FileType) -> ExtractionResult {
     // Read current file content
@@ -130,11 +128,9 @@ pub fn salsa_extract_file(path: &std::path::Path, file_type: FileType) -> Extrac
 }
 
 /// Extract all files using Salsa-backed extraction with memoization.
-///
 /// On the first call, each file is parsed and cached. On subsequent calls,
 /// Salsa re-parses only files whose content has changed. This is the Salsa
 /// equivalent of `extract::extract_all()` for use in `full_rebuild`.
-///
 /// Files are processed in parallel via rayon for performance; the Salsa DB
 /// is thread-local so each rayon worker gets its own DB instance.
 pub fn salsa_extract_all(files: &[crate::detect::DetectedFile]) -> ExtractionResult {

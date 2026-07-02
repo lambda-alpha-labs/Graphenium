@@ -1,12 +1,10 @@
 use crate::model::{make_id, normalize_label};
 /// Per-language import node handlers.
-///
 /// Each function matches the `ImportHandlerFn` signature and is called once
 /// per import node encountered during the structure pass.  Handlers push
 /// `imports` edges onto `result`; dangling edges (where the target node does
 /// not yet exist) are silently dropped by `GrapheniumGraph::add_edge` in the
 /// build phase.
-///
 /// Nodes for imported names are **not** created here — only edges from the
 /// current file's module node to the imported identifier.  Actual cross-file
 /// resolution for Python happens in `cross_file.rs`.
@@ -69,7 +67,6 @@ fn emit_import(
 // ── Python ────────────────────────────────────────────────────────────────────
 
 /// Python: `import X [as Y]` and `from X import Y [as Z], ...`
-///
 /// Grammar:
 /// - `import_statement`:      `import` ( dotted_name | aliased_import )+
 /// - `import_from_statement`: `from` dotted_name `import` ( `*` | import_list | dotted_name )
@@ -143,7 +140,6 @@ pub fn python_import(
 // ── JavaScript / TypeScript ───────────────────────────────────────────────────
 
 /// JS/TS: ES module imports and exports (all forms with a `source` field).
-///
 /// Handles:
 /// - `import X from "module"`           (default import)
 /// - `import { X } from "module"`       (named import)
@@ -151,7 +147,6 @@ pub fn python_import(
 /// - `import "module"`                  (side-effect import)
 /// - `export { X } from "module"`       (named re-export)
 /// - `export * from "module"`           (star re-export)
-///
 /// Only processes `import_statement` and `export_statement` nodes that have
 /// a `source` child field (the module specifier string).
 pub fn es_import_handler(
@@ -185,7 +180,6 @@ pub fn es_import_handler(
 }
 
 /// JS/TS: CommonJS `require("module")` calls.
-///
 /// Matches `call_expression` nodes whose function name is `"require"`.
 /// Extracts the first string argument as the imported module path.
 pub fn cjs_require_handler(
@@ -234,7 +228,6 @@ pub fn cjs_require_handler(
 
 /// Combined JS/TS import handler that dispatches to the appropriate sub-handler
 /// based on node kind.
-///
 /// This is the function registered in `LanguageConfig::import_handler`.
 /// It routes to `es_import_handler` for `import_statement`/`export_statement`
 /// and to `cjs_require_handler` for `call_expression` (`require(...)`).
@@ -259,7 +252,6 @@ pub fn js_import_handler(
 // ── Java ──────────────────────────────────────────────────────────────────────
 
 /// Java: `import com.example.Foo;`
-///
 /// The fully-qualified name is a `scoped_identifier`; we preserve the full
 /// import path as the placeholder label and normalize the ID from it.
 pub fn java_import(
@@ -294,7 +286,6 @@ pub fn java_import(
 // ── C / C++ ───────────────────────────────────────────────────────────────────
 
 /// C/C++: `#include <stdio.h>` or `#include "myheader.h"`
-///
 /// Extracts the header filename stem as the import target.
 pub fn c_include(
     node: tree_sitter::Node<'_>,
@@ -330,7 +321,6 @@ pub fn c_include(
 // ── Go ────────────────────────────────────────────────────────────────────────
 
 /// Go: `import "fmt"` or `import ( "fmt"; "os" )`
-///
 /// The generic walker handles `import_spec` nodes; Go's custom extractor
 /// (`go.rs`) calls this helper directly.
 pub fn go_import(
@@ -365,7 +355,6 @@ pub fn go_import(
 // ── C# ────────────────────────────────────────────────────────────────────────
 
 /// C#: `using System.Collections.Generic;`
-///
 /// Preserves the full namespace as the placeholder label.
 pub fn csharp_using(
     node: tree_sitter::Node<'_>,

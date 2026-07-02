@@ -1,9 +1,7 @@
 /// Validation of `ExtractionResult` values before graph construction.
-///
 /// Validation is a **mutation + reporting** step: invalid nodes and edges are
 /// removed in-place from the result, and a `ValidationReport` is returned
 /// describing what was stripped.
-///
 /// The confidence enum (`Confidence`) is guaranteed valid by Rust's type
 /// system, so only the numeric `confidence_score` and required string fields
 /// need runtime checking.
@@ -55,7 +53,6 @@ impl ValidationReport {
 
 /// Validate `result` in-place, stripping invalid entries and returning a
 /// report of everything that was removed.
-///
 /// Designed to run before `build::build_from_extraction`.
 pub fn validate(result: &mut ExtractionResult) -> ValidationReport {
     let mut report = ValidationReport::default();

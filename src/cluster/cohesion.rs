@@ -1,14 +1,10 @@
 /// Community cohesion scoring.
-///
 /// Cohesion measures how densely connected a community is internally:
-///
 /// ```text
 /// cohesion = actual_internal_edges / (n * (n-1) / 2)
 /// ```
-///
 /// where `n` is the number of nodes in the community and the denominator is
 /// the number of edges in a complete undirected graph with `n` nodes.
-///
 /// A score of 1.0 = all nodes fully connected (clique).
 /// A score of 0.0 = no internal edges.
 use std::collections::HashMap;
@@ -38,7 +34,6 @@ pub struct CommunityStats {
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Compute `CommunityStats` for each community present in `graph`.
-///
 /// `assignments[i]` is the community ID for `node_ids[i]`.
 pub fn community_stats(
     graph: &GrapheniumGraph,

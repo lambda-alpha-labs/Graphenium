@@ -1,9 +1,7 @@
 /// High-level semantic-extraction cache.
-///
 /// Wraps the low-level [`super::file_hash`] / [`super::load_cached`] /
 /// [`super::save_cached`] primitives to provide a batch-oriented interface
 /// suited to the semantic extraction orchestrator in Phase 9.
-///
 /// Typical usage:
 /// ```text
 /// let (hits, misses) = check_semantic_cache(&files, cache_dir);
@@ -42,7 +40,6 @@ pub struct CacheMiss {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Split `files` into cache hits and misses against `cache_dir`.
-///
 /// Files that cannot be hashed (e.g. permission error) are returned as misses
 /// with an empty hash, and will not be cached on the next store call.
 pub fn check_semantic_cache(
@@ -81,7 +78,6 @@ pub fn check_semantic_cache(
 }
 
 /// Persist a freshly-extracted result for future cache lookups.
-///
 /// A miss with `hash == ""` (file unreadable at check time) is silently
 /// skipped since there is no stable key to store under.
 pub fn store(cache_dir: &Path, hash: &str, result: &ExtractionResult) -> crate::Result<()> {

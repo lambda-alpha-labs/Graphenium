@@ -6,7 +6,6 @@ use super::{html_template::HTML_TEMPLATE, json};
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Render the graph as a self-contained HTML page.
-///
 /// The compact graph JSON is injected into the template at the
 /// `{{GRAPH_DATA}}` placeholder; `title` replaces `{{TITLE}}`.
 pub fn to_html(graph: &GrapheniumGraph, title: &str) -> crate::Result<String> {

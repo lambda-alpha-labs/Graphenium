@@ -44,7 +44,6 @@ pub struct VerificationPlan {
 }
 
 /// Build a verification plan for a set of changed nodes.
-///
 /// Given changed node IDs, walks the graph to find:
 /// - Callers (high-confidence extracted edges)
 /// - Dependents (downstream consumers)
@@ -286,7 +285,7 @@ pub fn format_plan_json(plan: &VerificationPlan) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Confidence, Edge, FileType, Node};
+    use crate::model::{Edge, FileType, Node};
 
     fn make_test_graph() -> GrapheniumGraph {
         let mut graph = GrapheniumGraph::new();

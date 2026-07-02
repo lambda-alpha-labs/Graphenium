@@ -3,7 +3,6 @@ use tree_sitter::Language;
 use crate::model::ExtractionResult;
 
 /// Signature for a language-specific import statement handler.
-///
 /// Called once per import node found during the structure pass.
 /// Implementations extract the imported module/name and push nodes/edges
 /// onto `result`.
@@ -16,7 +15,6 @@ pub type ImportHandlerFn = for<'tree> fn(
 );
 
 /// Data-driven configuration for one language's AST structure.
-///
 /// All languages share the same generic two-pass walker in `walker.rs`.
 /// Language-specific behaviour is captured here and in optional handler
 /// function pointers.

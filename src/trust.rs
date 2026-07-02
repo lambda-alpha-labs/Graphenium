@@ -111,7 +111,6 @@ pub enum ClaimType {
 }
 
 /// An agent-facing interpretation of graph evidence.
-///
 /// Claims separate raw graph facts from reasoned outputs. A claim always
 /// includes supporting evidence so agents can verify the claim independently.
 #[derive(Debug, Clone, Serialize, Deserialize)]

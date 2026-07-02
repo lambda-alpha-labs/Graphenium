@@ -49,7 +49,6 @@ pub struct DriftReport {
 }
 
 /// Detect drift between two graph snapshots.
-///
 /// Compares communities and cross-boundary edges between the old and new graph.
 pub fn detect_drift(old: &GrapheniumGraph, new: &GrapheniumGraph) -> DriftReport {
     let mut events = Vec::new();

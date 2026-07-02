@@ -95,7 +95,6 @@ pub fn symbol_inventory_diff(old: &GrapheniumGraph, new: &GrapheniumGraph) -> Ve
 }
 
 /// Compute downstream impact of changed symbols.
-///
 /// Uses reverse reachability on a directed projection (calls + imports edges)
 /// to find all nodes that could be affected by changes.
 pub fn downstream_impact(
@@ -160,7 +159,6 @@ pub fn downstream_impact(
 }
 
 /// Generate a recommended review order from an impact report.
-///
 /// Returns changed symbols sorted by: removed first (highest risk), then
 /// community changes, then additions. Within each group, sorted by
 /// downstream impact.

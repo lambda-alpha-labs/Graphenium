@@ -1,8 +1,6 @@
 /// Native Louvain community detection (Blondel et al., 2008).
-///
 /// Runs the two-phase Louvain method until modularity gain falls below
 /// `threshold` or `max_level` aggregation levels are reached.
-///
 /// Returns a `Vec<usize>` of length `n` where `result[i]` is the community
 /// ID of node `i`. Community IDs are renumbered 0..K, largest community first.
 use std::collections::HashMap;

@@ -3,11 +3,9 @@ use serde::{Deserialize, Serialize};
 use crate::model::edge::Confidence;
 
 /// An N-ary relationship involving three or more nodes.
-///
 /// HyperEdges capture group relationships that cannot be expressed as a
 /// single binary edge — e.g. "ClassA, ClassB, ClassC all implement InterfaceX",
 /// or "functions foo, bar, baz participate in the authentication flow".
-///
 /// The semantic extractor generates at most 3 hyperedges per file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HyperEdge {

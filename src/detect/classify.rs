@@ -3,7 +3,6 @@ use std::path::Path;
 use crate::model::FileType;
 
 /// Map a file extension to a `FileType`.
-///
 /// Returns `None` for extensions that should be skipped entirely
 /// (e.g. compiled artefacts, lock files).
 pub fn classify_extension(path: &Path) -> Option<FileType> {

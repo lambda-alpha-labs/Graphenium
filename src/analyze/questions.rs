@@ -1,7 +1,5 @@
 /// Suggested-question generation.
-///
 /// We generate questions from five sources:
-///
 /// 1. **AMBIGUOUS edges** — the relationship needs manual review.
 /// 2. **Bridge nodes** — nodes with high betweenness centrality (Brandes'
 ///    algorithm, capped at 5 000 nodes).

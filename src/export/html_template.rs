@@ -1,5 +1,4 @@
 /// Embedded HTML template for the vis.js knowledge-graph viewer.
-///
 /// Placeholders replaced at render time:
 /// - `{{TITLE}}`      — page / graph title
 /// - `{{GRAPH_DATA}}` — compact JSON blob (`graph_to_value` output)

@@ -12,12 +12,11 @@
 //! This is the production-equivalent of what a full stack-graphs engine would
 //! provide, implemented using the existing tree-sitter AST import infrastructure.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use crate::model::{Confidence, Edge, ExtractionResult, FileType, Node};
+use crate::model::{Edge, ExtractionResult, FileType, Node};
 
 /// Post-process extraction results to mark import resolution status.
-///
 /// Builds an export index from all results, then walks every edge:
 /// - Import edges whose target name exists in the export index get
 ///   `resolved` status.
@@ -96,11 +95,9 @@ fn build_symbol_index(results: &[ExtractionResult]) -> HashMap<String, Vec<(Stri
 }
 
 /// Resolve all cross-file references in the extraction results.
-///
 /// For each non-import behavioral edge (calls, uses, inherits, implements, depends_on),
 /// checks whether the target symbol exists in the global symbol index.
 /// If found in a different file, marks the edge as resolved.
-///
 /// This is called AFTER `resolver::resolve_imports` in the build pipeline.
 pub fn resolve_cross_file_calls(
     results: &mut [ExtractionResult],
@@ -137,7 +134,7 @@ pub fn resolve_cross_file_calls(
 
             // Look up the edge target in the global symbol index
             let candidates = symbol_index.get(&edge.target);
-            if let Some(entries) = candidates {
+            if let Some(_entries) = candidates {
                 // Found at least one matching export
                 edge.extractor = Some("tree-sitter-stack-graphs".to_string());
                 edge.resolution_status = Some("resolved".to_string());
@@ -145,7 +142,7 @@ pub fn resolve_cross_file_calls(
             } else {
                 // Also try normalized target
                 let normalized = crate::model::id::normalize_id(&edge.target);
-                if let Some(entries) = symbol_index.get(&normalized) {
+                if let Some(_entries) = symbol_index.get(&normalized) {
                     edge.extractor = Some("tree-sitter-stack-graphs".to_string());
                     edge.resolution_status = Some("resolved".to_string());
                     resolved_count += 1;

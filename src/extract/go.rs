@@ -1,5 +1,4 @@
 /// Go custom extractor.
-///
 /// Go's `method_declaration` nodes include a receiver parameter list, e.g.:
 /// ```go
 /// func (r *Router) Handle(path string) { ... }
@@ -7,7 +6,6 @@
 /// The generic walker can extract functions and classes but does not know how
 /// to associate a method with its receiver type.  This extractor reads the
 /// receiver type and builds `method` edges from the type node to the method.
-///
 /// Top-level functions and structs are delegated to the generic walker after
 /// the custom pass collects method information.
 use std::collections::{HashMap, HashSet};
@@ -344,7 +342,7 @@ fn extract_type_name(node: Node<'_>, source: &[u8]) -> Option<String> {
 }
 
 /// Get the text of a named field from a node.
-fn field_text<'src>(node: Node<'_>, field: &str, source: &'src [u8]) -> Option<String> {
+fn field_text(node: Node<'_>, field: &str, source: &[u8]) -> Option<String> {
     let child = node.child_by_field_name(field)?;
     child.utf8_text(source).ok().map(|s| s.to_string())
 }

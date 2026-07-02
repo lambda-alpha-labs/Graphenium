@@ -1,9 +1,7 @@
 /// Graph construction from extraction results.
-///
 /// This is the "assemble" step of the pipeline: validated `ExtractionResult`
 /// values are folded into a `GrapheniumGraph` using the model's upsert / add
 /// semantics:
-///
 /// - **Nodes**: inserted with last-write-wins — semantic results intentionally
 ///   override AST results when the same node ID appears in both.
 /// - **Edges**: dangling edges (where either endpoint is not yet in the graph)
@@ -27,7 +25,6 @@ pub struct BuildStats {
 }
 
 /// Build a `GrapheniumGraph` from a single (already-validated) `ExtractionResult`.
-///
 /// Prefer `build_merged` when combining AST + semantic results.
 pub fn build_from_extraction(result: &ExtractionResult) -> (GrapheniumGraph, BuildStats) {
     let mut graph = GrapheniumGraph::new();
@@ -62,7 +59,6 @@ pub fn build_from_extraction(result: &ExtractionResult) -> (GrapheniumGraph, Bui
 
 /// Merge multiple `ExtractionResult` values (AST + semantic) and build a
 /// single unified `GrapheniumGraph`.
-///
 /// Merging is done with `ExtractionResult::merge_all`, which concatenates
 /// node and edge lists (deduplication happens via `upsert_node` during build).
 /// Token counts are summed so the report phase can display LLM cost.

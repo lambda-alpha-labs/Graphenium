@@ -1,5 +1,4 @@
 /// Normalize a human-readable node label while preserving semantic separators.
-///
 /// Current rules:
 /// 1. Trim outer whitespace.
 /// 2. Strip matching wrapper quotes/brackets around the entire label.
@@ -48,7 +47,6 @@ pub fn normalize_id(value: &str) -> String {
 }
 
 /// Generate a stable, normalized node/edge ID from one or more parts.
-///
 /// Mirrors the Python `_make_id(*parts)` function exactly:
 /// 1. Strip leading/trailing `_` and `.` from each part.
 /// 2. Filter out empty parts.
@@ -56,7 +54,6 @@ pub fn normalize_id(value: &str) -> String {
 /// 4. Replace every run of non-ASCII-alphanumeric characters with a single `_`.
 /// 5. Strip leading/trailing `_`.
 /// 6. Lowercase the result.
-///
 /// # Examples
 /// ```
 /// use graphenium::model::make_id;

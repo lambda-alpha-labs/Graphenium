@@ -30,7 +30,6 @@ impl std::fmt::Display for FileType {
 }
 
 /// A single entity in the knowledge graph.
-///
 /// Nodes are produced by both the AST extractor (deterministic, free) and
 /// the semantic extractor (LLM-powered). When merging, last-write-wins on
 /// duplicate IDs — semantic results override AST ones.

@@ -1,9 +1,7 @@
 /// mtime-based manifest for incremental file detection.
-///
 /// The manifest is persisted as `<out_dir>/manifest.json` and maps each
 /// tracked file path (forward-slash, relative or absolute) to its last-seen
 /// modification time in UNIX seconds.
-///
 /// Typical incremental-update flow:
 /// 1. Load the manifest from disk.
 /// 2. Walk the corpus; call `is_changed(path)` for each file.
@@ -175,7 +173,6 @@ fn mtime_secs(path: &Path) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
     use tempfile::TempDir;
 
     fn write_file(dir: &Path, name: &str, content: &[u8]) -> PathBuf {

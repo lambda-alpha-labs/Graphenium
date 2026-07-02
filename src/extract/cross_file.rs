@@ -1,15 +1,11 @@
 /// Python-only cross-file import resolution.
-///
 /// After all files have been individually extracted, this pass upgrades
 /// generic `imports` edges into concrete `uses` INFERRED edges between
 /// code entities in different files.
-///
 /// ## Algorithm (two passes)
-///
 /// **Pass 1** — Build a lookup map from `(module_stem, ClassName)` to `node_id`.
 /// Iterate over all nodes whose `source_file` ends in `.py`, group by the
 /// file stem, and record class-level node IDs.
-///
 /// **Pass 2** — For each `from X import Y` import edge (i.e. relation ==
 /// "imports" whose target ID looks like `<module>_<name>`), find the concrete
 /// node for `Y` in module `X` and emit a `uses` INFERRED edge from the
@@ -20,7 +16,6 @@ use std::path::Path;
 use crate::model::{Confidence, Edge, ExtractionResult};
 
 /// Resolve Python cross-file imports in `combined`.
-///
 /// This function is a no-op for non-Python files; calling it on a mixed
 /// corpus is safe.
 pub fn resolve_python_imports(combined: &mut ExtractionResult) {

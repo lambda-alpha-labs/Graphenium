@@ -1,5 +1,4 @@
 /// Semantic extraction orchestrator.
-///
 /// Flow:
 /// ```text
 /// check cache ──► all cached? ──► return merged cached results
@@ -71,10 +70,8 @@ impl Default for SemanticOptions {
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Run semantic extraction over `files`, returning a merged `ExtractionResult`.
-///
 /// Files whose content hash is already present in `cache_dir` are returned
 /// directly from cache without calling the API.
-///
 /// If `opts.api_key` is empty, returns an empty result immediately.
 pub async fn extract_semantic(
     files: &[DetectedFile],
@@ -191,7 +188,6 @@ async fn process_batch(
 }
 
 /// Extract the subset of `result` whose `source_file` field matches `path`.
-///
 /// Path matching is intentionally lenient: we try exact normalised match,
 /// suffix match (result path is a suffix of the corpus path or vice-versa),
 /// and finally filename-only match.  This accommodates the LLM writing
@@ -247,8 +243,7 @@ fn filter_by_file(result: &ExtractionResult, path: &Path) -> ExtractionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cache::semantic_cache;
-    use crate::model::{Confidence, Edge, FileType, Node};
+    use crate::model::{FileType, Node};
     use tempfile::TempDir;
 
     fn make_detected(path: PathBuf) -> DetectedFile {

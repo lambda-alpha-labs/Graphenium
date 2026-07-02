@@ -4,8 +4,6 @@
 //! Injects nodes for CI jobs, test targets, and build artifacts so the graph
 //! reflects the full verification surface of the repository.
 
-use std::collections::HashMap;
-
 use crate::model::{Edge, ExtractionResult, FileType, Node};
 
 /// Extraction modes for CI artifacts.
@@ -47,7 +45,6 @@ pub fn detect_format(path: &str) -> CiFormat {
 }
 
 /// Parse a CI config file (or relevant project file) into CI targets.
-///
 /// For Cargo.toml: extracts test targets from [[test]] sections and package name.
 /// For package.json: extracts test/build scripts.
 /// For GitHub Actions: extracts job names and steps.

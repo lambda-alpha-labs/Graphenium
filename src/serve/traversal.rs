@@ -65,7 +65,6 @@ pub struct PathResult {
 
 /// Score every node by how many keywords from `query` appear in its label,
 /// ID, or source_file (case-insensitive).
-///
 /// Returns `(node_id, score)` pairs sorted highest-score first.
 /// If no node matches any keyword, falls back to the top-5 highest-degree nodes.
 pub fn score_nodes(graph: &GrapheniumGraph, query: &str) -> Vec<(String, f64)> {
@@ -91,7 +90,6 @@ pub fn score_nodes_detailed_in_scope(
 }
 
 /// Return the set of node IDs matching the requested path scope.
-///
 /// Path matching is case-insensitive and slash-normalized. Both `path_prefix`
 /// and `exclude_path` are treated as path fragments so callers can scope using
 /// either an absolute prefix or a repo-relative subtree segment.
@@ -268,7 +266,6 @@ fn node_matches_type(node: &Node, allowed_types: &[String]) -> bool {
 // ── BFS / DFS ─────────────────────────────────────────────────────────────────
 
 /// Breadth-first traversal from `seeds`.
-///
 /// Stops when `max_nodes` have been visited or no nodes within `max_depth`
 /// hops of any seed remain.
 pub fn bfs(
@@ -336,7 +333,6 @@ pub fn bfs_with_filters(
 }
 
 /// Depth-first traversal from `seeds`.
-///
 /// Stops when `max_nodes` have been visited or all reachable nodes within
 /// `max_depth` hops have been explored.
 pub fn dfs(
@@ -704,7 +700,6 @@ fn dfs_helper(
 // ── Text formatting ────────────────────────────────────────────────────────────
 
 /// Format a subgraph (ordered list of node IDs) as Markdown within `budget_chars`.
-///
 /// Each node is rendered as a Markdown section with its label, type, community,
 /// and connections to other nodes in the subgraph.
 pub fn subgraph_to_text(
@@ -850,7 +845,6 @@ pub fn subgraph_to_text_with_match_details(
 }
 
 /// Determine the display label for a node in query output.
-///
 /// If the node has a `qualified_label` AND its short `label` has collisions
 /// (multiple nodes share the same label), returns `"qualified_label (label)"`.
 /// Otherwise returns just the plain `label`.

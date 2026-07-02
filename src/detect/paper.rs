@@ -49,7 +49,6 @@ static PAPER_SIGNALS: &[&str] = &[
 /// Heuristically determines whether a plain-text or Markdown file is an
 /// academic paper by counting how many paper signals appear in the first
 /// `HEADER_BYTES` bytes.
-///
 /// PDF files are already classified as `Paper` by extension; this function
 /// applies to `.md`, `.rst`, `.txt`, and `.tex` files.
 pub fn looks_like_paper(path: &Path) -> bool {

@@ -1,5 +1,4 @@
 /// Prompt construction for semantic extraction.
-///
 /// Builds the system prompt and per-batch user content blocks sent to Claude.
 /// Text files are included verbatim (truncated at 50 KB).  Image files are
 /// base64-encoded and sent as `image` content blocks.
@@ -67,7 +66,6 @@ const MAX_TEXT_BYTES: usize = 50_000;
 const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024; // 5 MB
 
 /// Build the `content` array for the user message.
-///
 /// `files` is a slice of `(absolute_path, file_type)` pairs.
 pub fn build_user_content(files: &[(impl AsRef<Path>, FileType)]) -> Vec<ContentBlock> {
     let mut blocks = Vec::new();

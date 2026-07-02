@@ -1,5 +1,4 @@
 /// God-node detection.
-///
 /// A "god node" is a highly-connected entity that many other nodes depend on.
 /// We filter out two categories of false positives:
 ///   - **File-level hubs**: nodes whose label matches the source-file stem

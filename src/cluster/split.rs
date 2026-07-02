@@ -1,17 +1,14 @@
 /// Oversized community splitting.
-///
 /// After the initial Louvain pass, any community larger than
 /// `split_fraction * n` nodes (and at least `min_size` nodes) is treated as
 /// a candidate for further subdivision.  We run Louvain again on the induced
 /// subgraph and replace the original community ID with new sub-community IDs.
-///
 /// Community IDs are renumbered by size (largest = 0) after all splits.
 use std::collections::HashMap;
 
 use super::louvain::{run, LouvainConfig};
 
 /// Split oversized communities in `assignments` in-place.
-///
 /// - `n` — total number of nodes in the graph
 /// - `edges` — full edge list (same indexing as `assignments`)
 /// - `split_fraction` — fractional threshold (e.g. 0.25 = 25 %)

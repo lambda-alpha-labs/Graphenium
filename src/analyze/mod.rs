@@ -28,7 +28,6 @@ pub struct AnalysisResult {
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Run all analysis passes and return combined results.
-///
 /// - `graph` must have been clustered (community IDs assigned) before calling.
 /// - `community_stats` is the output of `cluster::cluster()`.
 pub fn analyze(graph: &GrapheniumGraph, community_stats: &[CommunityStats]) -> AnalysisResult {

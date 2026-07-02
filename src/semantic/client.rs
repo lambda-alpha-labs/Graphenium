@@ -1,12 +1,10 @@
 /// LLM API client supporting multiple AI providers.
-///
 /// Two request formats are supported:
 /// - **Anthropic Messages** (Anthropic): `POST /v1/messages`, `x-api-key` auth,
 ///   system prompt as top-level field, image blocks as `{type: image, source: ...}`.
 /// - **OpenAI Chat Completions** (OpenAI, OpenRouter, DeepSeek, compatible):
 ///   `POST /v1/chat/completions`, `Authorization: Bearer` auth, system prompt
 ///   as a `role: system` message, image blocks as `{type: image_url, image_url: ...}`.
-///
 /// Retry logic (429 rate-limit, 5xx server errors, JSON parse failures) is
 /// shared across all providers.
 use serde::{Deserialize, Serialize};
@@ -16,7 +14,6 @@ use super::provider::{AiProvider, RequestFormat};
 // ── Public types ──────────────────────────────────────────────────────────
 
 /// A single block in the content array sent to the API.
-///
 /// Serializes differently depending on format.  For Anthropic, images use
 /// `{type: "image", source: {type: "base64", ...}}`.  For OpenAI, images
 /// use `{type: "image_url", image_url: {url: "data:...;base64,..."}}`.

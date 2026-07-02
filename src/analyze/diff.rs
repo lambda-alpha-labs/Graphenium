@@ -20,7 +20,6 @@ pub struct GraphDiff {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Compare two graph snapshots and return what changed.
-///
 /// Edge identity is `(source_id, target_id, relation)`.  Changes in weight,
 /// confidence, or metadata do not produce a diff entry.
 pub fn diff(old: &GrapheniumGraph, new: &GrapheniumGraph) -> GraphDiff {

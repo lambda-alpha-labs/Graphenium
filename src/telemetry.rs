@@ -189,7 +189,7 @@ pub fn load_traces(path: &std::path::Path) -> Result<Vec<TraceSpan>, String> {
 }
 
 /// Match trace names to graph nodes and return a runtime overlay.
-pub fn build_overlay(graph: &GrapheniumGraph, spans: &[TraceSpan]) -> RuntimeOverlay {
+pub fn build_overlay(_graph: &GrapheniumGraph, spans: &[TraceSpan]) -> RuntimeOverlay {
     let mut overlay = RuntimeOverlay::default();
     overlay.import_traces(spans);
     overlay

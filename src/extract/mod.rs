@@ -36,7 +36,6 @@ pub struct ExtractOptions {
 
 /// Extract AST structure from all code files in `files`, using rayon for
 /// parallelism, then run Python cross-file import resolution.
-///
 /// Non-code files (Document, Paper, Image) are skipped; they are handled by
 /// the semantic extractor in Phase 9.
 pub fn extract_all(files: &[DetectedFile], opts: &ExtractOptions) -> ExtractionResult {

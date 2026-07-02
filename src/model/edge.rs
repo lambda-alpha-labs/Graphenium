@@ -3,9 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::model::id::normalize_id;
 
 /// How certain we are that a relationship actually exists.
-///
 /// Serializes as SCREAMING_SNAKE_CASE to match the Python output format.
-///
 /// | Variant    | Score | Meaning                                         |
 /// |------------|-------|-------------------------------------------------|
 /// | Extracted  | 1.0   | Explicit in source (import, call, citation)     |
@@ -54,7 +52,6 @@ impl std::fmt::Display for Confidence {
 }
 
 /// A directed relationship between two nodes, stored in an undirected graph.
-///
 /// The `src_original` / `tgt_original` fields preserve the intended direction
 /// even after petgraph normalizes the endpoints of the undirected edge.
 #[derive(Debug, Clone, Serialize, Deserialize)]
