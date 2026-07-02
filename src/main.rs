@@ -405,7 +405,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     Err(e) => eprintln!("Failed to load graph: {}", e),
                 }
-                Ok(())
+                Ok::<(), graphenium::Error>(())
             } else {
                 cmd_query(
                     question,
