@@ -155,11 +155,54 @@ fn check_graph_metadata(graph: &GrapheniumGraph) {
 }
 
 fn check_language_extraction_integrity(graph: &GrapheniumGraph) {
-    let Some(ref langs) = graph.metadata.languages else {
-        return;
+    // Detect languages from file extensions in the graph (works even without metadata.languages)
+    let languages: Vec<String> = if let Some(ref langs) = graph.metadata.languages {
+        langs.clone()
+    } else {
+        let mut detected: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for n in graph.nodes() {
+            let path = std::path::Path::new(&n.source_file);
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                match ext.to_lowercase().as_str() {
+                    "rs" => {
+                        detected.insert("rust".to_string());
+                    }
+                    "py" | "pyw" => {
+                        detected.insert("python".to_string());
+                    }
+                    "go" => {
+                        detected.insert("go".to_string());
+                    }
+                    "js" | "mjs" | "cjs" | "jsx" => {
+                        detected.insert("javascript".to_string());
+                    }
+                    "ts" | "tsx" => {
+                        detected.insert("typescript".to_string());
+                    }
+                    "c" | "h" => {
+                        detected.insert("c".to_string());
+                    }
+                    "cpp" | "cc" | "cxx" | "hh" | "hpp" | "hxx" => {
+                        detected.insert("cpp".to_string());
+                    }
+                    "java" => {
+                        detected.insert("java".to_string());
+                    }
+                    "cs" => {
+                        detected.insert("csharp".to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+        detected.into_iter().collect()
     };
 
-    for lang in langs {
+    if languages.is_empty() {
+        return;
+    }
+
+    for lang in &languages {
         let extensions: &[&str] = match lang.as_str() {
             "rust" => &["rs"],
             "python" => &["py", "pyw"],

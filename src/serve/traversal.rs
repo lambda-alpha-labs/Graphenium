@@ -545,13 +545,15 @@ pub fn format_explanation_report(graph: &GrapheniumGraph, exp: &SubsystemExplana
     ));
 
     // 1. Type Hierarchy & Containment
+    out.push_str("## 1. Type Hierarchy & Containment\n");
     if !exp.parents.is_empty() {
-        out.push_str("## 1. Type Hierarchy & Containment\n");
         for (parent, rel) in &exp.parents {
             out.push_str(&format!("- `{}` via relationship: `{}`\n", parent, rel));
         }
-        out.push('\n');
+    } else {
+        out.push_str("- None found.\n");
     }
+    out.push('\n');
 
     // 2. Community Context
     if let Some(c_id) = exp.community_id {
@@ -568,8 +570,8 @@ pub fn format_explanation_report(graph: &GrapheniumGraph, exp: &SubsystemExplana
     }
 
     // 3. Direct Callers
+    out.push_str("## 3. Direct Callers / Importers\n");
     if !exp.direct_callers.is_empty() {
-        out.push_str("## 3. Direct Callers / Importers\n");
         for caller in exp.direct_callers.iter().take(10) {
             out.push_str(&format!("- `{}`\n", caller));
         }
@@ -579,8 +581,10 @@ pub fn format_explanation_report(graph: &GrapheniumGraph, exp: &SubsystemExplana
                 exp.direct_callers.len() - 10
             ));
         }
-        out.push('\n');
+    } else {
+        out.push_str("- None found (no incoming behavioral edges).\n");
     }
+    out.push('\n');
 
     // 4. Production Files to Inspect
     out.push_str("## 4. Production Files to Inspect (Prioritized)\n");
@@ -596,8 +600,8 @@ pub fn format_explanation_report(graph: &GrapheniumGraph, exp: &SubsystemExplana
     out.push('\n');
 
     // 5. Test & Verification Scaffolding (Demoted)
+    out.push_str("## 5. Test & Verification Scaffolding\n");
     if !exp.test_files.is_empty() {
-        out.push_str("## 5. Test & Verification Scaffolding\n");
         for file in exp.test_files.iter().take(5) {
             out.push_str(&format!("  - `{}`\n", relative_path(file, root)));
         }
@@ -607,7 +611,10 @@ pub fn format_explanation_report(graph: &GrapheniumGraph, exp: &SubsystemExplana
                 exp.test_files.len() - 5
             ));
         }
+    } else {
+        out.push_str("- None found.\n");
     }
+    out.push('\n');
 
     out
 }
