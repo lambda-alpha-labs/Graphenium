@@ -87,6 +87,7 @@ gm query "<keywords>" [OPTIONS]
 | `--budget N` | `2000` | Output token budget |
 | `--mode MODE` | `lexical` | Retrieval model: `lexical`, `structural`, or `hybrid` |
 | `--dfs` | off | Use depth-first traversal |
+| `--datalog` | string | Run a Datalog query instead of keyword search (e.g. `--datalog "?- node(X, _, _, _, _)."`) |
 | `--safe` | off | Confidence-aware traversal; skips `AMBIGUOUS` edges |
 | `--min-degree N` | `0` | Minimum node degree to include |
 | `--exclude-test-nodes` | off | Exclude test/spec nodes from results |

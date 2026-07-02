@@ -52,6 +52,7 @@ Use these at the start of an unfamiliar repository or before a broad refactor.
 | `query_transitive` | BFS transitive closure from a seed symbol with depth, direction, and relation filtering |
 | `module_dependencies` | Module-to-module dependency summary between two directory paths |
 | `reload_graph` | Hot-swap the graph without restarting the MCP server |
+| `run_datalog` | Run a Datalog query against the graph: supports rules (`:-`), goals (`?-`), negation (`not`), and recursion |
 
 Use these to narrow the agent's reading set before it opens source files.
 

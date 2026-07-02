@@ -136,6 +136,7 @@ The following MCP tools provide trust, verification, and impact analysis:
 | `graph_info` | Full graph metadata: schema version, project root, build timestamp, languages, counts |
 | `recluster` | Re-run community detection after manual node/edge edits |
 | `query_transitive` | BFS transitive closure from a seed symbol with depth/direction control |
+| `run_datalog(query)` | Run a Datalog query against the graph with rules, goals, and negation |
 | `references_to` | Structural reference lookup (containers, imports, inheritance) — 100% AST-only safe |
 | `explain_change` | Composite pre-edit orientation: hierarchy + community + callers + files |
 
@@ -170,6 +171,7 @@ within a token budget.
 
 ```
 gm query "<keywords or question>" [flags]
+gm query "--datalog ?- node(X, _, _, _, _)."
 ```
 
 **Key flags:**
