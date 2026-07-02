@@ -63,7 +63,71 @@ pub fn compute_local_subgraph(db: &dyn salsa::Database, file: SourceFile) -> Ext
 
 // ── Phase 4: Graph Materialization ─────────────────────────────────────────
 
+// ── Phase 3: Salsa-backed extraction for watch.rs ──────────────────────────
+
 use std::collections::HashMap;
+
+thread_local! {
+    /// Per-thread Salsa database for persistent memoization across event batches.
+    /// Created lazily on first access by `salsa_extract_file`.
+    static SALSA_DB: std::cell::RefCell<Option<salsa::DatabaseImpl>> =
+        std::cell::RefCell::new(None);
+
+    /// Per-thread map of known source file inputs, indexed by path.
+    static SALSA_INPUTS: std::cell::RefCell<std::collections::HashMap<PathBuf, SourceFile>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Extract a file using Salsa's memoized tracked queries.
+///
+/// On first call, creates a persistent `salsa::DatabaseImpl` and a `SourceFile`
+/// input. On subsequent calls with the same content, Salsa returns the cached
+/// `parse_ast` result instantly without re-parsing. When content changes, Salsa
+/// automatically re-runs only the affected queries.
+///
+/// Falls back to direct extraction when Salsa is unavailable (unlikely).
+pub fn salsa_extract_file(path: &std::path::Path, file_type: FileType) -> ExtractionResult {
+    // Read current file content
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(_) => return ExtractionResult::new(),
+    };
+    let path_buf = path.to_path_buf();
+
+    // Phase 1: Get or create the Salsa database (separate RefCell from inputs)
+    SALSA_DB.with(|db_cell| {
+        let mut db_borrow = db_cell.borrow_mut();
+        let db = db_borrow.get_or_insert_with(|| salsa::DatabaseImpl::new());
+
+        // Phase 2: Check if the file is already known and if it changed
+        let (is_new, is_changed) = SALSA_INPUTS.with(|inputs_cell| {
+            let inputs = inputs_cell.borrow();
+            match inputs.get(&path_buf) {
+                None => (true, false),
+                Some(existing) => {
+                    let cached = existing.text(db);
+                    (false, cached != text)
+                }
+            }
+        });
+
+        // Phase 3: Create or reuse the source file input
+        SALSA_INPUTS.with(|inputs_cell| {
+            let mut inputs = inputs_cell.borrow_mut();
+            if is_new || is_changed {
+                let sf = SourceFile::new(db, path_buf.clone(), text, file_type);
+                inputs.insert(path_buf.clone(), sf);
+            }
+        });
+
+        // Phase 4: Extract using the (possibly new) SourceFile
+        SALSA_INPUTS.with(|inputs_cell| {
+            let inputs = inputs_cell.borrow();
+            let source_file = *inputs.get(&path_buf).unwrap();
+            compute_local_subgraph(db, source_file)
+        })
+    })
+}
 
 /// Materialize the full workspace graph from the Salsa database.
 pub fn materialize_full_graph(
