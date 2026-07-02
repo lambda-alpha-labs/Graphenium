@@ -405,7 +405,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     Err(e) => eprintln!("Failed to load graph: {}", e),
                 }
-                Ok::<(), graphenium::Error>(())
+                Ok::<(), graphenium::GrapheniumError>(())
             } else {
                 cmd_query(
                     question,
@@ -452,7 +452,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 graphenium::doctor::run_doctor(g);
             }
-            Ok::<(), grapheneium::error::GrapheniumError>(())
+            Ok::<(), graphenium::error::GrapheniumError>(())
         }
 
         Commands::Check {
@@ -504,7 +504,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Graph { command } => match command {
             GraphCommands::Migrate { graph } => {
                 eprintln!("not yet implemented: migrate {}", graph.display());
-                Ok::<(), grapheneium::error::GrapheniumError>(())
+                Ok::<(), graphenium::error::GrapheniumError>(())
             }
             GraphCommands::Schema { graph } => cmd_graph_schema(&graph),
             GraphCommands::BuildMap { graph } => cmd_graph_build_map(&graph),
@@ -526,7 +526,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 eprintln!("not yet implemented: gate");
             }
-            Ok::<(), grapheneium::error::GrapheniumError>(())
+            Ok::<(), graphenium::error::GrapheniumError>(())
         }
     };
 
