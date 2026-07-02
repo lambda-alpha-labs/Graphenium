@@ -2,6 +2,25 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.16.0 (2026-07-02) — All 5 enhancements: Stack Graphs, OpenTelemetry, Salsa, Datalog, Hybrid Retrieval
+
+### Added
+- **Stack Graphs**: Cross-file reference resolution (`resolve_cross_file_calls()`) — builds global symbol index, resolves `calls`, `uses`, `inherits`, `implements`, `depends_on` edges deterministically with `extractor = "tree-sitter-stack-graphs"`. 4 new tests.
+- **OpenTelemetry Integration**: `import_traces()` for OTEL trace import, `build_overlay()` for runtime analysis, `RuntimeOverlay` with per-node call counts and latency percentiles. `hot_path_query()` + `runtime_weighted_traversal()`. 4 new tests.
+- **Salsa Incremental Computation**: Salsa-based demand-driven memoization (`salsa = "0.27"`). `SourceFile` input, `parse_ast()` / `compute_local_subgraph()` tracked queries. `salsa_extract_file()` wired into `watch.rs`. 3 new tests.
+- **Datalog Query Engine**: 700-line self-contained engine (`src/analyze/query.rs`) with tokenizer, recursive parser, semi-naive fixpoint interpreter, negation, and safety guardrails. `run_datalog` MCP tool + `gm query --datalog`. 10 new tests.
+- **Hybrid Retrieval**: `QueryMode` enum (Lexical/Structural/Hybrid), `score_query_nodes_with_mode()`, `--mode` flag on `gm query`. TF text embeddings + Node2Vec structural embeddings.
+
+### Modules added
+- `src/analyze/query.rs` — Datalog engine
+- `src/cache/query.rs` — Salsa incremental database
+- `src/embed.rs` — Text and Node2Vec embeddings
+- `src/telemetry.rs` — OpenTelemetry trace import and overlay
+- `src/resolver.rs` — Cross-file reference resolver (Stack Graphs)
+
+### Performance
+- 363 tests pass, zero clippy errors.
+
 ## v0.15.5 (2026-07-02) — Hub detection phase-3, ratio heuristics, high-fan-in override
 
 ### Fixed

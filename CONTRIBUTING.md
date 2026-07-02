@@ -45,6 +45,12 @@ Key modules and their primary types:
 - `src/analyze/verifier.rs` — VerificationPlan, plan_verification
 - `src/cluster/drift.rs` — DriftEvent, detect_drift
 - `src/extract/ci.rs` — CI config parsing, CiTarget
+- `src/resolver.rs` — Cross-file reference resolution (Stack Graphs), `CrossFileReference`
+- `src/telemetry.rs` — OpenTelemetry trace import, `RuntimeOverlay`, hot-path analysis
+- `src/cache/query.rs` — Salsa-based incremental computation engine
+- `src/embed.rs` — TF text embeddings and Node2Vec structural embeddings
+- `src/ranking.rs` — `QueryMode` enum, hybrid retrieval scoring
+- `src/analyze/query.rs` — Datalog query engine with tokenizer, parser, interpreter
 
 ## Adding a language extractor
 

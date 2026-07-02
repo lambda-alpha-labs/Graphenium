@@ -254,8 +254,12 @@ More examples are in `docs/AGENT_WORKFLOWS.md`.
 - Symbol-level diffing and blast-radius analysis for review planning.
 - CI trust gates for resolution quality, ambiguity, and stale evidence.
 - MCP-native tools for architecture summaries, dependency paths, verification plans, and graph updates.
+- Declarative Datalog queries against the graph with rules, recursion, and negation.
+- Cross-file reference resolution via the resolver (Stack Graphs).
+- Incremental rebuilds via Salsa-style demand-driven memoization.
 - Optional semantic extraction for concepts the AST cannot capture.
 - Optional telemetry overlays for runtime hot paths and regression comparison.
+- Hybrid retrieval combining TF-cosine keyword search with graph-distance proximity.
 
 ---
 
