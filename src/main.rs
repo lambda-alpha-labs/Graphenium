@@ -404,7 +404,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     Err(e) => eprintln!("Failed to load graph: {}", e),
                 }
-                cmd_query_log_or_err(question, dfs, safe, budget, graph, &mode,
+                cmd_query(question, dfs, safe, budget, graph, &mode,
                     path_prefix, exclude_path, generated_code_mode, ast_only_tuning, json)
             }
         }
@@ -527,11 +527,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    if let Err(e) = &_result {
+    if let Err(e) = _result {
         eprintln!("[graphenium] error: {e}");
         process::exit(1);
     }
-    _result
 }
 
 // ── `run` command ──────────────────────────────────────────────────────────────
