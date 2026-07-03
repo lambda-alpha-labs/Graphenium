@@ -159,10 +159,10 @@ fn build_symbol_index(results: &[ExtractionResult]) -> HashMap<String, Vec<(Stri
 fn lang_family(path: &str) -> u8 {
     let p = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     match p.as_str() {
-        "cs" => 1,                                                   // C#
+        "cs" => 1,                                                    // C#
         "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "hh" | "hxx" => 2, // C/C++
-        "py" | "pyi" => 3,                                           // Python
-        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => 4,           // JS/TS
+        "py" | "pyi" => 3,                                            // Python
+        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => 4,             // JS/TS
         _ => 0,
     }
 }
