@@ -10,7 +10,7 @@ Install Graphenium (`gm`), build a knowledge graph for the current
 project, and connect it to the AI tool the user is running. When this
 playbook finishes, the agent gains a stateful coordination whiteboard:
 pre-edit pathfinding through trusted relationships, in-edit planning
-workspaces, and post-edit compliance verification — not just static
+workspaces, and post-edit compliance verification: not just static
 code search.
 
 ## Step 1: Detect the environment

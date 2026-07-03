@@ -6,24 +6,24 @@ Graphenium is an active coordination and verification engine, not a passive sear
 
 Graphenium models a repository as three layers:
 
-**Tier 1: AST + Resolver — Terrain (Stable)**
+**Tier 1: AST + Resolver: Terrain (Stable)**
 The bottom layer is the physical code structure. Tree-sitter parses each file into an AST. Language extractors pull out symbols (functions, classes, methods, structs, traits, imports). The import resolver links `use`/`import`/`require` statements to their target files. C# assembly boundaries (`.sln`/`.csproj`) are mapped as top-level structure. Language-family classification (`lang_family` in `resolver.rs`) restricts cross-file resolution scope per-language to prevent false-positive cross-language bindings. This layer produces the base graph with nodes and edges.
 
-**Tier 2: Semantic Pass — Road Network (Stable)**
+**Tier 2: Semantic Pass: Road Network (Stable)**
 The middle layer adds LLM-extracted relationships. An optional semantic pass using Claude/etc. identifies behavioural relationships the AST cannot capture: conceptual dependencies, delegation patterns, and architectural intent. This tier also includes academic paper detection (`looks_like_paper`) which upgrades standard Markdown/text files to `FileType::Paper` research nodes when scholarly markers are detected. These edges carry `extractor: "llm"` and confidence from the model's assessment.
 
-**Tier 3: Telemetry Overlay — Live Traffic (Experimental)**
+**Tier 3: Telemetry Overlay: Live Traffic (Experimental)**
 The top layer imports OpenTelemetry trace JSON to create a `RuntimeOverlay` with per-node call counts and latency percentiles (P50/P95/P99). This enables runtime-weighted traversal and hot-path queries. This layer is experimental and requires explicit trace data.
 
 ## Graph Model
 
 Each graph (`schema 0.2.0`) contains:
 
-- **Nodes** — files, modules, functions, classes, methods, structs, traits, tests, documents, build targets, CI jobs, dependencies
-- **Edges** — `imports`, `contains`, `calls`, `uses`, `inherits`, `implements`, `tests`, `depends_on`, `runs_in`
-- **Hyperedges** — n-ary relationships (e.g., group membership)
-- **Communities** — Louvain community detection clusters nodes into architectural groups
-- **Metadata** — schema version, build timestamp, project root, extraction mode, languages
+- **Nodes**: files, modules, functions, classes, methods, structs, traits, tests, documents, build targets, CI jobs, dependencies
+- **Edges**: `imports`, `contains`, `calls`, `uses`, `inherits`, `implements`, `tests`, `depends_on`, `runs_in`
+- **Hyperedges**: n-ary relationships (e.g., group membership)
+- **Communities**: Louvain community detection clusters nodes into architectural groups
+- **Metadata**: schema version, build timestamp, project root, extraction mode, languages
 
 ## Provenance and Trust Model
 
@@ -39,14 +39,14 @@ This lets agents distinguish source-backed facts (`EXTRACTED` + `resolved`) from
 
 ## Extraction Pipeline
 
-1. **File detection** — `detect/mod.rs` walks the directory, classifies files by extension, respects `.grapheniumignore`
-2. **AST parsing** — tree-sitter parses each file; language-specific extractors pull out symbols
-3. **Import resolution** — `resolver.rs` builds a symbol index from all extracted nodes, resolves `imports`/`uses` edges
-4. **Semantic pass** (optional) — LLM analyses code for behavioural relationships
-5. **Graph assembly** — `build.rs` merges all extraction results into a single graph
-6. **Clustering** — Louvain community detection partitions nodes into communities
-7. **Analysis** — degree distribution, PageRank hubs, chokepoints, architecture summary
-8. **Export** — graph exported as JSON, quality report, HTML visualization
+1. **File detection**: `detect/mod.rs` walks the directory, classifies files by extension, respects `.grapheniumignore`
+2. **AST parsing**: tree-sitter parses each file; language-specific extractors pull out symbols
+3. **Import resolution**: `resolver.rs` builds a symbol index from all extracted nodes, resolves `imports`/`uses` edges
+4. **Semantic pass** (optional): LLM analyses code for behavioural relationships
+5. **Graph assembly**: `build.rs` merges all extraction results into a single graph
+6. **Clustering**: Louvain community detection partitions nodes into communities
+7. **Analysis**: degree distribution, PageRank hubs, chokepoints, architecture summary
+8. **Export**: graph exported as JSON, quality report, HTML visualization
 
 ## Module Map
 

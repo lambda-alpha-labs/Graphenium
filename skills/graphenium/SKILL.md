@@ -53,13 +53,13 @@ below.
 | "Give me an overview of the repo" | `graph_stats` + `architecture_summary` |
 | "Summarize file X" | `summarize_file(path=X)` |
 | General structural exploration | `query_graph(question="...", budget=2000)` |
-| "What's the safest path from A to B?" | `mcp_graphenium_shortest_path(source=A, target=B, mode=semantic)` — prefers high-trust edges |
-| "What's the blast radius of changing X?" | `blast_radius(symbol=X)` — shows downstream impact |
-| "What symbols are unresolved?" | `unresolved_references()` — lists dangling references |
-| "What symbols are ambiguous?" | `ambiguous_symbols()` — lists symbols with multiple definitions |
-| "How trustworthy is this graph?" | `resolution_report()` — confidence breakdown, trust quality |
-| "How should I verify these changes?" | `verification_plan()` — prioritized verification plan |
-| "What files should I read next?" | `next_files_to_read(symbol=X)` — review order by risk |
+| "What's the safest path from A to B?" | `mcp_graphenium_shortest_path(source=A, target=B, mode=semantic)`: prefers high-trust edges |
+| "What's the blast radius of changing X?" | `blast_radius(symbol=X)`: shows downstream impact |
+| "What symbols are unresolved?" | `unresolved_references()`: lists dangling references |
+| "What symbols are ambiguous?" | `ambiguous_symbols()`: lists symbols with multiple definitions |
+| "How trustworthy is this graph?" | `resolution_report()`: confidence breakdown, trust quality |
+| "How should I verify these changes?" | `verification_plan()`: prioritized verification plan |
+| "What files should I read next?" | `next_files_to_read(symbol=X)`: review order by risk |
 
 `get_neighbors` output is ranked: behavioural edges (`calls`, `uses`,
 `inherits`) appear first, structural edges (`contains`, `imports`) appear
@@ -139,7 +139,7 @@ The following MCP tools provide trust, verification, and impact analysis:
 | `recluster` | Re-run community detection after manual node/edge edits |
 | `query_transitive` | BFS transitive closure from a seed symbol with depth/direction control |
 | `run_datalog(query)` | Run a Datalog query against the graph with rules, goals, and negation |
-| `references_to` | Structural reference lookup (containers, imports, inheritance) — 100% AST-only safe |
+| `references_to` | Structural reference lookup (containers, imports, inheritance): 100% AST-only safe |
 | `explain_change` | Composite pre-edit orientation: hierarchy + community + callers + files |
 
 **Planning workspace tools (v0.14.0):**
@@ -159,7 +159,7 @@ When reviewing `architecture_summary` or generated questions, pay attention to:
 - **Bridge nodes (high betweenness centrality)**: files that are the sole conduit between two otherwise isolated communities. Changes to these nodes carry disproportionately high risk; inspect them before modifying.
 
 Use this when the user asks about trust quality, change safety, or
-verification — especially in CI or review contexts. For CI integration,
+verification: especially in CI or review contexts. For CI integration,
 `gm check` enforces trust quality gates from the CLI (see AI_SETUP.md).
 
 Before running `gm run`, use `gm run --plan` to pre-scan the workspace
@@ -171,7 +171,7 @@ For Windows users, guide them through `install.ps1`:
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Note that `.NET`/C# repositories are supported — the extractor handles
+Note that `.NET`/C# repositories are supported: the extractor handles
 `using` directives, `namespace` declarations, and `.csproj`/`.sln` files.
 
 ## CLI fallback (`gm query`)
@@ -202,7 +202,7 @@ gm query "--datalog ?- node(X, _, _, _, _)."
 
 | MCP Tool | What it returns | When to use |
 |---|---|---|
-| `query_transitive(seed, depth?, relation?, direction?)` | BFS transitive closure — all reachable nodes grouped by depth; direction: forward (default), reverse, both | "What depends on this symbol?" / "What does this symbol depend on?" |
+| `query_transitive(seed, depth?, relation?, direction?)` | BFS transitive closure: all reachable nodes grouped by depth; direction: forward (default), reverse, both | "What depends on this symbol?" / "What does this symbol depend on?" |
 
 ### v0.6.0 composite tools
 
@@ -218,7 +218,7 @@ gm query "--datalog ?- node(X, _, _, _, _)."
 |---|---|---|
 | `include_tests=false` (default) | All query tools | Excludes test/spec nodes (replaces `exclude_test_nodes`) |
 | `show_leaves=false` (default) | `summarize_file` | Hides low-degree leaf symbols; hubs always shown |
-| `extracted_only=false` (default) | `get_neighbors` | Only `EXTRACTED` (source-backed) edges — zero heuristic/ambiguous |
+| `extracted_only=false` (default) | `get_neighbors` | Only `EXTRACTED` (source-backed) edges: zero heuristic/ambiguous |
 | Trust Profile | All query responses | Appends `N EXTRACTED, N INFERRED, N AMBIGUOUS` summary |
 
 **Examples:**

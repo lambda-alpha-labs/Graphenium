@@ -109,7 +109,7 @@ Graphenium exposes **34 MCP tools** across 6 categories: Read, Composite, Trust,
 ### `create_planning_workspace`
 - **Returns**: Confirmation with the plan ID for the new virtual workspace
 - **Use when**: Starting a multi-step architectural change that should be verified for compliance before merging
-- **Parameters**: `name` (required) — human-readable plan name
+- **Parameters**: `name` (required): human-readable plan name
 
 ### `add_planned_symbol`
 - **Returns**: Confirmation with the registered planned node/edge in the virtual workspace

@@ -3,7 +3,7 @@
 > **Question:** When should a team choose Graphenium over existing code-analysis tools?
 >
 > **Short answer:** When the primary consumer is an AI coding agent that needs more
-> than search — it needs to plan structural changes, verify compliance, and route
+> than search: it needs to plan structural changes, verify compliance, and route
 > through trusted relationships in a large repository. Graphenium is the only tool
 > that closes the plan-write-verify loop for autonomous agents.
 
@@ -15,7 +15,7 @@
 
 **What they are:** The fastest way to find literal text or regex patterns across files.
 
-**Where they fall short for agents:** Zero understanding of what a match means — no
+**Where they fall short for agents:** Zero understanding of what a match means: no
 knowledge that `authenticate()` in file A calls `validate_token()` in file B, no concept
 of dependency direction, no persistent memory between queries. Every session starts
 from scratch. An agent using grep alone must chain ad-hoc searches and infer structure
@@ -25,7 +25,7 @@ manually.
 in one query, with source-backed evidence for every relationship. Grep is still useful
 inside Graphenium's keyword-search layer; the two are complementary.
 
-**Limitation:** Graphenium does not replace grep for ad-hoc text search — it is not a
+**Limitation:** Graphenium does not replace grep for ad-hoc text search: it is not a
 dedicated search engine, and its keyword matching (TF-cosine) is less precise than
 ripgrep for raw string lookup.
 
@@ -74,14 +74,14 @@ Every session starts with a cold repository navigation problem. Without Grapheni
 these tools grep their way to understanding.
 
 **Graphenium's advantage:** Graphenium provides the structural memory these agents
-lack — a pre-built, trusted graph they can query via MCP before touching files.
+lack: a pre-built, trusted graph they can query via MCP before touching files.
 
 **Limitation:** Graphenium does not replace the coding agent. It makes the agent
 more effective by providing structural memory.
 
 ### Symbol indexers (ctags, SCIP, Kythe)
 
-**What they are:** Tools that extract flat lists or indices of symbols — definitions,
+**What they are:** Tools that extract flat lists or indices of symbols: definitions,
 references, types.
 
 **Where they fall short for agents:** Flat indexes answer "where is X defined?" but
@@ -138,5 +138,5 @@ compiler-backed index for languages with complex build systems.
 ## Positioning one-liner
 
 > Graphenium is the active coordination and verification loop that makes AI coding
-> agents effective in large, multi-language codebases — the only tool that helps agents
+> agents effective in large, multi-language codebases: the only tool that helps agents
 > plan, write, and verify structural changes, not just search for them.

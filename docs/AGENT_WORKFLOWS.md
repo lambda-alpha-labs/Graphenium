@@ -141,13 +141,13 @@ get_plan_details, then report implemented, missing, and unplanned symbols.
 
 Recommended tool sequence:
 
-1. `create_planning_workspace` — create a virtual workspace for the change
-2. `graph_info` + `get_neighbors` — understand current architecture
+1. `create_planning_workspace`: create a virtual workspace for the change
+2. `graph_info` + `get_neighbors`: understand current architecture
 3. `add_planned_symbol` for each new or modified symbol
 4. Implement the code
-5. `get_plan_details` + `verification_plan` — audit planned vs actual implementation
-6. `blast_radius` — downstream impact of the completed change
-7. `agent_change_gate` — trust quality gates before requesting review
+5. `get_plan_details` + `verification_plan`: audit planned vs actual implementation
+6. `blast_radius`: downstream impact of the completed change
+7. `agent_change_gate`: trust quality gates before requesting review
 
 Expected output:
 
