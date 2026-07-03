@@ -44,3 +44,4 @@ Thumbs.db
 package.json
 .deepseek/
 .gitignore.bak
+src/SUMMARY.md
