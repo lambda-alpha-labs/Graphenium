@@ -2,6 +2,23 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.18.0 (2026-07-03) — Working cross-file resolution: C# member access, base_list, resolver uniqueness gate, serve-layer fixes
+
+### Fixed
+- **C# member-access calls now captured**: `extract_callee_name` handles `member_access_expression` (CS042). Previously, `Helper.DoWork()` returned `None` — the dominant form of cross-file calls in C# was never emitted.
+- **C# inherits/implements from base_list**: Phase-1C edges now attach to the real class node via `handle_class`. Previously emitted from a fabricated node and never matched.
+- **Resolver uniqueness-gate rewrite**: Same-language filtering, distinct-id dedup, subsumption check (shorter `_`-prefixed ancestor → longer child). Unique targets bind as INFERRED; ambiguous/colliding names are left unresolved. Dangling unresolved edges pruned.
+- **main.rs catch-all fix**: Reordered route so MCP `/call` and `/events` aren't intercepted by the SPA static-file handler.
+- **blast_radius / verification_plan input resolution**: Both tools now resolve labels to real node ids before comparing. Previously, edge endpoints (ids like `matrix4_..._translatelocal`) never matched raw labels.
+- **Stale AST-only banners**: `graph_info`, `blast_radius`, `module_dependencies`, `next_files_to_read` now gate on actual resolution (any `calls` edge with `resolution_status = "resolved"`) instead of `graph.is_ast_only()`. `graph_info` shows real percentage + INFERRED-tier caveat.
+
+### Results (on a real 98k-node C# graph)
+- Calls resolved: **0% → 42%** (34,229 / 81,229)
+- Cross-file references resolved: **0 → 38,641**
+- `implements` / `inherits` edges: **0/0 → 1,713 / 2,219**
+- Dangling edges: **— → 0**
+- Communities: **4,140 → 775** (previously isolated islands now connected)
+
 ## v0.17.0 (2026-07-03) — All 5 enhancements complete, documentation restructuring, scoped resolution
 
 ### Added
