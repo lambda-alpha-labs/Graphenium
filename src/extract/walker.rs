@@ -191,6 +191,48 @@ fn handle_class<'src, 'tree>(
                 "contains",
                 state.file_path,
             ));
+            // Phase 1C (fix): emit inherits/implements edges from THIS class node to its
+            // base types (C# `class Foo : Base, IFoo`). Done here so edges attach to the
+            // real class node id (make_id), not a fabricated one; cross-file targets are
+            // bound by the resolver.
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(i) {
+                    if child.kind() == "base_list" {
+                        for j in 0..child.child_count() {
+                            if let Some(base) = child.child(j) {
+                                let bk = base.kind();
+                                if bk == "identifier"
+                                    || bk == "qualified_name"
+                                    || bk == "generic_name"
+                                {
+                                    if let Ok(base_name) = base.utf8_text(state.source) {
+                                        let base_name = base_name.to_string();
+                                        // C# convention heuristic: `IName` -> interface.
+                                        let is_iface = {
+                                            let mut cs = base_name.chars();
+                                            matches!(
+                                                (cs.next(), cs.next()),
+                                                (Some('I'), Some(c2)) if c2.is_ascii_uppercase()
+                                            )
+                                        };
+                                        let rel = if is_iface { "implements" } else { "inherits" };
+                                        let mut e = Edge::new(
+                                            id.clone(),
+                                            base_name,
+                                            rel,
+                                            Confidence::Ambiguous,
+                                            state.file_path,
+                                        );
+                                        e.extractor = Some("tree-sitter".to_string());
+                                        e.resolution_status = Some("unresolved".to_string());
+                                        state.result.edges.push(e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             id
         }
         // Anonymous class expression: inherit parent, still recurse children
@@ -392,11 +434,12 @@ pub fn get_call_target(call_node: Node<'_>, source: &[u8]) -> Option<String> {
 fn extract_callee_name(node: Node<'_>, source: &[u8]) -> Option<String> {
     match node.kind() {
         "identifier" => node.utf8_text(source).ok().map(|s| s.to_string()),
-        // obj.method  /  Cls.method  /  self.method
-        "member_expression" | "attribute" | "field_expression" => node
+        // obj.method / Cls.method / self.method / C# `Helper.DoWork()` (member_access_expression)
+        "member_expression" | "attribute" | "field_expression" | "member_access_expression" => node
             .child_by_field_name("property")
             .or_else(|| node.child_by_field_name("attribute"))
             .or_else(|| node.child_by_field_name("field"))
+            .or_else(|| node.child_by_field_name("name"))
             .and_then(|p| p.utf8_text(source).ok().map(|s| s.to_string())),
         // Foo::bar  (Rust / C++)
         "scoped_identifier" | "qualified_identifier" => node

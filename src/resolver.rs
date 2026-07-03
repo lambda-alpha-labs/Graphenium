@@ -154,6 +154,19 @@ fn build_symbol_index(results: &[ExtractionResult]) -> HashMap<String, Vec<(Stri
     index
 }
 
+/// Coarse language family for a source path, used to prevent cross-language false
+/// positives (e.g. a C# `Max(...)` binding to a same-named C++ header function).
+fn lang_family(path: &str) -> u8 {
+    let p = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match p.as_str() {
+        "cs" => 1,                                                   // C#
+        "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "hh" | "hxx" => 2, // C/C++
+        "py" | "pyi" => 3,                                           // Python
+        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => 4,           // JS/TS
+        _ => 0,
+    }
+}
+
 /// Resolve all cross-file references in the extraction results.
 /// For each non-import behavioral edge (calls, uses, inherits, implements, depends_on),
 /// checks whether the target symbol exists in the global symbol index.
@@ -167,9 +180,6 @@ pub fn resolve_cross_file_calls(
         Some(i) => i.clone(),
         None => build_symbol_index(results),
     };
-
-    // Phase 1D: Build file-scoped index for scope-narrowed resolution
-    let file_index = build_file_index(results);
 
     let mut resolved_count = 0usize;
 
@@ -195,45 +205,80 @@ pub fn resolve_cross_file_calls(
                 continue;
             }
 
-            // Phase 1D: Use scope-narrowed resolution (prefer matches in same-file imports)
-            let caller_file = result
+            // Trust-safe cross-file binding: resolve ONLY when the target label maps to a
+            // SINGLE distinct definition. Colliding names (e.g. `GetValue` in 39 files) are
+            // left unresolved rather than bound to an arbitrary candidate — this preserves
+            // the EXTRACTED trust guarantee. (Scope-narrowing by imports/namespace can raise
+            // recall on ambiguous names in a follow-up, still gated on a unique survivor.)
+            // Look up by the ORIGINAL label: `symbol_index` is keyed by node label / id,
+            // but `Edge::new` has already normalized `edge.target` (lowercased). The raw
+            // label lives in `tgt_original`.
+            let key = if !edge.tgt_original.is_empty() {
+                edge.tgt_original.as_str()
+            } else {
+                edge.target.as_str()
+            };
+            // Same-language guard: only consider candidates in the caller's language family
+            // (prevents a C# `Max(...)` binding to a same-named C++ header function).
+            let caller_fam = result
                 .nodes
                 .iter()
                 .find(|n| n.id == edge.source)
-                .map(|n| n.source_file.as_str());
-            let scope_match =
-                caller_file.and_then(|cf| resolve_cross_file_symbol(&edge.target, cf, &file_index));
-
-            if let Some((node_id, _file_id)) = scope_match {
-                // Found via scope-narrowed lookup — use the resolved node as target
-                edge.target = node_id.clone();
-                edge.extractor = Some("tree-sitter-stack-graphs".to_string());
-                edge.resolution_status = Some("resolved".to_string());
-                resolved_count += 1;
-            } else if let Some(_entries) = symbol_index.get(&edge.target) {
-                // Fallback: found in global index
-                edge.extractor = Some("tree-sitter-stack-graphs".to_string());
-                edge.resolution_status = Some("resolved".to_string());
-                resolved_count += 1;
-            } else {
-                // Also try normalized target
-                let normalized = crate::model::id::normalize_id(&edge.target);
-                if let Some(_entries) = symbol_index.get(&normalized) {
-                    edge.extractor = Some("tree-sitter-stack-graphs".to_string());
-                    edge.resolution_status = Some("resolved".to_string());
-                    resolved_count += 1;
-                } else {
-                    // Check if the target might be in a partial match
-                    // (e.g. "Helper" might be matched as "helper")
-                    let lower = edge.target.to_lowercase();
-                    if symbol_index.keys().any(|k| k.to_lowercase() == lower) {
-                        edge.extractor = Some("tree-sitter-stack-graphs".to_string());
-                        edge.resolution_status = Some("resolved".to_string());
-                        resolved_count += 1;
+                .map(|n| lang_family(&n.source_file))
+                .unwrap_or(0);
+            let mut distinct: Vec<&str> = Vec::new();
+            if let Some(entries) = symbol_index.get(key) {
+                for (file, nid) in entries {
+                    if lang_family(file) != caller_fam {
+                        continue;
+                    }
+                    if !distinct.iter().any(|d| *d == nid.as_str()) {
+                        distinct.push(nid.as_str());
                     }
                 }
             }
+            // Collapse a file-container node vs the type/method node for the SAME symbol
+            // (e.g. id "ifoo" is a `_`-prefixed ancestor of "ifoo_ifoo"): keep the most
+            // specific. This is safe — same symbol at different granularity — and lets a
+            // single genuine definition resolve while true cross-symbol collisions remain
+            // ambiguous (len > 1) and are left unresolved.
+            let mut specific: Vec<&str> = Vec::new();
+            for &id in &distinct {
+                let subsumed = distinct.iter().any(|&other| {
+                    other.len() > id.len()
+                        && other.starts_with(id)
+                        && other.as_bytes().get(id.len()) == Some(&b'_')
+                });
+                if !subsumed {
+                    specific.push(id);
+                }
+            }
+            let distinct = specific;
+            if distinct.len() == 1 {
+                // Unique target — bind the edge to the real node id and mark resolved.
+                // A uniquely-resolved, same-language cross-file reference is a strong hint
+                // (INFERRED), not ground truth (EXTRACTED) and not AMBIGUOUS junk.
+                edge.target = distinct[0].to_string();
+                edge.extractor = Some("tree-sitter-stack-graphs".to_string());
+                edge.resolution_status = Some("resolved".to_string());
+                edge.confidence = crate::model::Confidence::Inferred;
+                edge.confidence_score = crate::model::Confidence::Inferred.default_score();
+                resolved_count += 1;
+            }
+            // else: 0 candidates (unknown) or >1 (ambiguous) → leave unresolved; dropped
+            // below. No wrong EXTRACTED edge is ever emitted.
         }
+    }
+
+    // Drop the cross-file behavioral edges we could NOT uniquely resolve: they still point
+    // at a bare label (no real node), so keeping them would pollute the graph with dangling
+    // edges. Only uniquely-resolved edges (rewritten to a real node id) are retained — this
+    // keeps the graph honest and the trust model intact.
+    for result in results.iter_mut() {
+        result.edges.retain(|e| {
+            !(e.resolution_status.as_deref() == Some("unresolved")
+                && matches!(e.relation.as_str(), "calls" | "implements" | "inherits"))
+        });
     }
 
     resolved_count

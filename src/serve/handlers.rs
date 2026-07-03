@@ -2018,7 +2018,10 @@ impl GrapheniumServer {
                 ));
             } else {
                 out.push_str("\nNo direct dependencies found between these modules.\n");
-                if graph.is_ast_only() {
+                let calls_resolved = graph.edges_iter().any(|e| {
+                    e.relation == "calls" && e.resolution_status.as_deref() == Some("resolved")
+                });
+                if graph.is_ast_only() && !calls_resolved {
                     out.push_str(
                         "[NOTE] This graph is in AST-only mode (calls 0% resolved). Cross-module coupling \
                         relying on function calls or implicit references cannot be detected. If these modules \
@@ -3030,10 +3033,9 @@ impl GrapheniumServer {
         changed_nodes: String,
     ) -> String {
         let graph = self.graph_store.load();
-        let ids: Vec<String> = changed_nodes
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect();
+        // Resolve labels/ids to real node ids; plan_verification matches against node ids,
+        // so raw labels would never match (same bug that was in blast_radius).
+        let (ids, _unresolved) = self.resolve_symbols_to_ids(&changed_nodes);
 
         let plan = crate::analyze::verifier::plan_verification(&graph, &ids, None);
         crate::analyze::verifier::format_plan(&plan)
@@ -3051,9 +3053,13 @@ impl GrapheniumServer {
         changed_nodes: String,
     ) -> String {
         let graph = self.graph_store.load();
+        // Resolve each input (label or id) to a real node id; edge endpoints are ids, so
+        // comparing the raw label would never match.
         let ids: Vec<String> = changed_nodes
             .split(',')
-            .map(|s| s.trim().to_string())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| self.resolve_id(s).unwrap_or_else(|| s.to_string()))
             .collect();
 
         let mut output = String::new();
@@ -3061,6 +3067,12 @@ impl GrapheniumServer {
         if ids.is_empty() {
             return "No changed nodes provided.".to_string();
         }
+
+        // Once the Stack Graphs resolver has bound cross-file calls, the AST-only "calls 0%"
+        // banner is no longer accurate — suppress it.
+        let calls_resolved = graph
+            .edges_iter()
+            .any(|e| e.relation == "calls" && e.resolution_status.as_deref() == Some("resolved"));
 
         // Count direct affected neighbors
         let mut affected_files: std::collections::HashSet<String> =
@@ -3094,8 +3106,8 @@ impl GrapheniumServer {
             }
         }
 
-        // 1. Check if we are in AST-only mode and inject a loud safety guardrail
-        if graph.is_ast_only() {
+        // 1. Warn only when cross-file calls are genuinely unresolved.
+        if graph.is_ast_only() && !calls_resolved {
             output.push_str("⚠️  [SAFETY WARNING — AST-ONLY MODE ACTIVE]\n");
             output.push_str(
                 "This graph was built in AST-only mode. Behavioral cross-file call resolution is 0%.\n\
@@ -3108,7 +3120,7 @@ impl GrapheniumServer {
         }
 
         output.push_str(&format!("## Blast Radius\n\n"));
-        if affected_files.is_empty() && graph.is_ast_only() {
+        if affected_files.is_empty() && graph.is_ast_only() && !calls_resolved {
             output.push_str(
                 "Result: 0 affected symbols found.\n\
                 (Note: This empty result is highly likely an artifact of AST-only mode rather than true decoupling.)\n\n"
@@ -3376,7 +3388,10 @@ impl GrapheniumServer {
                 resolved_ids
             );
 
-            if graph.is_ast_only() {
+            let calls_resolved = graph.edges_iter().any(|e| {
+                e.relation == "calls" && e.resolution_status.as_deref() == Some("resolved")
+            });
+            if graph.is_ast_only() && !calls_resolved {
                 msg.push_str(
                     "WARNING: AST-Only Mode Limitation —\n\
                     Because the graph is currently in AST-only mode, cross-file behavioral calls are 0% resolved.\n\
@@ -3671,11 +3686,30 @@ impl GrapheniumServer {
             .len();
         out.push_str(&format!("**Communities:** {communities}\n"));
 
-        // Trust banner: mode and resolution status
+        // Trust banner: mode and resolution status (reflect actual cross-file resolution).
         let is_ast = graph.is_ast_only();
-        if is_ast {
+        let (mut calls_total, mut calls_res) = (0usize, 0usize);
+        for e in graph.edges_iter() {
+            if e.relation == "calls" {
+                calls_total += 1;
+                if e.resolution_status.as_deref() == Some("resolved") {
+                    calls_res += 1;
+                }
+            }
+        }
+        let calls_pct = if calls_total > 0 {
+            calls_res * 100 / calls_total
+        } else {
+            0
+        };
+        if is_ast && calls_res == 0 {
             out.push_str("\n**Graph mode:** AST-only · imports 100% resolved · calls 0% resolved (requires semantic pass) · 0 ambiguous\n");
             out.push_str("Behavioral edges (calls/uses) are heuristic hints; structural edges (imports/contains) are ground truth.\n");
+        } else if is_ast {
+            out.push_str(&format!(
+                "\n**Graph mode:** AST + Stack Graphs · imports 100% resolved · calls {calls_pct}% resolved cross-file (INFERRED) · 0 ambiguous\n"
+            ));
+            out.push_str("Structural edges are ground truth; resolved cross-file calls are high-probability hints (INFERRED) — corroborate before acting.\n");
         } else {
             out.push_str("\n**Graph mode:** Semantic (LLM-enriched) · calls resolved via AI\n");
         }

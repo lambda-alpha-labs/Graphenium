@@ -423,11 +423,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        _ => {
-            eprintln!("This command is not available in the current build");
-            Ok(())
-        }
-
         Commands::Serve { graph, watch } => {
             if watch {
                 graphenium::serve::serve_with_watch(&graph, true).await
