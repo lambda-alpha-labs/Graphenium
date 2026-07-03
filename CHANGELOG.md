@@ -2,6 +2,31 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.17.0 (2026-07-03) — All 5 enhancements complete, documentation restructuring, scoped resolution
+
+### Added
+- **Cross-file call resolution**: Walker emits `resolution_status="unresolved"` edges for cross-file calls. Resolver creates 4 edge types (TRANSITIVE_CALL, EXPORT_MAPPING, IMPORT_SYMBOL, CROSS_MODULE_CALL) with `extractor = "tree-sitter-stack-graphs"`.
+- **C# inherits/implements edges**: `handle_csharp_base_list()` detects `base_list` nodes in C# class/interface/struct declarations and emits `inherits`/`implements` edges.
+- **Scope-narrowed resolution**: `build_file_index()` tracks exports per file. `resolve_cross_file_calls()` now prefers matches in the caller's imported modules before falling back to global lookup.
+- **Datalog declarative query engine**: Self-contained 700-line engine with tokenizer, recursive AST parser, semi-naive fixpoint evaluator, negation (`not`), and safety guardrails. Exposed via `--datalog` CLI flag and `run_datalog` MCP tool.
+- **Runtime telemetry overlay**: OTEL-compatible trace import, `RuntimeOverlay` with per-node call counts and EMA percentile estimation, `hot_path_query()`, `runtime_weighted_traversal()`.
+- **Salsa-backed extraction**: `cache/query.rs` provides `salsa_extract_file()`/`salsa_extract_all()` for memoized AST parsing — unchanged files skip tree-sitter entirely on rebuilds.
+- **Hybrid retrieval modes**: `QueryMode` enum (lexical/structural/hybrid), `--mode` flag on `gm query`.
+
+### Changed
+- **Documentation restructured**: README slimmed from 887 to 144 lines. 7 new docs files in `docs/` (COMMAND_REFERENCE, MCP_TOOLS, ARCHITECTURE, COMPARISON, BENCHMARKING, GETTING_STARTED, AGENT_WORKFLOWS).
+- **Contributing guide**: New module definitions for resolver, cache/query, embed, ranking, analyze/query.
+- **SKILL.md**: Added run_datalog, query modes, C# guidance, cross-file resolution instructions.
+- **AI_SETUP.md**: New sections for Datalog, OpenTelemetry, Salsa, Hybrid Retrieval.
+- **All cargo install commands** now use `--locked` flag.
+
+### Fixed
+- **Binary build**: `cargo build --bins` passes with 0 errors (was 5+). Fixed GrapheniumError type resolution.
+- **CI pipeline**: 0 clippy errors, 0 format diffs, 363 tests pass.
+
+### Performance
+- 363 tests pass, 0 clippy errors, formatting clean.
+
 ## v0.16.1 (2026-07-02) — CI fixes, C# support, scope-narrowed resolution, --locked docs
 
 ### Fixed
