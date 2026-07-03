@@ -78,12 +78,12 @@ Add to `~/.codewhale/mcp.json`:
 - **Cross-file resolution** — resolves calls, uses, inherits, and implements across file boundaries
 - **Architectural analysis** — Louvain community detection, PageRank hubs, chokepoint analysis (Brandes' betweenness centrality), architecture drift detection
 - **Topological anomaly detection** — multi-variable surprise scoring identifies unexpected cross-boundary connections, architectural erosion, and out-of-layer dependencies without custom rules
-- **Design-then-verify planning workspaces** — agents declare intended symbols in a virtual workspace before writing code; `verify_plan` compares the planned design against the extracted physical graph for compliance audit
+- **Design-then-verify planning workspaces** — agents declare intended symbols in a virtual workspace before writing code; compliance audit compares the planned design against the extracted physical graph, reporting implemented, missing, and unplanned symbols
 - **C# assembly boundary parsing** — reads `.sln` and `.csproj` files to map project references and assembly dependencies as first-class graph elements, not just flat source files
 - **Academic paper classification** — heuristic detection of research papers (arXiv, DOI, LaTeX markers) linked into the graph alongside implementation code
 - **Symbol diff + impact** — `gm diff` compares graph snapshots and computes blast radius
 - **Trust gates for CI** — `gm check` enforces resolution quality and edge confidence policies
-- **22 MCP tools** — read, composite, trust, write, and diff tools for AI agents
+- **34 MCP tools** — read, composite, trust, write, diff, and planning tools for AI agents
 - **Hybrid retrieval** — lexical (TF-cosine), structural (graph-distance), and combined modes
 
 ## Documentation

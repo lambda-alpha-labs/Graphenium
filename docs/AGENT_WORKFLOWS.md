@@ -135,8 +135,8 @@ Agent prompt:
 ```text
 Use Graphenium to create a planning workspace for the proposed change.
 Declare the intended symbols and relationships before writing any code.
-After implementation, verify compliance with verify_plan and report
-implemented, missing, and unplanned symbols.
+After implementation, verify compliance with verification_plan and
+get_plan_details, then report implemented, missing, and unplanned symbols.
 ```
 
 Recommended tool sequence:
@@ -145,7 +145,7 @@ Recommended tool sequence:
 2. `graph_info` + `get_neighbors` — understand current architecture
 3. `add_planned_symbol` for each new or modified symbol
 4. Implement the code
-5. `verify_plan` — audit compliance of written code against the planned design
+5. `get_plan_details` + `verification_plan` — audit planned vs actual implementation
 6. `blast_radius` — downstream impact of the completed change
 7. `agent_change_gate` — trust quality gates before requesting review
 

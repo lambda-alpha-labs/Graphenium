@@ -146,11 +146,9 @@ The following MCP tools provide trust, verification, and impact analysis:
 | `create_planning_workspace` | Create a virtual workspace to group intended changes |
 | `add_planned_symbol` | Register an intended new/modified symbol linked to existing nodes |
 | `get_plan_details` | Return the full virtual subgraph of a plan |
-| `verify_plan` | Compare the planned virtual graph against the extracted physical graph: reports implemented, missing, and unplanned symbols |
-
 ### When to use planning workspaces
 
-Before implementing any multi-file architectural change, create a planning workspace and declare intended symbols. After writing the code, run `verify_plan` to confirm compliance. This gives the user a formal audit trail: intended design versus actual implementation.
+Before implementing any multi-file architectural change, create a planning workspace and declare intended symbols. After writing the code, use `verification_plan` (Trust Tools) with the implemented symbol IDs to assess coverage against the graph, and `get_plan_details` to review the declared plan. This gives the user a formal audit trail: intended design versus actual implementation.
 
 ### Interpreting surprise scores and bridge nodes
 

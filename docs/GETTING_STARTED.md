@@ -62,10 +62,10 @@ gm check --min-resolution 80 --max-ambiguous 10
 gm plan create --name "my-change"
 gm plan add-symbol --plan "my-change" --symbol "new_utils" --kind module
 # ... write the code ...
-gm verify-plan --plan "my-change"
+gm plan get --plan "my-change"
 ```
 
-This workflow lets AI agents formally verify that their implemented code matches the planned design before requesting review.
+Use `verification_plan` (via MCP) or `gm check` to assess symbol coverage after implementation. This workflow lets AI agents formally verify that their implemented code matches the planned design before requesting review.
 
 ### Incremental development
 

@@ -267,14 +267,14 @@ gm plan create --name "refactor-auth"
 # Register planned symbols before writing code
 gm plan add-symbol --plan "refactor-auth" --symbol "new_auth_service" --kind function
 
-# Verify compliance after implementation: did the code match the plan?
-gm run . && gm verify-plan --plan "refactor-auth"
+# After implementation, review the plan details and verify symbol coverage
+gm run . && gm plan get --plan "refactor-auth"
 ```
 
-This lets AI agents declare intent, write the code, and mathematically verify
+This lets AI agents declare intent, write the code, and verify
 compliance before requesting human review. The MCP tools `create_planning_workspace`,
-`add_planned_symbol`, and `verify_plan` provide the same workflow through the
-MCP protocol.
+`add_planned_symbol`, and `get_plan_details` provide the same workflow through the
+MCP protocol. Use `verification_plan` (Trust Tools) to assess coverage of implemented symbols.
 
 ## Datalog Declarative Queries (v0.16.0)
 

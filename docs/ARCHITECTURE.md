@@ -95,7 +95,7 @@ The classification engine (`src/detect/paper.rs`) contains a `looks_like_paper` 
 
 ## Planning Workspace Schema
 
-Nodes and edges carry an optional `plan_id` field that isolates virtual (planned) symbols from the physical graph. When an agent creates a planning workspace, declared symbols are tagged with the plan's identifier. The `verify_plan` engine (`src/analyze/verifier.rs`) compares the planned virtual subgraph against the extracted physical graph and reports:
+Nodes and edges carry an optional `plan_id` field that isolates virtual (planned) symbols from the physical graph. When an agent creates a planning workspace, declared symbols are tagged with the plan's identifier. The `verify_plan` engine (`src/harness.rs`) compares the planned virtual subgraph against the extracted physical graph and reports:
 
 - `implemented_nodes`: planned symbols that have been realized in code
 - `missing_nodes`: planned symbols still awaiting implementation

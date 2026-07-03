@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-Graphenium exposes **22 MCP tools** across 5 categories: Read, Composite, Trust, Write, and Diff. Each tool accepts parameters as JSON and returns formatted Markdown text.
+Graphenium exposes **34 MCP tools** across 6 categories: Read, Composite, Trust, Write, Diff, and Planning. Each tool accepts parameters as JSON and returns formatted Markdown text.
 
 ---
 
@@ -120,9 +120,7 @@ Graphenium exposes **22 MCP tools** across 5 categories: Read, Composite, Trust,
 - **Returns**: Full virtual subgraph of the plan: all planned nodes, edges, and implementation status
 - **Use when**: Reviewing what was declared in a planning workspace before or after implementation
 
-### `verify_plan`
-- **Returns**: Compliance report with `implemented_nodes`, `missing_nodes`, and `unplanned_modified_files`
-- **Use when**: After implementing code, verifying that the written code matches the planned design
+> **Compliance verification:** There is no standalone `verify_plan` MCP tool. To check planning workspace compliance, use `get_plan_details` to review the declared plan, then `verification_plan` (see Trust Tools) to assess coverage of the implemented symbols. The `verify_plan` engine exists in the core library (`src/harness.rs`) for use by embedded harnesses.
 
 ## Write Tools (4)
 
