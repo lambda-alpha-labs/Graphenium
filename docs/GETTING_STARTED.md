@@ -145,17 +145,24 @@ The agent should respond with communities, hubs, and relevant files.
 | `blast_radius` | Impact analysis for proposed changes |
 | `run_datalog` | Declarative graph queries with rules |
 
-## Creating a `grapheniumignore`
+## Creating a `.grapheniumignore`
 
-Create `.grapheniumignore` in your project root:
+Create `.grapheniumignore` in your project root. Patterns support gitignore-style globs:
 
 ```
+# Build artifacts
 target/
 node_modules/
 dist/
 build/
 vendor/
+
+# Generated / designer code
 *.generated.*
+*.Designer.cs
+*.g.cs
+*.gen.go
+*.pb.go
 ```
 
-Or use `gm init` to create one with sensible defaults.
+Or use `gm init` to create one with sensible defaults pre-configured for Rust, Node, Python, C++, and C# toolchains.

@@ -65,7 +65,7 @@ This lets agents distinguish source-backed facts (`EXTRACTED` + `resolved`) from
 | `policy.rs` | Trust quality policies |
 | `ranking.rs` | Query ranking: lexical, structural, hybrid |
 | `resolver.rs` | Cross-file import resolution, build_file_index, resolve_cross_file_symbol |
-| `cache/query.rs` | Salsa-backed demand-driven incremental extraction: `salsa_extract_file`, `salsa_extract_all` |
+| `cache/query.rs` | Salsa-backed demand-driven incremental extraction (same engine behind `rust-analyzer`): `salsa_extract_file`, `salsa_extract_all` |
 | `analyze/query.rs` | Datalog declarative query engine: `run_datalog_query`, `tokenize`, `solve` with semi-naive fixpoint |
 | `semantic/` | LLM-based semantic extraction |
 | `serve/` | MCP server with 22 tools |

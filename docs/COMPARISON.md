@@ -116,6 +116,20 @@ compiler-backed index for languages with complex build systems.
 
 ---
 
+## Competitive landscape
+
+Graphenium is optimized for active writing, trust boundaries, and agent verification loops. The following matrix compares Graphenium against alternative tools in the agent tooling space:
+
+| Feature | **Graphenium** | **CodeGraph** | **Aider repo-map** | **SCIP/Kythe** |
+| :--- | :--- | :--- | :--- | :--- |
+| **Primary Focus** | Active agent verification | Fast local search | Inline editing context | Compiler-grade indexing |
+| **Trust Model** | Explicit (EXTRACTED/INFERRED/AMBIGUOUS) | None (implicit) | None | Implicit |
+| **Query Engine** | Built-in Datalog + hybrid retrieval | SQL | Regex / string search | None (raw index) |
+| **Rebuild Architecture** | Sub-second Salsa incremental (like rust-analyzer) | Full / standard incremental | Instant (file-tree only) | Full compiler rebuild |
+| **Planning Workspaces** | Yes (design-then-verify) | No | No | No |
+| **Telemetry Integration** | Yes (OTEL trace overlays, P50/P95/P99) | No | No | No |
+| **Language-Family Guardrails** | Yes (prevents cross-language false positives) | No | No | No |
+
 ## When to use Graphenium
 
 - AI agents repeatedly work in the same large repository

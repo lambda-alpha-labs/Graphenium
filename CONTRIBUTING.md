@@ -77,7 +77,7 @@ issue. Include:
 ## Submitting a PR
 
 - Keep PRs focused. One change per PR.
-- Run `cargo test` and `cargo fmt` before submitting.
+- Run `cargo test`, `cargo clippy --lib`, and `cargo fmt` before submitting.
 - If adding a feature, include tests.
 - If changing extraction behaviour, include a fixture that demonstrates
   the change.

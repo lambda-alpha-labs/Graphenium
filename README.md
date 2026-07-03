@@ -2,6 +2,8 @@
 
 Most code tools help AI agents search files. Graphenium is the only tool that helps agents *plan, write, and verify* structural changes. It provides a stateful coordination whiteboard, real-time reactive indexing, and a mathematical verification loop: so coding agents stop guessing and start engineering.
 
+Without structural memory, agents suffer from **hallucination cascades** (one wrong assumption breaks multiple downstream dependencies) and **blind-edit failures** (changes that compile but violate design constraints). Graphenium prevents both by giving agents a trust-aware map they can plan against and verify against.
+
 Binary: `gm` | Schema: `0.2.0` | Status: `AST + Resolver [Stable]`, `Semantic Pass [Stable]`, `Telemetry Overlay [Experimental]`
 
 ## Quick Start
