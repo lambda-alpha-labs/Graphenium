@@ -363,6 +363,12 @@ pub fn csharp_using(
     file_node_id: &str,
     result: &mut ExtractionResult,
 ) {
+    // Phase 1C: Handle base_list (C# inheritance)
+    if node.kind() == "base_list" {
+        handle_csharp_base_list(node, source, file_path, file_node_id, result);
+        return;
+    }
+
     if node.kind() != "using_directive" {
         return;
     }
@@ -385,6 +391,79 @@ pub fn csharp_using(
     }
     if let Some(t) = candidate {
         emit_import(file_node_id, t, file_path, result);
+    }
+}
+
+/// Handle C# base_list nodes: emit inherits/implements edges for class/interface/struct base types.
+fn handle_csharp_base_list(
+    node: tree_sitter::Node<'_>,
+    source: &[u8],
+    file_path: &str,
+    _file_node_id: &str,
+    result: &mut ExtractionResult,
+) {
+    let parent = match node.parent() {
+        Some(p) => p,
+        None => return,
+    };
+    let parent_kind = parent.kind();
+
+    // Determine if parent is interface -> implements, else -> inherits
+    let is_interface = parent_kind == "interface_declaration";
+    let relation = if is_interface {
+        "implements"
+    } else {
+        "inherits"
+    };
+
+    // Find the parent type name (first identifier child of the declaration)
+    let parent_name = (0..parent.child_count()).find_map(|i| {
+        parent.child(i).and_then(|c| {
+            if c.kind() == "identifier" || c.kind() == "name" {
+                text(c, source)
+            } else {
+                None
+            }
+        })
+    });
+    let parent_name = match parent_name {
+        Some(n) => n,
+        None => return,
+    };
+
+    // Build owner_id matching the pattern from the class/struct/interface node
+    let owner_id = format!("{}::{}::{}", file_path, parent_kind, parent_name);
+
+    // Ensure owner node exists
+    let has_owner = result.nodes.iter().any(|n| n.id == owner_id);
+    if !has_owner {
+        let node = crate::model::Node::new(
+            owner_id.clone(),
+            parent_name.clone(),
+            crate::model::FileType::Code,
+            file_path,
+        );
+        result.nodes.push(node);
+    }
+
+    // Emit edges for each base type
+    for i in 0..node.child_count() {
+        if let Some(child) = node.child(i) {
+            let kind = child.kind();
+            if kind != "identifier" && kind != "qualified_name" {
+                continue;
+            }
+            if let Some(base_type) = text(child, source) {
+                let edge = crate::model::Edge::new(
+                    owner_id.clone(),
+                    base_type.clone(),
+                    relation,
+                    crate::model::Confidence::Extracted,
+                    file_path,
+                );
+                result.edges.push(edge);
+            }
+        }
     }
 }
 
