@@ -140,7 +140,8 @@ Graphenium exposes **22 MCP tools** across 5 categories: Read, Composite, Trust,
 
 | Goal | Recommended Tool |
 |---|---|
-| "What does this repo look like?" | `graph_info` + `architecture_summary` |
+| "What does this repo look like?" | `run_datalog` | Run a Datalog query against the loaded graph. Supports rules, goals, facts, and negation (not). Budget-bounded. | Right column: `query: string`, `step_budget?: number` | Declarative reachability, constraint queries, custom graph analysis | Read |
+| `graph_info` | + `architecture_summary` |
 | "What does X depend on?" | `get_neighbors(X)` |
 | "Find me code related to Y" | `query_graph("Y")` |
 | "How are A and B connected?" | `shortest_path(A, B)` |

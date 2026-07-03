@@ -21,6 +21,9 @@ gm serve
 # 4. Query the graph (via MCP)
 gm query "authentication flow" --budget 2000
 
+# 6. Run a Datalog query
+gm query --datalog "?- node(X, _, _, _, _)."
+
 # 5. Run diagnostics
 gm doctor --graph graphenium-out/graph.json
 ```
@@ -66,6 +69,11 @@ Add to `~/.codewhale/mcp.json`:
 
 ## Core Features
 
+- **Cross-file call resolution** — resolves calls, uses, and references across file boundaries using tree-sitter and scope-aware symbol indexing. All resolved edges carry `extractor = "tree-sitter-stack-graphs"` provenance.
+- **Declarative Datalog queries** — `gm query --datalog "<program>"` runs first-order logic queries against the graph with support for rules, goals, facts, and negation.
+- **Hybrid retrieval** — lexical (TF-cosine), structural (graph-distance), and combined modes via `--mode` flag.
+- **Runtime telemetry overlay** — import OpenTelemetry trace JSON to create a RuntimeOverlay with per-node call counts and latency percentiles (P50/P95/P99). Enables hot-path and runtime-weighted traversal.
+- **Demand-driven incremental computation** — Salsa-powered memoized extraction caches AST results by content hash, near-instant rebuilds on unchanged files.
 - **Provenance on every edge** — every relationship carries `extractor` and `resolution_status` so agents know how much to trust each connection
 - **Cross-file resolution** — resolves calls, uses, inherits, and implements across file boundaries
 - **Architectural analysis** — Louvain community detection, PageRank hubs, chokepoint analysis, architecture drift detection

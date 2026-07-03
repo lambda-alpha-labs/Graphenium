@@ -256,6 +256,39 @@ Report a summary:
 - Run `gm run . --api-key sk-ant-...` to add LLM-inferred edges
 - Run `gm watch .` in a terminal for automatic rebuilds on file changes
 
+## Datalog Declarative Queries (v0.16.0)
+
+The Datalog engine in `src/analyze/query.rs` enables declarative first-order logic queries.
+
+```sh
+gm query --datalog "?- node(X, 'AuthSvc', _, _, _)."
+gm query --datalog "?- calls(X, Y, _)."
+```
+
+## OpenTelemetry Runtime Overlay (v0.16.0)
+
+Import runtime traces to create a `RuntimeOverlay`:
+
+```sh
+gm import-traces otel-traces.json
+gm build-overlay --hot-paths
+```
+
+## Incremental Computation with Salsa (v0.16.0)
+
+The Salsa-backed extraction cache in `src/cache/query.rs` provides memoized AST parsing.
+Unchanged files skip tree-sitter entirely on subsequent rebuilds.
+
+## Hybrid Retrieval Modes (v0.16.0)
+
+Three query modes via `--mode`:
+
+```sh
+gm query "authentication" --mode lexical     # TF-cosine keyword matching
+gm query "authentication" --mode structural  # graph-distance from seeds
+gm query "authentication" --mode hybrid      # weighted combination
+```
+
 ## Trust Gates (v3)
 
 For CI integration, run `gm check` to enforce trust quality gates:

@@ -48,6 +48,7 @@ gm query "<keywords>" [flags]
 | `--datalog` | String | — | Run a Datalog query instead of keyword search |
 | `--budget` | Int | 2000 | Output token budget |
 | `--depth` | Int | 3 | Traversal depth (1-6) |
+| `--datalog` | String | — | Run a Datalog query instead of keyword search |
 | `--dfs` | bool | false | Use DFS instead of BFS |
 | `--safe` | bool | false | Confidence-aware traversal |
 | `--graph` | PathBuf | — | Path to graph.json |

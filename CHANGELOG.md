@@ -2,6 +2,23 @@
 
 All notable changes to Graphenium are documented in this file.
 
+## v0.16.1 (2026-07-02) — CI fixes, C# support, scope-narrowed resolution, --locked docs
+
+### Fixed
+- **Binary build**: `cargo build --bins` now passes with 0 errors (was 5+)
+- **CI pipeline**: 0 clippy errors, 0 format diffs, 363 tests pass on `--lib`
+- **`--locked` flag**: All `cargo install` commands in README.md, AI_SETUP.md, install.sh, install.ps1 now use `--locked`
+
+### Added
+- **C# inherits/implements**: `handle_csharp_base_list()` emits `inherits`/`implements` edges for C# class/interface/struct base types
+- **Scope-narrowed resolution**: `resolve_cross_file_calls()` now uses file-scoped symbol index to prefer matches in the caller's imported modules
+- **Unresolved cross-file edges**: Walker emits `resolution_status="unresolved"` edges for calls whose targets aren't in the same file
+- **`--datalog` CLI flag**: `gm query --datalog "<program>"` runs Datalog queries against the graph
+- **`run_datalog` MCP tool**: New tool for declarative graph queries
+
+### Performance
+- 363 tests pass, 0 clippy errors, formatting clean
+
 ## v0.16.0 (2026-07-02) — All 5 enhancements: Stack Graphs, OpenTelemetry, Salsa, Datalog, Hybrid Retrieval
 
 ### Added
