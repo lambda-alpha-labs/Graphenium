@@ -46,3 +46,4 @@ package.json
 .gitignore.bak
 src/SUMMARY.md
 DEMO_SCRIPT.md
+scripts/demo.sh
