@@ -30,6 +30,17 @@ contribute a PR to `src/detect/sensitive.rs` with the pattern and a test.
 Only the latest release receives security patches. We recommend running
 the most recent version.
 
+## Academic paper classification
+
+Graphenium's file classifier (`src/detect/paper.rs`) can detect academic
+papers in the repository by scanning for scholarly markers (arXiv IDs,
+DOIs, LaTeX citations, proceedings indicators). Papers classified this
+way are linked into the graph as `FileType::Paper` nodes alongside source
+code. These nodes follow the same sensitive-file exclusion rules: if a
+paper file matches a pattern in `sensitive.rs`, it is skipped. Papers are
+treated as documentation assets, not source code, and are never submitted
+to any remote service during AST-only scans.
+
 ## Scope
 
 Graphenium is a local tool. It does not send your source code to any

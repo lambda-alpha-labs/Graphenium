@@ -146,8 +146,19 @@ The following MCP tools provide trust, verification, and impact analysis:
 | `create_planning_workspace` | Create a virtual workspace to group intended changes |
 | `add_planned_symbol` | Register an intended new/modified symbol linked to existing nodes |
 | `get_plan_details` | Return the full virtual subgraph of a plan |
+| `verify_plan` | Compare the planned virtual graph against the extracted physical graph: reports implemented, missing, and unplanned symbols |
 
-Use these when the user asks about trust quality, change safety, or
+### When to use planning workspaces
+
+Before implementing any multi-file architectural change, create a planning workspace and declare intended symbols. After writing the code, run `verify_plan` to confirm compliance. This gives the user a formal audit trail: intended design versus actual implementation.
+
+### Interpreting surprise scores and bridge nodes
+
+When reviewing `architecture_summary` or generated questions, pay attention to:
+- **High surprise-score edges**: these cross unexpected boundaries (community, directory, file type) and may indicate architectural erosion, leaky abstractions, or out-of-layer dependencies.
+- **Bridge nodes (high betweenness centrality)**: files that are the sole conduit between two otherwise isolated communities. Changes to these nodes carry disproportionately high risk; inspect them before modifying.
+
+Use this when the user asks about trust quality, change safety, or
 verification — especially in CI or review contexts. For CI integration,
 `gm check` enforces trust quality gates from the CLI (see AI_SETUP.md).
 

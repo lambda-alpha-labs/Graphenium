@@ -40,6 +40,23 @@ MCP server needs current data
   └─ snapshot_to_disk(g, path)    ← atomic JSON write
 ```
 
+## Planning workspace integration
+
+The harness can leverage the `plan_id` field on nodes and edges to support
+design-then-verify workflows. When an AI agent declares intent to modify
+symbols, the harness should:
+
+1. Call `create_planning_workspace` to obtain a plan ID
+2. Register planned symbols with `add_planned_symbol`, which tags each
+   virtual node/edge with the `plan_id`
+3. After the agent writes code, call `verify_plan` to compare the planned
+   subgraph against the newly extracted physical graph
+4. Report `implemented_nodes`, `missing_nodes`, and `unplanned_modified_files`
+   to the agent for review
+
+This integrates the planning workspace lifecycle into the harness's file-save
+hooks, so verification can run automatically on editor save events.
+
 ## Serving the graph
 
 Once the graph is built and snapshotted to disk, any MCP client can

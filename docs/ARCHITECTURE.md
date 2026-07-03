@@ -7,10 +7,10 @@ This document describes Graphenium's architecture at the three-tier model, graph
 Graphenium models a repository as three layers:
 
 **Tier 1: AST + Resolver — Terrain (Stable)**
-The bottom layer is the physical code structure. Tree-sitter parses each file into an AST. Language extractors pull out symbols (functions, classes, methods, structs, traits, imports). The import resolver links `use`/`import`/`require` statements to their target files. This layer produces the base graph with nodes and edges.
+The bottom layer is the physical code structure. Tree-sitter parses each file into an AST. Language extractors pull out symbols (functions, classes, methods, structs, traits, imports). The import resolver links `use`/`import`/`require` statements to their target files. C# assembly boundaries (`.sln`/`.csproj`) are mapped as top-level structure. Language-family classification (`lang_family` in `resolver.rs`) restricts cross-file resolution scope per-language to prevent false-positive cross-language bindings. This layer produces the base graph with nodes and edges.
 
 **Tier 2: Semantic Pass — Road Network (Stable)**
-The middle layer adds LLM-extracted relationships. An optional semantic pass using Claude/etc. identifies behavioural relationships the AST cannot capture: conceptual dependencies, delegation patterns, and architectural intent. These edges carry `extractor: "llm"` and confidence from the model's assessment.
+The middle layer adds LLM-extracted relationships. An optional semantic pass using Claude/etc. identifies behavioural relationships the AST cannot capture: conceptual dependencies, delegation patterns, and architectural intent. This tier also includes academic paper detection (`looks_like_paper`) which upgrades standard Markdown/text files to `FileType::Paper` research nodes when scholarly markers are detected. These edges carry `extractor: "llm"` and confidence from the model's assessment.
 
 **Tier 3: Telemetry Overlay — Live Traffic (Experimental)**
 The top layer imports OpenTelemetry trace JSON to create a `RuntimeOverlay` with per-node call counts and latency percentiles (P50/P95/P99). This enables runtime-weighted traversal and hot-path queries. This layer is experimental and requires explicit trace data.
@@ -84,6 +84,37 @@ This lets agents distinguish source-backed facts (`EXTRACTED` + `resolved`) from
 | Structural | Graph-distance from keyword seeds | Finding topologically related code |
 | Hybrid | Weighted (0.6 lexical + 0.4 structural) | General-purpose discovery |
 | Datalog | First-order logic fixpoint | Declarative reachability and constraint queries |
+
+## C# Assembly Boundary Parsing
+
+For .NET projects, Graphenium ingests Visual Studio solution (`.sln`) and project (`.csproj`) files via `CSharpWorkspace` (`src/extract/csharp_project.rs`). Instead of treating directories as flat folders, it maps assembly names, root namespaces, and project references into first-class graph elements using `csproj_...` nodes and `depends_on` edges. These assembly boundaries are injected before file-level extraction, establishing high-level build-configuration boundaries that the file resolver respects. This is critical for enterprise C# applications where directory layout and compiled boundaries diverge.
+
+## Academic Paper Classification
+
+The classification engine (`src/detect/paper.rs`) contains a `looks_like_paper` heuristic that scans the first 3,000 bytes of plain-text and Markdown files for academic signal markers: arXiv IDs, DOIs, LaTeX citation commands, proceedings references, and abstract/begin markers. Files meeting the threshold are classified as `FileType::Paper` nodes and linked into the graph alongside implementation code. This bridges the gap between scientific documentation and source code, allowing agents to map theoretical specifications directly to their implementations.
+
+## Planning Workspace Schema
+
+Nodes and edges carry an optional `plan_id` field that isolates virtual (planned) symbols from the physical graph. When an agent creates a planning workspace, declared symbols are tagged with the plan's identifier. The `verify_plan` engine (`src/analyze/verifier.rs`) compares the planned virtual subgraph against the extracted physical graph and reports:
+
+- `implemented_nodes`: planned symbols that have been realized in code
+- `missing_nodes`: planned symbols still awaiting implementation
+- `unplanned_modified_files`: modified source files not declared in the initial plan
+
+This creates a formal design-then-verify loop where agents declare intent, write code, and programmatically verify compliance.
+
+## Betweenness Centrality and Anomaly Detection
+
+Beyond standard metrics like PageRank and degree centrality, Graphenium implements Brandes' O(V·E) algorithm for betweenness centrality (`src/analyze/questions.rs`), safely capped at the first 5,000 nodes. While PageRank identifies popular or heavily utilized files, betweenness centrality locates structural bridge nodes: files that act as the sole conduit between otherwise isolated communities. The engine auto-generates suggested questions prompting agents to review these architectural chokepoints.
+
+The `surprising_connections` algorithm (`src/analyze/surprise.rs`) computes a multi-variable heuristic surprise score for graph edges, aggregating signals from:
+- Confidence bonuses: high scores for AMBIGUOUS or INFERRED edges that are statistically unexpected
+- Cross-FileType coupling: source files connected to non-code files (e.g., research papers)
+- Cross-community boundaries: links bridging distant Louvain-detected communities
+- Cross-repository / cross-directory lines: connections across top-level folder silos
+- Peripheral-to-hub transitions: low-degree nodes directly coupled to giant god nodes
+
+This provides ML-free architectural anomaly detection, helping agents locate code smells, out-of-boundary imports, and leaky abstractions without custom rules.
 
 ## Current Limitations
 

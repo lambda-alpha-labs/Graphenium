@@ -126,7 +126,43 @@ Gate: failed max ambiguous threshold by 2 edges
 
 ---
 
-## Workflow 5: CI trust gate
+## Workflow 5: Design, Plan, and Verify (The Sandbox Loop)
+
+Use this when an agent is about to implement a multi-file architectural change.
+
+Agent prompt:
+
+```text
+Use Graphenium to create a planning workspace for the proposed change.
+Declare the intended symbols and relationships before writing any code.
+After implementation, verify compliance with verify_plan and report
+implemented, missing, and unplanned symbols.
+```
+
+Recommended tool sequence:
+
+1. `create_planning_workspace` — create a virtual workspace for the change
+2. `graph_info` + `get_neighbors` — understand current architecture
+3. `add_planned_symbol` for each new or modified symbol
+4. Implement the code
+5. `verify_plan` — audit compliance of written code against the planned design
+6. `blast_radius` — downstream impact of the completed change
+7. `agent_change_gate` — trust quality gates before requesting review
+
+Expected output:
+
+```text
+Plan: refactor-auth-service
+Implemented nodes: new_auth_service, token_provider_adapter (2/3)
+Missing nodes: session_manager (not yet implemented)
+Unplanned modified files: src/middleware/unrelated.rs (1 unexpected change)
+Compliance: 2/3 planned symbols implemented. 1 unplanned file touched.
+Review priority: verify session_manager is intentionally deferred.
+```
+
+---
+
+## Workflow 6: CI trust gate
 
 Use this when a repository wants agent changes to meet a minimum graph-quality bar.
 
@@ -146,7 +182,7 @@ Good CI policy starts permissive and tightens over time. A team should not fail 
 
 ---
 
-## Workflow 6: Manual graph correction
+## Workflow 7: Manual graph correction
 
 Use this when source extraction cannot capture a relationship that is still important for agents.
 

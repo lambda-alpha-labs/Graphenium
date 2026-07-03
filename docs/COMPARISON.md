@@ -109,6 +109,9 @@ compiler-backed index for languages with complex build systems.
 | **Community detection (Louvain)** | Graph is clustered into architectural communities | Agent sees the high-level shape of the codebase in one query |
 | **CI trust gating** | `gm check` enforces min-resolution and max-ambiguous thresholds | PRs can be blocked when the graph is too unreliable to plan changes |
 | **Token-optimized for LLM context** | Token-budgeted traversal, leaf-symbol omission, compact output format | Agents spend less context on navigation and more on reasoning |
+| **Design-then-verify planning workspaces** | Agents declare intended symbols virtually before writing code; `verify_plan` audits compliance | Formal verification loop: intent, implementation, audit. Reduces review time for multi-file changes |
+| **Topological anomaly detection** | Multi-variable surprise scoring without ML: cross-boundary edges, peripheral-to-hub jumps, cross-community links | Agents locate architectural erosion and leaky abstractions without writing custom rules |
+| **Multi-language guardrails** | Language-family classification prevents cross-language false positives in mixed-stack monorepos | Enterprise-safe resolution in repos spanning C#, C++, Python, and JS/TS simultaneously |
 
 ---
 

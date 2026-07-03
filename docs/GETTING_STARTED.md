@@ -55,6 +55,18 @@ gm query "architecture summary" --budget 2000
 gm check --min-resolution 80 --max-ambiguous 10
 ```
 
+### Design-then-verify compliance check
+
+```sh
+# Create a planning workspace, declare intended symbols, implement, then verify:
+gm plan create --name "my-change"
+gm plan add-symbol --plan "my-change" --symbol "new_utils" --kind module
+# ... write the code ...
+gm verify-plan --plan "my-change"
+```
+
+This workflow lets AI agents formally verify that their implemented code matches the planned design before requesting review.
+
 ### Incremental development
 
 ```sh

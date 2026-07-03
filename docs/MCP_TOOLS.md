@@ -104,6 +104,26 @@ Graphenium exposes **22 MCP tools** across 5 categories: Read, Composite, Trust,
 
 ---
 
+## Planning Workspace Tools
+
+### `create_planning_workspace`
+- **Returns**: Confirmation with the plan ID for the new virtual workspace
+- **Use when**: Starting a multi-step architectural change that should be verified for compliance before merging
+- **Parameters**: `name` (required) — human-readable plan name
+
+### `add_planned_symbol`
+- **Returns**: Confirmation with the registered planned node/edge in the virtual workspace
+- **Use when**: Declaring an intended new symbol or relationship before writing implementation code
+- **Parameters**: `plan_id` (required), `symbol` (required), `kind` (function, class, module, etc.), `references?` (existing nodes to link to)
+
+### `get_plan_details`
+- **Returns**: Full virtual subgraph of the plan: all planned nodes, edges, and implementation status
+- **Use when**: Reviewing what was declared in a planning workspace before or after implementation
+
+### `verify_plan`
+- **Returns**: Compliance report with `implemented_nodes`, `missing_nodes`, and `unplanned_modified_files`
+- **Use when**: After implementing code, verifying that the written code matches the planned design
+
 ## Write Tools (4)
 
 ### `add_node(id, label, file_type, source_file, ...)`

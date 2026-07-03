@@ -256,6 +256,26 @@ Report a summary:
 - Run `gm run . --api-key sk-ant-...` to add LLM-inferred edges
 - Run `gm watch .` in a terminal for automatic rebuilds on file changes
 
+## Planning Workspace & Compliance Verification (v0.14.0+)
+
+Graphenium supports a design-then-verify workflow for AI agents via the planning workspace:
+
+```sh
+# Create a virtual planning workspace
+gm plan create --name "refactor-auth"
+
+# Register planned symbols before writing code
+gm plan add-symbol --plan "refactor-auth" --symbol "new_auth_service" --kind function
+
+# Verify compliance after implementation: did the code match the plan?
+gm run . && gm verify-plan --plan "refactor-auth"
+```
+
+This lets AI agents declare intent, write the code, and mathematically verify
+compliance before requesting human review. The MCP tools `create_planning_workspace`,
+`add_planned_symbol`, and `verify_plan` provide the same workflow through the
+MCP protocol.
+
 ## Datalog Declarative Queries (v0.16.0)
 
 The Datalog engine in `src/analyze/query.rs` enables declarative first-order logic queries.

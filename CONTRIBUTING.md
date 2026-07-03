@@ -42,9 +42,11 @@ Key modules and their primary types:
 - `src/trust.rs` — EvidenceSpan, Claim, ResolutionReport
 - `src/harness.rs` — TrustCheckResult, check_resolution_quality
 - `src/policy.rs` — Policy enum, evaluate_policies
-- `src/analyze/verifier.rs` — VerificationPlan, plan_verification
+- `src/analyze/verifier.rs` — VerificationPlan, plan_verification, verify_plan compliance auditing
+- `src/analyze/surprise.rs` — SurpriseScore, multi-variable anomaly detection for architectural boundaries
 - `src/cluster/drift.rs` — DriftEvent, detect_drift
 - `src/extract/ci.rs` — CI config parsing, CiTarget
+- `src/extract/csharp_project.rs` — CSharpWorkspace, `.sln` and `.csproj` assembly boundary parsing
 - `src/resolver.rs` — Cross-file reference resolution (Stack Graphs), `CrossFileReference`
 - `src/telemetry.rs` — OpenTelemetry trace import, `RuntimeOverlay`, hot-path analysis
 - `src/cache/query.rs` — Salsa-based incremental computation engine
