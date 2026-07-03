@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 
 use tree_sitter::{Node, Parser, Tree};
 
-use crate::model::{make_id, Edge, ExtractionResult, FileType, Node as GNode};
+use crate::model::{make_id, Confidence, Edge, ExtractionResult, FileType, Node as GNode};
 
 use super::config::LanguageConfig;
 
@@ -304,7 +304,13 @@ fn callgraph_walk<'tree>(
                 }
             } else if seen.insert((owner_id.to_string(), callee_label.clone())) {
                 // Phase 1A: Emit unresolved cross-file call-site
-                let mut edge = Edge::new(owner_id.to_string(), callee_label.clone(), "calls", Confidence::Ambiguous, state.file_path);
+                let mut edge = Edge::new(
+                    owner_id.to_string(),
+                    callee_label.clone(),
+                    "calls",
+                    Confidence::Ambiguous,
+                    state.file_path,
+                );
                 edge.extractor = Some("tree-sitter".to_string());
                 edge.resolution_status = Some("unresolved".to_string());
                 out.push(edge);
