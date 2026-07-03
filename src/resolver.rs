@@ -168,6 +168,9 @@ pub fn resolve_cross_file_calls(
         None => build_symbol_index(results),
     };
 
+    // Phase 1D: Build file-scoped index for scope-narrowed resolution
+    let file_index = build_file_index(results);
+
     let mut resolved_count = 0usize;
 
     for result in results.iter_mut() {
@@ -192,10 +195,23 @@ pub fn resolve_cross_file_calls(
                 continue;
             }
 
-            // Look up the edge target in the global symbol index
-            let candidates = symbol_index.get(&edge.target);
-            if let Some(_entries) = candidates {
-                // Found at least one matching export
+            // Phase 1D: Use scope-narrowed resolution (prefer matches in same-file imports)
+            let caller_file = result
+                .nodes
+                .iter()
+                .find(|n| n.id == edge.source)
+                .map(|n| n.source_file.as_str());
+            let scope_match =
+                caller_file.and_then(|cf| resolve_cross_file_symbol(&edge.target, cf, &file_index));
+
+            if let Some((node_id, _file_id)) = scope_match {
+                // Found via scope-narrowed lookup — use the resolved node as target
+                edge.target = node_id.clone();
+                edge.extractor = Some("tree-sitter-stack-graphs".to_string());
+                edge.resolution_status = Some("resolved".to_string());
+                resolved_count += 1;
+            } else if let Some(_entries) = symbol_index.get(&edge.target) {
+                // Fallback: found in global index
                 edge.extractor = Some("tree-sitter-stack-graphs".to_string());
                 edge.resolution_status = Some("resolved".to_string());
                 resolved_count += 1;
