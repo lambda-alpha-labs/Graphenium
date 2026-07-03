@@ -1,8 +1,6 @@
-# Graphenium — Trust-aware codebase memory for AI coding agents
+# Graphenium (gm) — The active coordination & verification loop for autonomous AI coding agents
 
-Turn your repository into a persistent, queryable architecture graph so AI assistants stop grepping and start querying.
-
-Most code tools help humans search files. Graphenium gives AI agents a compact, trust-aware map of the repository — with confidence and provenance on every relationship.
+Most code tools help AI agents search files. Graphenium is the only tool that helps agents *plan, write, and verify* structural changes. It provides a stateful coordination whiteboard, real-time reactive indexing, and a mathematical verification loop — so coding agents stop guessing and start engineering.
 
 Binary: `gm` | Schema: `0.2.0` | Status: `AST + Resolver [Stable]`, `Semantic Pass [Stable]`, `Telemetry Overlay [Experimental]`
 
@@ -67,24 +65,29 @@ Add to `~/.codewhale/mcp.json`:
 }
 ```
 
-## Core Features
+## Core Features (Agent Lifecycle)
 
-- **Cross-file call resolution** — resolves calls, uses, and references across file boundaries using tree-sitter and scope-aware symbol indexing. All resolved edges carry `extractor = "tree-sitter-stack-graphs"` provenance. Includes language-family guardrails to prevent cross-language false positives in multi-language monorepos.
-- **Declarative Datalog queries** — `gm query --datalog "<program>"` runs first-order logic queries against the graph with support for rules, goals, facts, and negation.
-- **Hybrid retrieval** — lexical (TF-cosine), structural (graph-distance), and combined modes via `--mode` flag.
-- **Runtime telemetry overlay** — import OpenTelemetry trace JSON to create a RuntimeOverlay with per-node call counts and latency percentiles (P50/P95/P99). Enables hot-path and runtime-weighted traversal.
-- **Demand-driven incremental computation** — Salsa-powered memoized extraction caches AST results by content hash, near-instant rebuilds on unchanged files.
-- **Provenance on every edge** — every relationship carries `extractor` and `resolution_status` so agents know how much to trust each connection
-- **Cross-file resolution** — resolves calls, uses, inherits, and implements across file boundaries
-- **Architectural analysis** — Louvain community detection, PageRank hubs, chokepoint analysis (Brandes' betweenness centrality), architecture drift detection
-- **Topological anomaly detection** — multi-variable surprise scoring identifies unexpected cross-boundary connections, architectural erosion, and out-of-layer dependencies without custom rules
-- **Design-then-verify planning workspaces** — agents declare intended symbols in a virtual workspace before writing code; compliance audit compares the planned design against the extracted physical graph, reporting implemented, missing, and unplanned symbols
-- **C# assembly boundary parsing** — reads `.sln` and `.csproj` files to map project references and assembly dependencies as first-class graph elements, not just flat source files
-- **Academic paper classification** — heuristic detection of research papers (arXiv, DOI, LaTeX markers) linked into the graph alongside implementation code
-- **Symbol diff + impact** — `gm diff` compares graph snapshots and computes blast radius
-- **Trust gates for CI** — `gm check` enforces resolution quality and edge confidence policies
-- **34 MCP tools** — read, composite, trust, write, diff, and planning tools for AI agents
-- **Hybrid retrieval** — lexical (TF-cosine), structural (graph-distance), and combined modes
+### Pre-Edit: Trust-Aware Pathfinding
+
+- **Provenance on every edge** — every relationship carries `extractor`, `resolution_status`, and three confidence tiers (`EXTRACTED`, `INFERRED`, `AMBIGUOUS`). Agents route traversals through high-trust, source-backed edges to prevent hallucination cascades.
+- **Cross-file call resolution** — resolves calls, uses, inherits, and implements across file boundaries using tree-sitter and scope-aware symbol indexing. Includes language-family guardrails to prevent cross-language false positives in multi-language monorepos.
+- **Architectural analysis** — Louvain community detection, PageRank hubs, chokepoint analysis (Brandes' betweenness centrality), and architecture drift detection give agents the high-level shape of the codebase in one query.
+- **Topological anomaly detection** — multi-variable surprise scoring identifies unexpected cross-boundary connections, architectural erosion, and out-of-layer dependencies without custom rules.
+- **Hybrid retrieval** — lexical (TF-cosine), structural (graph-distance), and combined modes via `--mode` flag. Datalog declarative queries for first-order logic reachability and constraint queries.
+- **Runtime telemetry overlay** — import OpenTelemetry trace JSON to create a RuntimeOverlay with per-node call counts and latency percentiles (P50/P95/P99). Hot-path and runtime-weighted traversal.
+- **C# assembly boundary parsing** — reads `.sln` and `.csproj` files to map project references and assembly dependencies as first-class graph elements, not just flat source files.
+- **Academic paper classification** — heuristic detection of research papers (arXiv, DOI, LaTeX markers) linked into the graph alongside implementation code.
+
+### In-Edit: Reactive Multi-Turn Planning
+
+- **Salsa-backed incremental indexing** — demand-driven memoized extraction via Salsa. When an agent edits a file, only the changed file and its downstream importers are re-parsed, updating the graph in milliseconds. Designed for active writers, not passive readers.
+- **Design-then-verify planning workspaces** — agents register intended symbols in a virtual workspace before writing code. The compliance audit compares the planned design against the extracted physical graph, reporting implemented, missing, and unplanned symbols. Transitions agents from chaotic file modification to a structured engineering loop.
+
+### Post-Edit: Automated Compliance & Gating
+
+- **Symbol diff + impact** — `gm diff` compares graph snapshots and computes blast radius (downstream impact) for changed symbols.
+- **Trust gates for CI** — `gm check` enforces resolution quality and edge confidence policies. Block PRs when the graph is too unreliable to plan changes, or when agent-generated code violates architectural boundaries.
+- **34 MCP tools** — read, composite, trust, write, diff, and planning tools across the full agent lifecycle.
 
 ## Documentation
 

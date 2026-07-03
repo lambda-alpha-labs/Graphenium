@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes Graphenium's architecture at the three-tier model, graph model, extraction pipeline, trust model, and module level.
+Graphenium is an active coordination and verification engine, not a passive search index. This document describes the three-tier model, graph schema, extraction pipeline, trust model, and module map that power the agent lifecycle: pre-edit pathfinding, in-edit planning, and post-edit compliance verification.
 
 ## Three-Tier Repository Model
 

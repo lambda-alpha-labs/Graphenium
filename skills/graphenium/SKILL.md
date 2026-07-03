@@ -5,9 +5,11 @@ description: Use when navigating a Graphenium knowledge graph: querying code str
 
 # Graphenium Skill
 
-Graphenium is a knowledge graph engine for the current codebase. It runs
-`gm run` to extract structure (AST + optional LLM), then serves the result
-via MCP tools or the `gm query` CLI. This skill tells you which tool to
+Graphenium is an active coordination and verification engine for the current
+codebase. It runs `gm run` to build a trust-aware graph, then serves it via
+MCP tools or the `gm query` CLI. Unlike passive search tools, Graphenium
+closes the full agent lifecycle: pre-edit pathfinding, in-edit planning,
+and post-edit compliance verification. This skill tells you which tool to
 reach for and how to interpret the output.
 
 ## Session start: verify the loaded graph

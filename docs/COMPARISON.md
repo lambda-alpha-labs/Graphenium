@@ -2,9 +2,10 @@
 
 > **Question:** When should a team choose Graphenium over existing code-analysis tools?
 >
-> **Short answer:** When the primary consumer is an AI coding agent that needs to navigate,
-> plan, and verify changes in a large repository — and when trust metadata per
-> relationship matters more than raw search speed or parse depth.
+> **Short answer:** When the primary consumer is an AI coding agent that needs more
+> than search — it needs to plan structural changes, verify compliance, and route
+> through trusted relationships in a large repository. Graphenium is the only tool
+> that closes the plan-write-verify loop for autonomous agents.
 
 ---
 
@@ -136,6 +137,6 @@ compiler-backed index for languages with complex build systems.
 
 ## Positioning one-liner
 
-> Graphenium is the trust-aware repository-graph layer that makes AI coding agents
-> effective in large, multi-language codebases — without replacing grep, tree-sitter,
-> Sourcegraph, or your coding agent of choice.
+> Graphenium is the active coordination and verification loop that makes AI coding
+> agents effective in large, multi-language codebases — the only tool that helps agents
+> plan, write, and verify structural changes, not just search for them.
