@@ -1,17 +1,38 @@
 # Worked Examples
 
-Real Graphenium analyses on open-source repositories.
-Each example includes the graph, sample queries, and a report
-on what Graphenium got right and what it missed.
+Worked examples show real Graphenium analyses on real repositories.
 
-## Adding your own
+Each example should include:
 
-Copy `TEMPLATE.md`, fill it in, and open a PR. Worked examples
-are one of the most valuable contributions: they show real use
-and help others understand what to expect.
+- the graph
+- sample queries
+- what Graphenium got right
+- what Graphenium missed
+- how the output changed the agent's plan
+- whether the graph was useful enough to repeat the workflow
 
-## Examples
+## Why examples matter
 
-- [Graphenium (self-analysis)](graphenium-self-analysis/): 868 nodes,
-  1,766 edges, 19 communities. AST-only analysis of Graphenium's own
-  Rust codebase.
+Graphenium is a trust layer. Trust grows when users see realistic successes and realistic limitations.
+
+A strong worked example is honest. It should show where the graph helped, where it needed source inspection, and where extraction missed dynamic or framework-specific behavior.
+
+## Adding an example
+
+1. Copy `TEMPLATE.md`.
+2. Fill in repository metadata.
+3. Run Graphenium.
+4. Add graph statistics.
+5. Include two or three useful queries.
+6. Explain what the graph changed about the agent workflow.
+7. Open a pull request.
+
+## Example ideas
+
+- Graphenium self-analysis
+- C# enterprise solution
+- Python web API
+- Rust CLI
+- TypeScript frontend
+- Mixed-language monorepo
+- Research implementation with papers

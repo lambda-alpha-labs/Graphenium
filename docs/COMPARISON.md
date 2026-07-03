@@ -1,156 +1,165 @@
-# Graphenium: Competitive Comparison
+# Competitive Comparison
 
-> **Question:** When should a team choose Graphenium over existing code-analysis tools?
->
-> **Short answer:** When the primary consumer is an AI coding agent that needs more
-> than search: it needs to plan structural changes, verify compliance, and route
-> through trusted relationships in a large repository. Graphenium is the only tool
-> that closes the plan-write-verify loop for autonomous agents.
+Graphenium is best understood by what it is optimized for:
 
----
+> AI coding agents that need to plan, modify, verify, and gate structural changes in real repositories.
 
-## In detail
+It is not just search. It is not a replacement for tests. It is not a compiler-perfect index. It is a trust-aware architecture map for agentic code changes.
 
-### Grep / ripgrep
+## Quick comparison
 
-**What they are:** The fastest way to find literal text or regex patterns across files.
-
-**Where they fall short for agents:** Zero understanding of what a match means: no
-knowledge that `authenticate()` in file A calls `validate_token()` in file B, no concept
-of dependency direction, no persistent memory between queries. Every session starts
-from scratch. An agent using grep alone must chain ad-hoc searches and infer structure
-manually.
-
-**Graphenium's advantage:** The graph answers "what depends on X?" and "what calls X?"
-in one query, with source-backed evidence for every relationship. Grep is still useful
-inside Graphenium's keyword-search layer; the two are complementary.
-
-**Limitation:** Graphenium does not replace grep for ad-hoc text search: it is not a
-dedicated search engine, and its keyword matching (TF-cosine) is less precise than
-ripgrep for raw string lookup.
-
-### tree-sitter / ast-grep
-
-**What they are:** Tools that parse source code into syntax trees and match patterns
-against those trees.
-
-**Where they fall short for agents:** They understand structure within a single file
-but have no concept of cross-file relationships, import resolution, or dependency
-direction. They output matches as text spans, not as a persistent graph. There is
-no trust model, no diff analysis, and no MCP server.
-
-**Graphenium's advantage:** Graphenium uses tree-sitter for initial AST extraction,
-then builds a cross-file graph on top with import resolution, community detection,
-and trust metadata. The graph persists across sessions and serves through MCP.
-
-**Limitation:** Graphenium's AST extraction is less configurable than a standalone
-tree-sitter query for one-off pattern matching. If you need to write ad-hoc AST
-patterns, ast-grep is more direct.
-
-### Sourcegraph
-
-**What they are:** Web-based code search with cross-repository navigation, commit
-history, and code intelligence.
-
-**Where they fall short for agents:** Sourcegraph is designed for humans browsing
-code in a web browser. It has limited MCP support (experimental), no trust model
-on individual relationships, no token-budgeted output, and no CI trust gating.
-Every query requires a network round-trip to a server; there is no local
-persistent graph for the agent to query offline.
-
-**Graphenium's advantage:** Fully local, MCP-native, with trust metadata on every
-edge. The graph persists on disk and loads in milliseconds. No network dependencies.
-
-**Limitation:** Sourcegraph can index entire organizations across thousands of repos.
-Graphenium works within a single repository at a time. For org-wide search,
-Sourcegraph complements Graphenium.
-
-### Claude Code / Cursor / CodeWhale
-
-**What they are:** AI coding agents and IDEs that edit code and run commands.
-
-**Where they fall short for agents:** They do not build persistent code graphs.
-Every session starts with a cold repository navigation problem. Without Graphenium,
-these tools grep their way to understanding.
-
-**Graphenium's advantage:** Graphenium provides the structural memory these agents
-lack: a pre-built, trusted graph they can query via MCP before touching files.
-
-**Limitation:** Graphenium does not replace the coding agent. It makes the agent
-more effective by providing structural memory.
-
-### Symbol indexers (ctags, SCIP, Kythe)
-
-**What they are:** Tools that extract flat lists or indices of symbols: definitions,
-references, types.
-
-**Where they fall short for agents:** Flat indexes answer "where is X defined?" but
-not "what depends on X?" or "what is the path between X and Y?" They have no edge
-confidence, no community structure, no blast-radius analysis, and no token-aware
-traversal.
-
-**Graphenium's advantage:** The graph model is relational, not flat. Edges carry
-provenance and confidence. The resolver resolves cross-file imports into directed
-dependency edges. Community detection (Louvain) groups symbols into architectural
-clusters.
-
-**Limitation:** Graphenium's extraction is less precise than Kythe's
-compiler-backed index for languages with complex build systems.
-
----
-
-## Core Differentiators
-
-| Differentiator | What it means | Why it matters for agents |
+| Tool type | Best at | Where Graphenium is different |
 |---|---|---|
-| **Provenance/confidence per edge** | Every relationship is labeled EXTRACTED, INFERRED, or AMBIGUOUS with the source method | Agent knows which facts are safe to plan against vs. which need verification |
-| **MCP-native** | Graph is served through MCP tools (`gm serve`), not a web UI or REST API | Agent uses the same protocol for graph queries as for file reads and edits |
-| **Diff + impact analysis** | Symbol-level diff between graph snapshots with blast-radius computation | Reviewers get a risk-sorted delta instead of hunting through changed files |
-| **Cross-file import resolver** | Import resolution directed edges across file boundaries | Agent gets verified edges, not guessed strings |
-| **Community detection (Louvain)** | Graph is clustered into architectural communities | Agent sees the high-level shape of the codebase in one query |
-| **CI trust gating** | `gm check` enforces min-resolution and max-ambiguous thresholds | PRs can be blocked when the graph is too unreliable to plan changes |
-| **Token-optimized for LLM context** | Token-budgeted traversal, leaf-symbol omission, compact output format | Agents spend less context on navigation and more on reasoning |
-| **Design-then-verify planning workspaces** | Agents declare intended symbols virtually before writing code; planning tools + `verification_plan` audit compliance | Formal verification loop: intent, implementation, audit. Reduces review time for multi-file changes |
-| **Topological anomaly detection** | Multi-variable surprise scoring without ML: cross-boundary edges, peripheral-to-hub jumps, cross-community links | Agents locate architectural erosion and leaky abstractions without writing custom rules |
-| **Multi-language guardrails** | Language-family classification prevents cross-language false positives in mixed-stack monorepos | Enterprise-safe resolution in repos spanning C#, C++, Python, and JS/TS simultaneously |
+| grep and ripgrep | exact text search | Graphenium understands relationships and dependency direction |
+| tree-sitter and ast-grep | syntax-aware matching | Graphenium persists a cross-file graph with trust metadata |
+| Sourcegraph | human code search and navigation | Graphenium is local-first and MCP-native for agents |
+| Claude, Cursor, CodeWhale | writing and editing code | Graphenium gives these agents structural memory and verification workflows |
+| ctags, SCIP, Kythe | symbol indexing and compiler-backed references | Graphenium adds confidence, community structure, blast radius, and agent workflows |
+| generic RAG | semantic text retrieval | Graphenium models code as relationships, not just chunks |
 
----
+## Grep and ripgrep
 
-## Competitive landscape
+Grep is excellent for literal and regex search.
 
-Graphenium is optimized for active writing, trust boundaries, and agent verification loops. The following matrix compares Graphenium against alternative tools in the agent tooling space:
+Where it falls short for agents:
 
-| Feature | **Graphenium** | **CodeGraph** | **Aider repo-map** | **SCIP/Kythe** |
-| :--- | :--- | :--- | :--- | :--- |
-| **Primary Focus** | Active agent verification | Fast local search | Inline editing context | Compiler-grade indexing |
-| **Trust Model** | Explicit (EXTRACTED/INFERRED/AMBIGUOUS) | None (implicit) | None | Implicit |
-| **Query Engine** | Built-in Datalog + hybrid retrieval | SQL | Regex / string search | None (raw index) |
-| **Rebuild Architecture** | Sub-second Salsa incremental (like rust-analyzer) | Full / standard incremental | Instant (file-tree only) | Full compiler rebuild |
-| **Planning Workspaces** | Yes (design-then-verify) | No | No | No |
-| **Telemetry Integration** | Yes (OTEL trace overlays, P50/P95/P99) | No | No | No |
-| **Language-Family Guardrails** | Yes (prevents cross-language false positives) | No | No | No |
+- no dependency direction
+- no persistent structural memory
+- no trust model
+- no blast radius
+- no verification plan
+
+Graphenium advantage:
+
+- answers relationship questions such as what calls X and what depends on X
+- carries provenance on edges
+- gives an agent a compact path through the codebase
+
+Use both together. Grep is still the fastest exact-text tool.
+
+## tree-sitter and ast-grep
+
+AST tools understand syntax within files and can run powerful structural searches.
+
+Where they fall short for agents:
+
+- usually not a persistent cross-file graph
+- no agent workflow layer
+- no MCP-native graph operations
+- no confidence model
+- no post-edit verification loop
+
+Graphenium advantage:
+
+- uses tree-sitter as a foundation
+- adds cross-file resolution, communities, trust metadata, impact analysis, and MCP tools
+
+## Sourcegraph
+
+Sourcegraph is strong for human code search across large organizations.
+
+Where it falls short for this specific lane:
+
+- primarily optimized for human browsing
+- network/server orientation
+- no per-edge trust model designed for agent action
+- no design-then-verify planning workspace
+- no local-first architecture graph for an agent to query offline
+
+Graphenium advantage:
+
+- local-first
+- MCP-native
+- trust-aware
+- workflow-oriented for agents
+
+Sourcegraph can complement Graphenium for organization-wide search.
+
+## AI coding tools
+
+Claude, Cursor, CodeWhale, and similar tools are agents or agentic IDEs.
+
+Where they fall short without Graphenium:
+
+- repeated cold-start repo exploration
+- grep-driven navigation
+- hidden assumptions about dependencies
+- no standalone architecture trust layer
+- no graph-quality gate before review
+
+Graphenium advantage:
+
+- gives agents a shared structural memory
+- teaches agents what to trust
+- supports blast-radius checks and verification plans
+
+Graphenium does not replace the coding agent. It makes the coding agent safer and more effective.
+
+## Symbol indexers
+
+ctags, SCIP, and Kythe are valuable for definitions, references, and compiler-backed indexing.
+
+Where they fall short for agent workflows:
+
+- flat or compiler-centric indexes are not enough for change planning
+- confidence and provenance are often implicit
+- limited planning and verification workflows
+- no token-budgeted traversal designed for LLMs
+
+Graphenium advantage:
+
+- relational graph model
+- explicit confidence tiers
+- communities, hubs, chokepoints, and blast radius
+- CI gates and planning workspaces
+
+Kythe and compiler-backed systems may be more precise for certain language reference graphs. Graphenium optimizes for practical multi-language agent workflows.
+
+## Feature matrix
+
+| Capability | Graphenium | grep | ast-grep | Sourcegraph | coding agents | symbol indexers |
+|---|---|---|---|---|---|---|
+| Local architecture graph | Yes | No | No | Server-oriented | No | Partial |
+| MCP-native agent interface | Yes | No | No | Limited or external | Varies | No |
+| Per-edge confidence | Yes | No | No | No | No | Usually no |
+| Provenance on relationships | Yes | No | No | Partial | No | Partial |
+| Cross-file resolution | Yes | No | Limited | Yes | Varies | Yes |
+| Blast radius | Yes | No | No | Limited | Varies | No |
+| Planning workspace | Yes | No | No | No | No | No |
+| CI trust gates | Yes | No | No | No | No | No |
+| Token-budgeted output | Yes | No | No | No | Varies | No |
+| Runtime telemetry overlay | Experimental | No | No | No | No | No |
+| Multi-language repository map | Yes | No | Limited | Yes | Varies | Varies |
 
 ## When to use Graphenium
 
-- AI agents repeatedly work in the same large repository
-- Navigation tokens are crowding out reasoning and implementation
-- Reviewers want dependency paths and blast-radius summaries for agent patches
-- The team wants confidence and provenance surfaced to the agent
-- CI should enforce graph-quality thresholds before agent changes are accepted
-- The repo spans multiple languages and needs a unified map
+Use Graphenium when:
 
-## When NOT to use Graphenium
+- AI agents repeatedly work in the same repository
+- the repository is too large to read directly
+- navigation tokens crowd out reasoning
+- reviewers need blast radius and dependency paths
+- agents need to distinguish facts from guesses
+- CI should enforce graph trust thresholds
+- the codebase spans multiple languages
+- agent-generated changes need governance
 
-- The repository is small enough for an agent to understand by reading directly
-- The task is pure exact-text lookup (use ripgrep)
-- A compiler-perfect call graph is mandatory (use Kythe or a language-specific indexer)
-- The codebase relies heavily on dynamic dispatch, reflection, code generation
-- The team will treat graph output as a substitute for source inspection (it is a map, not the territory)
+## When not to use Graphenium
 
----
+Do not use Graphenium as the primary tool when:
 
-## Positioning one-liner
+- the repository is small enough for direct reading
+- the task is pure exact-text lookup
+- compiler-perfect call graph precision is mandatory
+- the codebase relies heavily on reflection or dynamic dispatch without traces
+- the team plans to treat graph output as a substitute for source reading
 
-> Graphenium is the active coordination and verification loop that makes AI coding
-> agents effective in large, multi-language codebases: the only tool that helps agents
-> plan, write, and verify structural changes, not just search for them.
+## Core differentiation
+
+Graphenium is the only tool in this comparison built around this full loop:
+
+```text
+Plan -> Read -> Edit -> Diff -> Blast radius -> Verify -> Gate
+```
+
+That is the lane to own.

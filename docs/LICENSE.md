@@ -1,3 +1,5 @@
+# License
+
 MIT License
 
 Copyright (c) 2026 lambda-alpha-labs

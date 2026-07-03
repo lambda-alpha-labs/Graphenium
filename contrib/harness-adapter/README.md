@@ -1,116 +1,71 @@
 # Graphenium Harness Adapter
 
-Reference integration showing how to embed the Graphenium knowledge graph
-engine inside an AI coding harness. The adapter provides lifecycle functions
-that a harness calls at specific moments: file open, edge discovery,
-periodic clustering, to build and maintain the graph ambiently during
-normal AI work.
+This adapter shows how to embed Graphenium inside an AI coding harness.
 
-## Adding the dependency
+The harness keeps the graph current as the agent works, then exposes that graph to MCP clients or internal agent workflows.
+
+## Install as a dependency
 
 ```toml
 [dependencies]
 graphenium = { git = "https://github.com/lambda-alpha-labs/Graphenium", default-features = false, features = ["harness"] }
 ```
 
-The `harness` feature excludes the MCP server and watch-mode dependencies,
-giving you a lean dependency tree. Enable specific language features
-(`lang-python`, `lang-rust`, etc.) for the languages you need, or enable
-the default feature set for all 9.
+Enable language features as needed, such as `lang-rust`, `lang-python`, or `lang-csharp`.
 
 ## Lifecycle
 
-```
+```text
 Workspace open
-  └─ initialize_graph(root)       ← full AST scan, Louvain clustering, snapshot to disk
+  -> initialize_graph(root)
+  -> snapshot_to_disk(graph)
 
-File opened / saved
-  └─ on_file_open(graph, path)    ← re-extract one file, patch graph
+File opened or saved
+  -> on_file_open(graph, path)
+  -> refresh_communities when needed
+  -> snapshot_to_disk(graph)
 
-AI discovers a relationship
-  └─ on_edge_discovered(g, ...)   ← add EXTRACTED edge (AI verified by inspection)
+AI verifies a relationship
+  -> on_edge_discovered(graph, source, target, relation, file)
 
-AI finds a wrong edge
-  └─ on_edge_invalid(g, ...)      ← remove the bad edge
+AI invalidates a relationship
+  -> on_edge_invalid(graph, source, target, relation)
 
-Periodic (every N files or on timer)
-  └─ refresh_communities(g, ...)  ← re-cluster, snapshot to disk
-
-MCP server needs current data
-  └─ snapshot_to_disk(g, path)    ← atomic JSON write
+MCP sidecar serves current graph
+  -> gm serve --graph graphenium-out/graph.json
 ```
 
-## Planning workspace integration
+## Planning integration
 
-The harness can leverage the `plan_id` field on nodes and edges to support
-design-then-verify workflows. When an AI agent declares intent to modify
-symbols, the harness should:
+Use planning workspaces for multi-file agent changes.
 
-1. Call `create_planning_workspace` to obtain a plan ID
-2. Register planned symbols with `add_planned_symbol`, which tags each
-   virtual node/edge with the `plan_id`
-3. After the agent writes code, call `verify_plan` to compare the planned
-   subgraph against the newly extracted physical graph
-4. Report `implemented_nodes`, `missing_nodes`, and `unplanned_modified_files`
-   to the agent for review
+1. Create a plan.
+2. Add planned symbols.
+3. Let the agent edit code.
+4. Rebuild or patch the graph.
+5. Verify planned symbols against extracted symbols.
+6. Report implemented, missing, and unplanned work.
 
-This integrates the planning workspace lifecycle into the harness's file-save
-hooks, so verification can run automatically on editor save events.
+## Confidence policy
 
-## Serving the graph
+Only write edges that the AI verified through source inspection.
 
-Once the graph is built and snapshotted to disk, any MCP client can
-connect to it. The simplest approach is running `gm serve` as a sidecar:
+Do not write relationships based on naming conventions alone.
 
-```sh
-gm serve --graph /path/to/graphenium-out/graph.json
-```
+| Evidence | Write? |
+|---|---|
+| Source was inspected and relationship is visible | Yes |
+| Relationship is only suspected | No |
+| Relationship comes from generated code that was excluded | Add only if verified and documented |
+| Relationship is uncertain | No |
 
-The 12 tools (9 read + 3 write) are available to any connected AI
-assistant. The `add_node`, `add_edge`, and `remove_edge` tools persist
-to disk immediately, so edges added via MCP survive across sessions.
-
-## Minimal harness integration (pseudocode)
-
-```rust
-use graphenium_harness_adapter::*;
-use std::path::Path;
-
-// On workspace open
-let (mut graph, communities) = initialize_graph(Path::new("/path/to/project"));
-snapshot_to_disk(&graph, Path::new("/path/to/project/graphenium-out/graph.json"))?;
-
-// On file open
-let stats = on_file_open(&mut graph, Path::new("src/auth/service.rs"));
-if stats.nodes_replaced > 0 {
-    // Enough changed; refresh communities and snapshot
-    let stats = refresh_communities(&mut graph, &ClusterOptions::default());
-    snapshot_to_disk(&graph, Path::new(".../graph.json"))?;
-}
-
-// AI discovered a relationship through code inspection
-on_edge_discovered(&mut graph, "auth_service", "token_provider", "delegates_to", "src/auth/service.rs");
-snapshot_to_disk(&graph, Path::new(".../graph.json"))?;
-
-// AI found a false positive
-on_edge_invalid(&mut graph, "auth_service", "unrelated_fn", Some("imports"));
-```
-
-## Confidence model (important)
-
-When the AI adds edges through the harness adapter, it uses `EXTRACTED`
-confidence; this is the same tier as tree-sitter edges. The AI confirmed
-the relationship through actual code inspection. This is fundamentally
-different from batch Claude API inference (`INFERRED`/`AMBIGUOUS` edges).
-
-The harness should **not** automatically add edges the AI hasn't verified.
-If the AI reads two files and traces a call chain, it should call
-`on_edge_discovered`. If it merely suspects a relationship based on naming
-conventions, it should not write the edge.
-
-## Testing
+## Test
 
 ```sh
 cd contrib/harness-adapter
 cargo test
 ```
+
+## Full guide
+
+See `docs/HARNESS_ADAPTER.md` for the expanded integration guide.

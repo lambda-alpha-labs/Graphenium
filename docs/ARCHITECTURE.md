@@ -1,125 +1,197 @@
 # Architecture
 
-Graphenium is an active coordination and verification engine, not a passive search index. This document describes the three-tier model, graph schema, extraction pipeline, trust model, and module map that power the agent lifecycle: pre-edit pathfinding, in-edit planning, and post-edit compliance verification.
+Graphenium is an active coordination and verification engine for AI coding agents. It is not a passive code search index.
 
-## Three-Tier Repository Model
+Its architecture exists to support the full agent lifecycle:
 
-Graphenium models a repository as three layers:
+1. Pre-edit pathfinding
+2. In-edit planning
+3. Post-edit compliance verification
+4. CI trust gating
 
-**Tier 1: AST + Resolver: Terrain (Stable)**
-The bottom layer is the physical code structure. Tree-sitter parses each file into an AST. Language extractors pull out symbols (functions, classes, methods, structs, traits, imports). The import resolver links `use`/`import`/`require` statements to their target files. C# assembly boundaries (`.sln`/`.csproj`) are mapped as top-level structure. Language-family classification (`lang_family` in `resolver.rs`) restricts cross-file resolution scope per-language to prevent false-positive cross-language bindings. This layer produces the base graph with nodes and edges.
+## Three-tier repository model
 
-**Tier 2: Semantic Pass: Road Network (Stable)**
-The middle layer adds LLM-extracted relationships. An optional semantic pass using Claude/etc. identifies behavioural relationships the AST cannot capture: conceptual dependencies, delegation patterns, and architectural intent. This tier also includes academic paper detection (`looks_like_paper`) which upgrades standard Markdown/text files to `FileType::Paper` research nodes when scholarly markers are detected. These edges carry `extractor: "llm"` and confidence from the model's assessment.
+```mermaid
+graph TD
+    T3[Telemetry overlay: live traffic, experimental] --> T2[Semantic pass: road network, stable]
+    T2 --> T1[AST plus resolver: terrain, stable]
+    T1 --> G[Provenance-aware architecture graph]
+    G --> A[Agent workflows]
+    A --> P[Plan]
+    A --> V[Verify]
+    A --> C[Gate]
+```
 
-**Tier 3: Telemetry Overlay: Live Traffic (Experimental)**
-The top layer imports OpenTelemetry trace JSON to create a `RuntimeOverlay` with per-node call counts and latency percentiles (P50/P95/P99). This enables runtime-weighted traversal and hot-path queries. This layer is experimental and requires explicit trace data.
+### Tier 1: AST plus resolver
 
-## Graph Model
+This is the physical code structure.
 
-Each graph (`schema 0.2.0`) contains:
+Graphenium uses tree-sitter to parse supported files and extract symbols such as functions, classes, methods, structs, traits, imports, calls, uses, inheritance, implementations, tests, dependencies, and build targets.
 
-- **Nodes**: files, modules, functions, classes, methods, structs, traits, tests, documents, build targets, CI jobs, dependencies
-- **Edges**: `imports`, `contains`, `calls`, `uses`, `inherits`, `implements`, `tests`, `depends_on`, `runs_in`
-- **Hyperedges**: n-ary relationships (e.g., group membership)
-- **Communities**: Louvain community detection clusters nodes into architectural groups
-- **Metadata**: schema version, build timestamp, project root, extraction mode, languages
+The resolver builds a symbol index and links imports, uses, and cross-file references where it can. C# projects receive extra structure through `.sln` and `.csproj` parsing, including assemblies, root namespaces, and project references.
 
-## Provenance and Trust Model
+This tier produces the base graph.
 
-Every edge carries:
+### Tier 2: semantic pass
 
-| Field | Values | Meaning |
-|-------|--------|---------|
-| `extractor` | `tree-sitter`, `resolver`, `llm`, `csproj-parser` | Which component created this edge |
-| `resolution_status` | `resolved`, `unresolved`, `heuristic` | Whether the edge target was found in the graph |
-| `confidence` | `EXTRACTED`, `INFERRED`, `AMBIGUOUS` | How much to trust this relationship |
+The optional semantic pass adds relationships that static extraction may miss, such as conceptual dependencies, delegation patterns, and architectural intent.
 
-This lets agents distinguish source-backed facts (`EXTRACTED` + `resolved`) from weak leads (`AMBIGUOUS` + `unresolved`).
+Semantic edges carry provenance and confidence. Agents must treat them as inferred unless the edge explicitly has source-backed provenance.
 
-## Extraction Pipeline
+### Tier 3: telemetry overlay
 
-1. **File detection**: `detect/mod.rs` walks the directory, classifies files by extension, respects `.grapheniumignore`
-2. **AST parsing**: tree-sitter parses each file; language-specific extractors pull out symbols
-3. **Import resolution**: `resolver.rs` builds a symbol index from all extracted nodes, resolves `imports`/`uses` edges
-4. **Semantic pass** (optional): LLM analyses code for behavioural relationships
-5. **Graph assembly**: `build.rs` merges all extraction results into a single graph
-6. **Clustering**: Louvain community detection partitions nodes into communities
-7. **Analysis**: degree distribution, PageRank hubs, chokepoints, architecture summary
-8. **Export**: graph exported as JSON, quality report, HTML visualization
+The experimental telemetry layer imports OpenTelemetry trace JSON to produce runtime-aware graph data, including call counts and latency percentiles.
 
-## Module Map
+This enables hot-path queries and runtime-weighted traversal.
 
-| Module | Description |
-|--------|-------------|
-| `analyze/` | Architecture analysis: diff, impact, rank, god nodes, verifier |
+## Graph model
+
+Each graph uses schema `0.2.0` and contains:
+
+| Element | Examples |
+|---|---|
+| Nodes | files, modules, functions, methods, classes, structs, traits, tests, documents, build targets, CI jobs, dependencies |
+| Edges | imports, contains, calls, uses, inherits, implements, tests, depends_on, runs_in |
+| Hyperedges | n-ary relationships such as group membership |
+| Communities | Louvain-detected architectural clusters |
+| Metadata | schema version, build timestamp, project root, extraction mode, languages |
+
+## Trust model in the graph
+
+Every edge carries trust metadata.
+
+| Field | Example values | Meaning |
+|---|---|---|
+| `extractor` | `tree-sitter`, `resolver`, `llm`, `csproj-parser` | Which component created the edge |
+| `resolution_status` | `resolved`, `unresolved`, `heuristic` | Whether the target was found in the graph |
+| `confidence` | `EXTRACTED`, `INFERRED`, `AMBIGUOUS` | How much an agent should trust the relationship |
+
+The practical rule:
+
+```text
+EXTRACTED + resolved: plan against it
+INFERRED: verify it
+AMBIGUOUS: inspect source before acting
+unresolved: treat as a gap
+```
+
+## Extraction pipeline
+
+```mermaid
+graph LR
+    A[Detect files] --> B[Parse AST]
+    B --> C[Extract symbols]
+    C --> D[Resolve imports and calls]
+    D --> E[Optional semantic pass]
+    E --> F[Assemble graph]
+    F --> G[Cluster communities]
+    G --> H[Analyze topology]
+    H --> I[Export JSON, report, visualization]
+```
+
+Detailed stages:
+
+1. File detection walks the directory, classifies files, and respects `.grapheniumignore`.
+2. AST parsing uses tree-sitter and language-specific extractors.
+3. Import and cross-file resolution build source-backed graph relationships where possible.
+4. Optional semantic extraction adds inferred behavioral relationships.
+5. Graph assembly merges all extraction results.
+6. Louvain clustering partitions nodes into architectural communities.
+7. Analysis computes degree distributions, PageRank hubs, chokepoints, drift, and anomaly signals.
+8. Export writes `graph.json`, quality reports, and optional visualization.
+
+## Module map
+
+| Module | Responsibility |
+|---|---|
+| `analyze/` | Architecture analysis, diff, impact, rank, god nodes, verifier |
 | `build.rs` | Graph assembly pipeline |
-| `cache/` | Manifest tracking, semantic caching |
-| `cluster/` | Louvain community detection, drift analysis |
-| `detect/` | File detection, classification, `.grapheniumignore` |
-| `embed.rs` | TF-based text embeddings, Node2Vec structural embeddings |
+| `cache/` | Manifest tracking and semantic caching |
+| `cache/query.rs` | Salsa-backed incremental extraction |
+| `cluster/` | Louvain community detection and drift analysis |
+| `detect/` | File detection, classification, ignore rules, sensitive-file checks |
+| `embed.rs` | TF text embeddings and structural embeddings |
 | `export/` | JSON and HTML export |
-| `extract/` | Tree-sitter AST extraction per language |
-| `harness.rs` | Trust check harness for CI |
-| `model/` | Graph, node, edge, hyperedge, extraction result types |
-| `policy.rs` | Trust quality policies |
-| `ranking.rs` | Query ranking: lexical, structural, hybrid |
-| `resolver.rs` | Cross-file import resolution, build_file_index, resolve_cross_file_symbol |
-| `cache/query.rs` | Salsa-backed demand-driven incremental extraction (same engine behind `rust-analyzer`): `salsa_extract_file`, `salsa_extract_all` |
-| `analyze/query.rs` | Datalog declarative query engine: `run_datalog_query`, `tokenize`, `solve` with semi-naive fixpoint |
+| `extract/` | Tree-sitter extraction per language |
+| `harness.rs` | Trust check harness and plan verification engine |
+| `model/` | Graph, node, edge, hyperedge, and extraction result types |
+| `policy.rs` | Trust quality policy evaluation |
+| `ranking.rs` | Lexical, structural, and hybrid query scoring |
+| `resolver.rs` | Cross-file import and reference resolution |
+| `analyze/query.rs` | Datalog query engine |
 | `semantic/` | LLM-based semantic extraction |
-| `serve/` | MCP server with 22 tools |
+| `serve/` | MCP server and tool handlers |
 | `telemetry.rs` | Runtime telemetry overlay |
-| `trust.rs` | Evidence span, claims, stale detection |
+| `trust.rs` | Evidence spans, claims, stale detection, resolution reports |
 | `watch.rs` | File watcher for incremental rebuilds |
 | `doctor.rs` | Diagnostic checks |
-| `error.rs` | Error types |
-| `main.rs` | CLI entry point with clap |
+| `main.rs` | CLI entry point |
 
-## Query Modes
+## Query modes
 
-| Mode | Algorithm | Best For |
-|------|-----------|----------|
-| Lexical | TF-cosine keyword matching | Finding nodes by name/description |
-| Structural | Graph-distance from keyword seeds | Finding topologically related code |
-| Hybrid | Weighted (0.6 lexical + 0.4 structural) | General-purpose discovery |
-| Datalog | First-order logic fixpoint | Declarative reachability and constraint queries |
+| Mode | Algorithm | Best for |
+|---|---|---|
+| Lexical | TF-cosine keyword matching | Finding nodes by name or description |
+| Structural | Graph distance from keyword seeds | Finding topologically related code |
+| Hybrid | Weighted lexical plus structural scoring | General discovery |
+| Datalog | First-order logic fixpoint | Reachability and constraint queries |
 
-## C# Assembly Boundary Parsing
+## C# assembly boundary parsing
 
-For .NET projects, Graphenium ingests Visual Studio solution (`.sln`) and project (`.csproj`) files via `CSharpWorkspace` (`src/extract/csharp_project.rs`). Instead of treating directories as flat folders, it maps assembly names, root namespaces, and project references into first-class graph elements using `csproj_...` nodes and `depends_on` edges. These assembly boundaries are injected before file-level extraction, establishing high-level build-configuration boundaries that the file resolver respects. This is critical for enterprise C# applications where directory layout and compiled boundaries diverge.
+Enterprise C# codebases often have important build boundaries that do not match directory layout. Graphenium parses `.sln` and `.csproj` files to model:
 
-## Academic Paper Classification
+- solution files
+- projects
+- assembly names
+- root namespaces
+- project references
+- build-time dependency boundaries
 
-The classification engine (`src/detect/paper.rs`) contains a `looks_like_paper` heuristic that scans the first 3,000 bytes of plain-text and Markdown files for academic signal markers: arXiv IDs, DOIs, LaTeX citation commands, proceedings references, and abstract/begin markers. Files meeting the threshold are classified as `FileType::Paper` nodes and linked into the graph alongside implementation code. This bridges the gap between scientific documentation and source code, allowing agents to map theoretical specifications directly to their implementations.
+These become first-class graph structure so agents can reason about compiled boundaries, not just file paths.
 
-## Planning Workspace Schema
+## Academic paper classification
 
-Nodes and edges carry an optional `plan_id` field that isolates virtual (planned) symbols from the physical graph. When an agent creates a planning workspace, declared symbols are tagged with the plan's identifier. The `verify_plan` engine (`src/harness.rs`) compares the planned virtual subgraph against the extracted physical graph and reports:
+Graphenium can classify Markdown and text files as research papers when they contain scholarly markers such as arXiv identifiers, DOIs, LaTeX citations, abstract markers, or proceedings indicators.
 
-- `implemented_nodes`: planned symbols that have been realized in code
-- `missing_nodes`: planned symbols still awaiting implementation
-- `unplanned_modified_files`: modified source files not declared in the initial plan
+This lets scientific documentation sit beside implementation nodes in the same graph.
 
-This creates a formal design-then-verify loop where agents declare intent, write code, and programmatically verify compliance.
+## Planning workspace schema
 
-## Betweenness Centrality and Anomaly Detection
+Nodes and edges can carry an optional `plan_id`. This separates planned virtual symbols from extracted physical code.
 
-Beyond standard metrics like PageRank and degree centrality, Graphenium implements Brandes' O(V·E) algorithm for betweenness centrality (`src/analyze/questions.rs`), safely capped at the first 5,000 nodes. While PageRank identifies popular or heavily utilized files, betweenness centrality locates structural bridge nodes: files that act as the sole conduit between otherwise isolated communities. The engine auto-generates suggested questions prompting agents to review these architectural chokepoints.
+The verification engine compares:
 
-The `surprising_connections` algorithm (`src/analyze/surprise.rs`) computes a multi-variable heuristic surprise score for graph edges, aggregating signals from:
-- Confidence bonuses: high scores for AMBIGUOUS or INFERRED edges that are statistically unexpected
-- Cross-FileType coupling: source files connected to non-code files (e.g., research papers)
-- Cross-community boundaries: links bridging distant Louvain-detected communities
-- Cross-repository / cross-directory lines: connections across top-level folder silos
-- Peripheral-to-hub transitions: low-degree nodes directly coupled to giant god nodes
+| Planned graph | Physical graph | Result |
+|---|---|---|
+| Intended symbols | Extracted symbols | Implemented nodes |
+| Intended relationships | Extracted relationships | Implemented edges |
+| Declared file scope | Modified files | Unplanned modifications |
 
-This provides ML-free architectural anomaly detection, helping agents locate code smells, out-of-boundary imports, and leaky abstractions without custom rules.
+This enables formal design-then-verify workflows for agents.
 
-## Current Limitations
+## Betweenness and anomaly detection
 
-- **Label collisions**: 22% of node labels appear ≥2x; `get_node` shows disambiguation warnings
-- **Undirected petgraph**: Relationships are directed but stored in an undirected graph; direction is preserved in edge metadata but requires manual filtering for traversals
-- **Telemetry overlay**: Experimental; requires OTEL trace JSON input
-- **No built-in diff viewer**: Diff output is textual/JSON; no side-by-side visualization
-- **No LSP integration**: Graphenium does not provide IDE completion; it provides MCP tools for agent use
+Graphenium computes more than degree counts.
+
+- PageRank finds popular or heavily referenced nodes.
+- Betweenness centrality finds bridge nodes between communities.
+- Surprise scoring finds unexpected links such as cross-community edges, source-to-document connections, peripheral-to-hub jumps, and out-of-boundary dependencies.
+
+These signals help agents find architectural erosion before editing.
+
+## Current limitations
+
+| Limitation | Impact | Mitigation |
+|---|---|---|
+| Label collisions | Same label can map to multiple nodes | Use `get_node`, file paths, and disambiguation warnings |
+| Dynamic dispatch and reflection | Some runtime relationships may be missed | Use semantic extraction, telemetry overlay, or verified manual edges |
+| Telemetry overlay experimental | Runtime data requires explicit traces | Treat runtime-weighted results as supplemental |
+| No built-in side-by-side diff viewer | Diff output is textual or JSON | Use `gm diff --json` with external viewers |
+| No LSP completion | Graphenium is not an IDE language server | Use MCP tools for agents and CLI for scripts |
+| Graph is not source | Agents still need direct file reads | Require source inspection before edits |
+
+## Architecture principle
+
+Graphenium is intentionally a map, not a replacement for code.
+
+The map lets agents choose where to look, what to trust, and how to verify. The source remains the final authority.

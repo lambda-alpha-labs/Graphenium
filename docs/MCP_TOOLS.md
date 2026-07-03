@@ -1,172 +1,357 @@
 # MCP Tools Reference
 
-Graphenium exposes **34 MCP tools** across 6 categories: Read, Composite, Trust, Write, Diff, and Planning. Each tool accepts parameters as JSON and returns formatted Markdown text.
+Graphenium exposes MCP tools so AI coding agents can query repository structure without reading every file.
 
----
+The tools are grouped into six categories:
 
-## Read Tools (11)
+1. Read tools
+2. Composite tools
+3. Trust tools
+4. Planning workspace tools
+5. Write tools
+6. Diff tools
+
+## Agent rule of thumb
+
+```text
+Start with graph_info.
+Use read tools to understand.
+Use trust tools before acting.
+Use planning tools for multi-file work.
+Use diff tools after edits.
+Use write tools only after source inspection.
+```
+
+## Read tools
 
 ### `graph_info`
-- **Returns**: Project root, schema version, build timestamp, extraction mode, languages, node/edge counts
-- **Use when**: Confirming which graph the server has loaded before acting on results
+
+Returns project root, schema version, build timestamp, extraction mode, languages, node counts, edge counts, and graph identity.
+
+Use when:
+
+- starting a session
+- confirming the loaded graph
+- checking whether the agent is using the right repository
 
 ### `graph_stats`
-- **Returns**: Node/edge/hyperedge counts, communities, node-type breakdown, edge confidence distribution
-- **Use when**: Getting a quick sense of graph size and quality
 
-### `query_graph(keywords, depth?, budget?, ...)`
-- **Returns**: Matching nodes + connections formatted as Markdown
-- **Use when**: Searching the graph by keyword relevance
-- **Parameters**: `keywords` (required), `depth` (1-6, default 3), `budget` (default 2000), `dfs`, `path_prefix`, `exclude_path`, `include_relations`, `exclude_relations`, `node_types`, `generated_code_mode`, `include_tests`, `min_degree`, `ast_only_tuning`
+Returns node, edge, hyperedge, community, node-type, and confidence distribution statistics.
 
-### `get_node(id)`
-- **Returns**: Node label, file type, source file, source span, community, degree
-- **Use when**: Looking up a specific symbol by ID or label
+Use when:
 
-### `get_neighbors(node_id, relation?, max_neighbors?, extracted_only?)`
-- **Returns**: Direct neighbors with edge relation types, confidence levels, and scores
-- **Use when**: Exploring what a node connects to
+- checking graph scale
+- assessing overall confidence profile
+- deciding whether the graph is healthy enough to use
 
-### `get_community(community_id, include_members?)`
-- **Returns**: Representative nodes, files, dominant relations; optionally full member list
-- **Use when**: Understanding an architectural community
+### `query_graph`
 
-### `god_nodes(n?, path_prefix?, node_types?, ...)`
-- **Returns**: Top N most connected nodes (hubs), excluding file-level stubs
-- **Use when**: Finding architectural hotspots
+Searches the graph using keyword relevance and traversal.
 
-### `shortest_path(from, to, mode?, ...)`
-- **Returns**: Path between two nodes with relation details
-- **Use when**: Finding how two symbols are connected
-- **Mode**: `semantic` (prefers meaningful relations) or `strict` (fewest hops)
+Common parameters:
 
-### `summarize_file(path, group_by?, show_leaves?, min_degree?)`
-- **Returns**: All graph symbols extracted from a file, grouped by kind or community
-- **Use when**: Answering "what's in this file?" without reading source
-- **Token optimization**: Hubs shown by default; low-degree leaves hidden unless `show_leaves=true`
+| Parameter | Purpose |
+|---|---|
+| `keywords` | Search query |
+| `depth` | Traversal depth |
+| `budget` | Output token budget |
+| `dfs` | Use deeper, narrower traversal |
+| `path_prefix` | Scope to a directory or module |
+| `exclude_path` | Remove noisy paths |
+| `include_relations` | Restrict relationship types |
+| `exclude_relations` | Exclude relationship types |
+| `node_types` | Restrict node kinds |
+| `generated_code_mode` | Include, exclude, or only generated code |
+| `include_tests` | Include test nodes |
+| `min_degree` | Filter low-degree symbols |
+| `ast_only_tuning` | Tune for AST-only graphs |
 
-### `architecture_summary(...)`
-- **Returns**: Repository-level summary with major communities, cross-community connectors, and hotspots
-- **Use when**: Orienting on a codebase before digging into specific files
+Use when:
 
-### `query_transitive(seed, depth?, relation?, direction?)`
-- **Returns**: Full transitive closure from a seed symbol (BFS)
-- **Parameters**: `seed` (required), `depth` (1-6, default 3), `direction` (forward/reverse/both)
-- **Use when**: Finding all nodes reachable from a given symbol, or all nodes that can reach it
+- searching for feature-related code
+- finding a target symbol
+- exploring a module
+- asking broad architecture questions
 
----
+### `get_node`
 
-## Composite Tools (3)
+Returns metadata for one node: label, file type, source file, source span, community, and degree.
 
-### `analyse_symbol(symbol)`
-- **Returns**: Single-turn composite analysis: node metadata + behavioral connections (calls, uses, inherits, implements) + structural connections (imports, contains) + trust profile
-- **Use when**: Getting a comprehensive understanding of a symbol in one call
+Use when:
 
-### `module_dependencies(module_a, module_b)`
-- **Returns**: Summary of dependency connections between two modules/directories, grouped by relation type
-- **Use when**: Understanding how two parts of the codebase relate
+- resolving a symbol precisely
+- checking source location
+- disambiguating label collisions
 
-### `what_changed(snapshot_name?)`
-- **Returns**: Risk-sorted delta: removed symbols (highest risk), community moves, added symbols, downstream impact
-- **Use when**: Comparing current graph against a stored snapshot after analyzing changes
+### `get_neighbors`
 
----
+Returns direct neighbors with relation types, confidence levels, and scores.
 
-## Trust Tools (7)
+Useful options include relation filters, max neighbors, and extracted-only mode.
 
-### `resolution_report()`
-- **Returns**: Import resolution %, call resolution %, ambiguous edge count, unresolved references
-- **Use when**: Checking graph trust quality before acting on results
+Use when:
 
-### `ambiguous_symbols()`
-- **Returns**: List of ambiguous (low-confidence) edges
-- **Use when**: Finding edges that need manual verification
+- asking what calls a symbol
+- asking what a symbol calls
+- checking imports, uses, inherits, or implements relationships
+- planning direct-impact changes
 
-### `unresolved_references()`
-- **Returns**: List of import edges where the target symbol was not found
-- **Use when**: Finding potentially missing dependencies
+### `get_community`
 
-### `safest_path(from, to)`
-- **Returns**: Path with highest-confidence edges, plus a safety score (0.0-1.0)
-- **Use when**: Need a trustworthy path, not necessarily the shortest
+Returns community-level context and optionally full member lists.
 
-### `verification_plan(changed_nodes)`
-- **Returns**: Prioritized 7-tier plan: must-read files → tests → ambiguous edges → risk gates
-- **Use when**: Planning what to verify after symbol changes
+Use when:
 
-### `blast_radius(changed_nodes)`
-- **Returns**: Downstream impact: affected files, communities, edge confidence distribution
-- **Use when**: Understanding the blast radius of proposed changes
+- understanding architectural clusters
+- finding module boundaries
+- checking whether a symbol sits in the expected community
 
-### `agent_change_gate(changed_nodes, min_resolution?, max_ambiguous?)`
-- **Returns**: Policy gate evaluations (pass/fail table) with optional threshold overrides
-- **Use when**: Running trust quality gates for CI before committing changes
+### `god_nodes`
 
----
+Returns the most connected nodes after filtering obvious noise.
 
-## Planning Workspace Tools
+Use when:
+
+- identifying hubs
+- finding high-risk change targets
+- spotting architectural chokepoints
+
+### `shortest_path`
+
+Returns a path between two nodes.
+
+Modes:
+
+| Mode | Meaning |
+|---|---|
+| `strict` | Fewest hops |
+| `semantic` | Prefers meaningful relationships |
+
+Use when:
+
+- explaining how two parts connect
+- checking whether a dependency path exists
+
+### `summarize_file`
+
+Returns graph symbols extracted from a file, grouped by kind or community.
+
+Use when:
+
+- answering what is in a file without reading the full source
+- choosing whether a file deserves direct inspection
+
+### `architecture_summary`
+
+Returns repository-level architecture summary with major communities, cross-community connectors, and hotspots.
+
+Use when:
+
+- entering a new repository
+- preparing an agent orientation
+- creating a map before a multi-file change
+
+### `query_transitive`
+
+Returns a transitive closure from a seed symbol.
+
+Parameters include seed, depth, relation, and direction.
+
+Use when:
+
+- finding all downstream consumers
+- finding all upstream dependencies
+- tracing impact across multiple hops
+
+### `run_datalog`
+
+Runs a Datalog query against the loaded graph.
+
+Use when:
+
+- asking declarative reachability questions
+- finding constraint violations
+- building custom graph analyses
+
+Example:
+
+```text
+?- calls(X, Y, _).
+```
+
+## Composite tools
+
+### `analyse_symbol`
+
+Returns a complete single-symbol analysis: node metadata, behavioral connections, structural connections, and trust profile.
+
+Use when:
+
+- preparing to edit a symbol
+- creating a pre-edit safety plan
+
+### `module_dependencies`
+
+Summarizes dependency connections between two modules or directories.
+
+Use when:
+
+- checking boundary coupling
+- explaining why two modules are connected
+- reviewing architecture drift
+
+### `what_changed`
+
+Returns a risk-sorted delta against a snapshot: removed symbols, community moves, additions, and downstream impact.
+
+Use when:
+
+- reviewing an agent patch
+- producing a pull request review plan
+
+## Trust tools
+
+### `resolution_report`
+
+Returns import resolution, call resolution, ambiguous edge count, and unresolved references.
+
+Use before trusting graph output for a high-risk change.
+
+### `ambiguous_symbols`
+
+Lists ambiguous edges and collisions that require source inspection.
+
+Use when an agent needs to know what not to assume.
+
+### `unresolved_references`
+
+Lists references whose targets were not found in the graph.
+
+Use when diagnosing missing extraction, unsupported language features, or ignore-rule issues.
+
+### `safest_path`
+
+Returns the highest-confidence path between two symbols, plus a safety score.
+
+Use when correctness matters more than shortest route.
+
+### `verification_plan`
+
+Returns a prioritized verification plan for changed nodes.
+
+Typical output tiers:
+
+1. must-read files
+2. affected public interfaces
+3. downstream consumers
+4. tests to inspect or run
+5. ambiguous edges to verify
+6. architecture gates
+7. CI policy results
+
+### `blast_radius`
+
+Returns downstream impact for changed nodes: affected files, communities, and confidence profile.
+
+Use before and after agent edits.
+
+### `agent_change_gate`
+
+Evaluates policy gates such as minimum resolution and maximum ambiguous edges.
+
+Use in CI or pre-review agent workflows.
+
+## Planning workspace tools
+
+Planning tools support the design-then-verify loop.
+
+```mermaid
+graph LR
+    A[Create plan] --> B[Declare intended symbols]
+    B --> C[Write implementation]
+    C --> D[Compare planned graph to physical graph]
+    D --> E[Report implemented, missing, unplanned]
+```
 
 ### `create_planning_workspace`
-- **Returns**: Confirmation with the plan ID for the new virtual workspace
-- **Use when**: Starting a multi-step architectural change that should be verified for compliance before merging
-- **Parameters**: `name` (required): human-readable plan name
+
+Creates a virtual workspace and returns a plan ID.
+
+Use when starting a multi-step architectural change.
 
 ### `add_planned_symbol`
-- **Returns**: Confirmation with the registered planned node/edge in the virtual workspace
-- **Use when**: Declaring an intended new symbol or relationship before writing implementation code
-- **Parameters**: `plan_id` (required), `symbol` (required), `kind` (function, class, module, etc.), `references?` (existing nodes to link to)
+
+Registers an intended symbol or relationship before implementation.
+
+Use when declaring the design the agent intends to implement.
 
 ### `get_plan_details`
-- **Returns**: Full virtual subgraph of the plan: all planned nodes, edges, and implementation status
-- **Use when**: Reviewing what was declared in a planning workspace before or after implementation
 
-> **Compliance verification:** There is no standalone `verify_plan` MCP tool. To check planning workspace compliance, use `get_plan_details` to review the declared plan, then `verification_plan` (see Trust Tools) to assess coverage of the implemented symbols. The `verify_plan` engine exists in the core library (`src/harness.rs`) for use by embedded harnesses.
+Returns the virtual subgraph of the plan and implementation status.
 
-## Write Tools (4)
+Use before review to compare intent with result.
 
-### `add_node(id, label, file_type, source_file, ...)`
-- **Returns**: Confirmation with total node+edge counts after save
-- **Use when**: Registering architectural concepts, rationale nodes, or other entities the AST extractor doesn't capture
+Important: compliance checking is performed by reviewing plan details and using `verification_plan`. The core library also has a `verify_plan` engine for embedded harnesses.
 
-### `add_edge(source, target, relation, confidence, source_file, ...)`
-- **Returns**: Confirmation with total node+edge counts
-- **Use when**: Recording verified relationships between nodes
+## Write tools
 
-### `remove_edge(source, target, relation?)`
-- **Returns**: Confirmation of removed edges
-- **Use when**: Correcting false positives or removing stale relationships
+Write tools should be used carefully. Do not write guesses into the graph.
 
-### `recluster()`
-- **Returns**: Re-runs Louvain community detection and re-assigns communities
-- **Use when**: After adding nodes/edges via write tools, community assignments may be stale
+### `add_node`
 
----
+Adds an architectural concept, rationale node, external system, or manually verified entity.
 
-## Diff Tools (2)
+### `add_edge`
 
-### `diff_graph(before_graph, after_graph)`
-- **Returns**: Added/removed nodes and edges between two graph snapshots
-- **Use when**: Comparing two exported graph.json files
+Adds a verified relationship.
 
-### `review_plan(before_graph_path?, after_graph_path?)`
-- **Returns**: Full review plan: symbol inventory changes + prioritized verification plan
-- **Use when**: Generating a complete pre-commit review from graph diffs
+Only use `EXTRACTED` confidence when the relationship was confirmed by source inspection.
 
----
+### `remove_edge`
 
-## Tool Selection Guide
+Removes a false positive or stale relationship.
 
-| Goal | Recommended Tool |
+### `recluster`
+
+Re-runs community detection after meaningful manual edits.
+
+## Diff tools
+
+### `diff_graph`
+
+Compares two graph files and returns added or removed nodes and edges.
+
+### `review_plan`
+
+Generates a full review plan from graph diffs.
+
+Use when preparing pull request review for agent-authored changes.
+
+## Tool selection guide
+
+| Goal | Best first tool |
 |---|---|
-| "What does this repo look like?" | `run_datalog` | Run a Datalog query against the loaded graph. Supports rules, goals, facts, and negation (not). Budget-bounded. | Right column: `query: string`, `step_budget?: number` | Declarative reachability, constraint queries, custom graph analysis | Read |
-| `graph_info` | + `architecture_summary` |
-| "What does X depend on?" | `get_neighbors(X)` |
-| "Find me code related to Y" | `query_graph("Y")` |
-| "How are A and B connected?" | `shortest_path(A, B)` |
-| "What's in this file?" | `summarize_file("path/to/file")` |
-| "What changed since last snapshot?" | `what_changed()` |
-| "What's the impact of changing Z?" | `blast_radius(Z)` |
-| "Is the graph trustworthy?" | `resolution_report()` |
-| "Plan my verification steps" | `verification_plan(nodes)` |
-| "Full analysis of a symbol" | `analyse_symbol(symbol)` |
-| "Multi-hop transitive closure" | `query_transitive(seed)` |
+| Confirm graph identity | `graph_info` |
+| Understand repository shape | `architecture_summary` |
+| Find code related to a feature | `query_graph` |
+| Understand a symbol | `analyse_symbol` |
+| Find direct callers or dependencies | `get_neighbors` |
+| Find multi-hop impact | `query_transitive` |
+| Explain connection between two symbols | `shortest_path` and `safest_path` |
+| Check graph trust quality | `resolution_report` |
+| Plan verification after editing | `verification_plan` |
+| Measure downstream impact | `blast_radius` |
+| Review a changed graph | `what_changed` or `review_plan` |
+| Enforce policy | `agent_change_gate` |
+| Run custom logic | `run_datalog` |
+
+## Output interpretation
+
+Treat Graphenium output as a map, not the territory.
+
+| Evidence | Agent action |
+|---|---|
+| `EXTRACTED` and resolved | Safe to plan against, still read source before editing |
+| `INFERRED` | Strong lead, verify at least one source file |
+| `AMBIGUOUS` | Do not act until inspected |
+| unresolved | Investigate missing symbol, dynamic code, generated code, or ignore rules |

@@ -1,37 +1,92 @@
-# Graphenium (gm): The active coordination & verification loop for autonomous AI coding agents
+# Graphenium
 
-Most code tools help AI agents search files. Graphenium is the only tool that helps agents *plan, write, and verify* structural changes. It provides a stateful coordination whiteboard, real-time reactive indexing, and a mathematical verification loop: so coding agents stop guessing and start engineering.
+**Graphenium is the local trust and verification layer for AI coding agents.**
 
-Without structural memory, agents suffer from **hallucination cascades** (one wrong assumption breaks multiple downstream dependencies) and **blind-edit failures** (changes that compile but violate design constraints). Graphenium prevents both by giving agents a trust-aware map they can plan against and verify against.
+It turns a repository into a provenance-aware architecture graph so agents can plan code changes, inspect blast radius, follow source-backed relationships, and verify edits before they land.
 
-Binary: `gm` | Schema: `0.2.0` | Status: `AST + Resolver [Stable]`, `Semantic Pass [Stable]`, `Telemetry Overlay [Experimental]`
+Most developer tools help people search files. Graphenium helps AI agents avoid unsafe edits.
 
-## Quick Start
-
-```sh
-# 1. Initialize workspace (creates .grapheniumignore)
-gm init
-
-# 2. Build the graph
-gm run . --no-semantic --no-viz
-
-# 3. Start the MCP server
-gm serve
-
-# 4. Query the graph (via MCP)
-gm query "authentication flow" --budget 2000
-
-# 6. Run a Datalog query
-gm query --datalog "?- node(X, _, _, _, _)."
-
-# 5. Run diagnostics
-gm doctor --graph graphenium-out/graph.json
+```text
+Without Graphenium                 With Graphenium
+------------------                 ----------------
+Agent greps blindly                Agent queries a trusted architecture map
+Agent guesses dependencies         Agent sees provenance on every edge
+Agent edits before planning        Agent plans before touching code
+Reviewer hunts for blast radius    Reviewer gets risk-sorted impact
+CI checks only tests               CI can also gate graph trust quality
 ```
 
-## MCP Setup
+Binary: `gm`  
+Schema: `0.2.0`  
+Status: AST plus resolver stable, semantic pass stable, telemetry overlay experimental
+
+## Why Graphenium exists
+
+AI coding agents are now capable of large code changes, but they still struggle with repository navigation and dependency trust. They often over-read irrelevant files, under-read critical files, infer relationships from names, and make changes without knowing what depends on what.
+
+Graphenium gives agents a compact structural memory of the codebase.
+
+The result is a safer engineering loop:
+
+```mermaid
+graph LR
+    A[Query trusted graph] --> B[Plan the change]
+    B --> C[Read the right source files]
+    C --> D[Edit code]
+    D --> E[Rebuild or diff graph]
+    E --> F[Check blast radius]
+    F --> G[Run verification plan]
+    G --> H[Gate or review]
+```
+
+## The promise
+
+Graphenium helps teams answer five questions before trusting an AI-generated code change:
+
+1. What does this symbol depend on?
+2. What depends on this symbol?
+3. Which relationships are source-backed and which are only inferred?
+4. What files should the agent read before editing?
+5. What must be verified after the edit?
+
+## Quick start
+
+```sh
+# 1. Initialize workspace
+# Creates .grapheniumignore with sensible defaults.
+gm init
+
+# 2. Build a local graph with no API key required.
+gm run . --no-semantic --no-viz
+
+# 3. Inspect graph quality.
+gm doctor --graph graphenium-out/graph.json
+
+# 4. Query the architecture map.
+gm query "authentication flow" --budget 2000
+
+# 5. Start the MCP server for AI coding agents.
+gm serve --graph graphenium-out/graph.json
+```
+
+## Install
+
+```sh
+# From a local checkout
+cargo install --locked --path .
+
+# Or use the installer
+curl -fsSL https://raw.githubusercontent.com/lambda-alpha-labs/Graphenium/main/install.sh | sh
+```
+
+Requires Rust 1.81 or later. Tree-sitter language grammars are bundled.
+
+## MCP setup
 
 ### Claude Desktop
-Add to `claude_desktop_config.json`:
+
+Add this to `claude_desktop_config.json`:
+
 ```json
 {
   "mcpServers": {
@@ -44,7 +99,9 @@ Add to `claude_desktop_config.json`:
 ```
 
 ### Cursor
-Add to `~/.cursor/mcp.json`:
+
+Add this to `~/.cursor/mcp.json`:
+
 ```json
 {
   "mcpServers": {
@@ -57,7 +114,9 @@ Add to `~/.cursor/mcp.json`:
 ```
 
 ### CodeWhale
-Add to `~/.codewhale/mcp.json`:
+
+Add this to `~/.codewhale/mcp.json`:
+
 ```json
 {
   "graphenium": {
@@ -67,51 +126,94 @@ Add to `~/.codewhale/mcp.json`:
 }
 ```
 
-## Core Features (Agent Lifecycle)
+## Core capabilities
 
-### Pre-Edit: Trust-Aware Pathfinding
+### 1. Trust-aware architecture graph
 
-- **Provenance on every edge**: every relationship carries `extractor`, `resolution_status`, and three confidence tiers (`EXTRACTED`, `INFERRED`, `AMBIGUOUS`). Agents route traversals through high-trust, source-backed edges to prevent hallucination cascades.
-- **Cross-file call resolution**: resolves calls, uses, inherits, and implements across file boundaries using tree-sitter and scope-aware symbol indexing. Includes language-family guardrails to prevent cross-language false positives in multi-language monorepos.
-- **Architectural analysis**: Louvain community detection, PageRank hubs, chokepoint analysis (Brandes' betweenness centrality), and architecture drift detection give agents the high-level shape of the codebase in one query.
-- **Topological anomaly detection**: multi-variable surprise scoring identifies unexpected cross-boundary connections, architectural erosion, and out-of-layer dependencies without custom rules.
-- **Hybrid retrieval**: lexical (TF-cosine), structural (graph-distance), and combined modes via `--mode` flag. Datalog declarative queries for first-order logic reachability and constraint queries.
-- **Runtime telemetry overlay**: import OpenTelemetry trace JSON to create a RuntimeOverlay with per-node call counts and latency percentiles (P50/P95/P99). Hot-path and runtime-weighted traversal.
-- **C# assembly boundary parsing**: reads `.sln` and `.csproj` files to map project references and assembly dependencies as first-class graph elements, not just flat source files.
-- **Academic paper classification**: heuristic detection of research papers (arXiv, DOI, LaTeX markers) linked into the graph alongside implementation code.
+Graphenium extracts files, modules, functions, methods, classes, imports, calls, uses, inheritance, implementations, tests, build targets, and dependencies into a local graph.
 
-### In-Edit: Reactive Multi-Turn Planning
+Every relationship carries provenance:
 
-- **Salsa-backed incremental indexing**: demand-driven memoized extraction via Salsa. When an agent edits a file, only the changed file and its downstream importers are re-parsed, updating the graph in milliseconds. Designed for active writers, not passive readers.
-- **Design-then-verify planning workspaces**: agents register intended symbols in a virtual workspace before writing code. The compliance audit compares the planned design against the extracted physical graph, reporting implemented, missing, and unplanned symbols. Transitions agents from chaotic file modification to a structured engineering loop.
+| Field | Why it matters |
+|---|---|
+| `extractor` | Shows which component created the relationship |
+| `resolution_status` | Shows whether the target was resolved |
+| `confidence` | Separates source-backed facts from inferred or ambiguous leads |
 
-### Post-Edit: Automated Compliance & Gating
+Agents can plan against `EXTRACTED` relationships, treat `INFERRED` relationships as leads, and stop for source inspection when an edge is `AMBIGUOUS`.
 
-- **Symbol diff + impact**: `gm diff` compares graph snapshots and computes blast radius (downstream impact) for changed symbols.
-- **Trust gates for CI**: `gm check` enforces resolution quality and edge confidence policies. Block PRs when the graph is too unreliable to plan changes, or when agent-generated code violates architectural boundaries.
-- **34 MCP tools**: read, composite, trust, write, diff, and planning tools across the full agent lifecycle.
+### 2. Pre-edit pathfinding
+
+Before an agent edits code, Graphenium helps it resolve the target symbol, find callers and downstream consumers, choose the safest source-backed path, and identify the first files to read.
+
+Useful tools:
+
+- `analyse_symbol`
+- `get_neighbors`
+- `query_transitive`
+- `safest_path`
+- `next_files_to_read`
+- `blast_radius`
+
+### 3. In-edit planning workspaces
+
+For multi-file changes, agents can declare intended symbols before writing code. Graphenium stores the plan as a virtual workspace and later compares it to the extracted physical graph.
+
+```text
+Plan declared       Implementation written       Compliance checked
+-------------       ----------------------       ------------------
+planned symbols --> actual code symbols     --> implemented, missing, unplanned
+```
+
+### 4. Post-edit verification and CI gates
+
+After a change, Graphenium can compare graph snapshots, compute downstream impact, create a verification plan, and enforce trust policies in CI.
+
+```sh
+gm diff --before old-graph.json --after graphenium-out/graph.json --impact --review-plan
+gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 10
+```
+
+### 5. Local-first operation
+
+The AST-only pipeline runs entirely on your machine. Source code is not sent to a remote service unless you explicitly configure semantic extraction with an API key and provider.
+
+## Supported languages
+
+Graphenium supports mixed repositories with Rust, Python, Go, JavaScript, TypeScript, Java, C, C++, and C#.
+
+C# projects receive additional build-boundary awareness through `.sln` and `.csproj` parsing, which maps projects, assemblies, namespaces, and project references as first-class graph structure.
 
 ## Documentation
 
-- [`docs/COMMAND_REFERENCE.md`](docs/COMMAND_REFERENCE.md): Complete CLI reference for all 13 commands
-- [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md): Full MCP tool catalog with parameter tables and selection guide
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Three-tier model, extraction pipeline, trust model, module map
-- [`docs/COMPARISON.md`](docs/COMPARISON.md): How Graphenium compares to grep, tree-sitter, Sourcegraph, and others
-- [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md): Token-reduction benchmarks and methodology
-- [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md): Step-by-step guided workflows for AI agents
+| Document | Purpose |
+|---|---|
+| [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md) | Full coverage map from the original documentation set to this improved documentation pack |
+| [`docs/POSITIONING.md`](docs/POSITIONING.md) | Category, message, buyer pain, and recommended language |
+| [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) | Guided installation, first scan, first query, and MCP setup |
+| [`docs/AGENT_WORKFLOWS.md`](docs/AGENT_WORKFLOWS.md) | Operating playbooks for agents before, during, and after code changes |
+| [`docs/COMMAND_REFERENCE.md`](docs/COMMAND_REFERENCE.md) | CLI command reference for `gm` |
+| [`docs/MCP_TOOLS.md`](docs/MCP_TOOLS.md) | MCP tool catalog and tool selection guide |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Three-tier model, graph schema, extraction pipeline, and module map |
+| [`docs/TRUST_MODEL.md`](docs/TRUST_MODEL.md) | Practical guide to confidence, provenance, and safe agent behavior |
+| [`docs/CI_AND_GOVERNANCE.md`](docs/CI_AND_GOVERNANCE.md) | CI gates, PR review, change governance, and adoption policy |
+| [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) | Token, latency, and task-quality benchmarking methodology |
+| [`docs/COMPARISON.md`](docs/COMPARISON.md) | Competitive comparison and when to choose Graphenium |
+| [`docs/AI_SETUP.md`](docs/AI_SETUP.md) | AI assistant setup playbook |
+| [`docs/HARNESS_ADAPTER.md`](docs/HARNESS_ADAPTER.md) | Embedded harness integration guide |
+| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Contributor guide |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Security model and vulnerability reporting |
+| [`docs/CHANGELOG.md`](docs/CHANGELOG.md) | Release history summary |
+| [`docs/CODE_OF_CONDUCT.md`](docs/CODE_OF_CONDUCT.md) | Community standards |
+| [`docs/LICENSE.md`](docs/LICENSE.md) | MIT license text |
+| [`worked/README.md`](worked/README.md) | Worked examples guide |
+| [`worked/TEMPLATE.md`](worked/TEMPLATE.md) | Template for new worked examples |
+| [`skills/graphenium/SKILL.md`](skills/graphenium/SKILL.md) | Skill instructions for Graphenium-aware assistants |
 
-## Install
+## The shortest pitch
 
-```sh
-# From source
-cargo install --locked --path .
-
-# Or via curl
-curl -fsSL https://raw.githubusercontent.com/lambda-alpha-labs/Graphenium/main/install.sh | sh
-```
-
-Requires Rust 1.81+ and tree-sitter language grammars (bundled).
+**Graphenium gives AI coding agents a trusted map of your codebase and a preflight check before they change it.**
 
 ## License
 
-MIT: see [LICENSE](LICENSE).
+MIT. See [`docs/LICENSE.md`](docs/LICENSE.md).

@@ -1,77 +1,134 @@
 # Benchmarking
 
+Graphenium should be benchmarked by how quickly and reliably it helps an agent produce a correct change plan, not by token reduction alone.
+
+The core metric is:
+
+> tokens-to-correct-plan
+
 ## Why measure tokens
 
-LLM context windows are expensive. Every file read costs tokens that could be spent on reasoning and implementation. Graphenium's value is reducing the tokens needed for structural understanding.
+LLM context is expensive. Every irrelevant file read competes with reasoning, implementation, and review context.
 
-**Token-chars ratio**: Graphenium's ASCII output averages ~4 characters per token. Use this to estimate your LLM cost per query.
+Graphenium reduces navigation cost by giving agents compact structural answers instead of forcing them to read many raw files.
 
-## Self-analysis results
+The current documented heuristic is approximately 4 characters per token for Graphenium ASCII output.
 
-Benchmarks on Graphenium's own codebase (1061 nodes, 2104 edges, 22 communities) using `target/release/gm`:
+## Self-analysis baseline
 
-| Query | Output chars | Tokens (~4 chars/token) | Time (ms) |
-|---|---|---|---|
-| `replace_file_extraction`: impact analysis | 8,674 | ~2,170 | 27 |
-| `GrapheniumCluster`: community overview | 6,690 | ~1,670 | 18 |
-| `GrapheniumGraph`: module architecture | 8,395 | ~2,100 | 22 |
-| `node_data`: symbol with callers/dependents | 8,570 | ~2,140 | 20 |
-| `authentication flow`: cross-module keyword | 8,409 | ~2,100 | 19 |
-| `gm serve`: server topology | 6,635 | ~1,660 | 15 |
+Graphenium's own repository report documents:
 
-Typical queries return **6,600–8,700 chars** (~1,600–2,200 tokens): a 4-6x token reduction vs reading the raw source files that would be needed for the same structural understanding.
+| Metric | Value |
+|---|---|
+| Nodes | 1,061 |
+| Edges | 2,104 |
+| Communities | 22 |
+| EXTRACTED edges | 1,166 |
+| INFERRED edges | 938 |
+| AMBIGUOUS edges | 0 |
 
-## Methodology
+Typical self-analysis query output has been measured around 6,600 to 8,700 characters, or roughly 1,600 to 2,200 tokens.
 
+## Example benchmark table
+
+| Query | Output chars | Approx tokens | Time |
+|---|---:|---:|---:|
+| `replace_file_extraction` impact analysis | 8,674 | about 2,170 | 27 ms |
+| `GrapheniumCluster` community overview | 6,690 | about 1,670 | 18 ms |
+| `GrapheniumGraph` module architecture | 8,395 | about 2,100 | 22 ms |
+| `node_data` symbol with callers and dependents | 8,570 | about 2,140 | 20 ms |
+| `authentication flow` cross-module keyword | 8,409 | about 2,100 | 19 ms |
+| `gm serve` server topology | 6,635 | about 1,660 | 15 ms |
+
+These numbers are useful as a baseline, not as a universal guarantee.
+
+## Benchmark methodology
+
+1. Rebuild the graph.
+2. Run a realistic query.
+3. Record character count.
+4. Estimate token count.
+5. Record latency.
+6. Judge whether the output contained the structural facts needed for the task.
+7. Compare against the raw files an agent would otherwise need to read.
+
+```sh
+gm run . --no-semantic --no-viz
+gm query "authentication flow" --budget 2000
 ```
-1. Run gm run . --no-semantic --no-viz to rebuild the graph
-2. Run gm query with the target query and budget
-3. Record output character count, timing, and whether the answer
-   contained the expected structural information
-```
 
-Use `scripts/run_benchmarks.sh` for automated benchmarking:
+Automated script:
 
 ```sh
 chmod +x scripts/run_benchmarks.sh
-./scripts/run_benchmarks.sh           # console output
-./scripts/run_benchmarks.sh --json    # JSON output to benchmark_results.json
+./scripts/run_benchmarks.sh
+./scripts/run_benchmarks.sh --json
 ```
 
-## Interpreting results
+## What good looks like
 
-Good benchmarks show:
-- **<10,000 chars per query** (manageable by most LLMs)
-- **<50ms query time** (not network-bound; all computation is local)
-- **All needed structural info present** (the graph is complete enough for the task)
+| Signal | Good range | Why |
+|---|---|---|
+| Output size | under 10,000 chars | Small enough for common agent workflows |
+| Latency | under 50 ms for typical queries | Feels local and interactive |
+| Structural completeness | enough to plan next read | Avoids blind file browsing |
+| Confidence visibility | trust profile included | Prevents false certainty |
+| Actionability | first files to read are clear | Moves the agent toward source inspection |
 
-Concerning signals:
-- **>20,000 chars per query**: the graph may be too dense; increase specific keywords
-- **Query time >500ms**: the graph may be too large; consider excluding vendored directories
-- **Missing structural info**: extraction may need semantic pass or more languages covered
+## Concerning signals
 
-## Performance optimizations
+| Signal | What it may mean | Action |
+|---|---|---|
+| Over 20,000 chars | Query too broad or graph too dense | Tighten keywords, path scope, relation filters, or budget |
+| Query over 500 ms | Repository or graph is very large | Exclude vendored dirs and generated code |
+| Missing expected symbols | Unsupported language feature or ignore issue | Check `.grapheniumignore`, extractor support, semantic pass |
+| Too many inferred edges | Static extraction cannot see enough | Inspect manually or improve extractor |
+| Too many ambiguous edges | Label collisions or dynamic patterns | Use `get_node` disambiguation and source reads |
 
-### Brandes' betweenness centrality (O(V·E))
+## Task-quality scoring
 
-The `betweenness_centrality` implementation in `src/analyze/questions.rs` uses Brandes' O(V·E) algorithm, safely capped at the first 5,000 nodes per community. On graphs under 5,000 nodes, the computation runs in milliseconds. On larger codebases, the cap ensures analysis completes in bounded time while still identifying structural bridge nodes (chokepoints) in the most significant architectural communities.
+A benchmark should score whether Graphenium helped the agent create a better plan.
 
-### Salsa-backed incremental extraction
+| Score | Meaning |
+|---|---|
+| 0 | Output was irrelevant |
+| 1 | Output found some names but no useful structure |
+| 2 | Output found related files but not enough dependencies |
+| 3 | Output supported a reasonable first source read |
+| 4 | Output supported a clear pre-edit plan |
+| 5 | Output supported plan, trust profile, blast radius, and verification steps |
 
-The `src/cache/query.rs` module provides Salsa-powered demand-driven incremental computation. Extraction results are memoized by content hash, so unchanged files skip tree-sitter parsing entirely on subsequent rebuilds. After an initial full scan, `gm run .` on a project where only a few files changed completes in near-constant time: only the delta is re-extracted.
+## Recommended benchmark tasks
 
-### Token-reduction benchmarks
+Use tasks that represent real agent work:
 
-Graphenium's ASCII output averages approximately 4 characters per token. Typical queries return 6,600 to 8,700 characters (approximately 1,600 to 2,200 tokens), a 4-6x reduction compared to reading the raw source files needed for equivalent structural understanding.
+- Modify a public API.
+- Change an authentication or authorization path.
+- Refactor a service boundary.
+- Remove a symbol with downstream callers.
+- Move logic between modules.
+- Change a C# project reference.
+- Add a new integration test target.
+- Explain why two modules are connected.
 
-## Token reduction vs task completion
+## Compare against alternatives
 
-Graphenium optimizes for **tokens-to-correct-plan**, not token reduction alone. A smaller output that lacks needed information is worse than a larger one that's correct. Always verify that the query result contains the structural information needed for the change.
+For each task, compare:
 
-## How to run your own benchmarks
+1. Raw file reads only
+2. grep or ripgrep navigation
+3. IDE symbol navigation
+4. Graphenium query plus targeted source reads
 
-1. Build the graph: `gm run . --no-semantic --no-viz`
-2. Run benchmark script: `scripts/run_benchmarks.sh`
-3. For custom queries, use: `gm query "<your question>" --budget <chars>`
-4. Record: query, output chars, timing, and whether the result was sufficient
-5. Compare iterations to track improvements
+Measure:
+
+- files read
+- tokens consumed
+- time to usable plan
+- correctness of dependency understanding
+- missed downstream consumers
+- reviewer effort
+
+## Benchmark principle
+
+A smaller answer is not automatically better. The goal is the smallest answer that still lets the agent make a correct, trustworthy next move.
