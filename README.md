@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://githubusercontent.com" alt="Graphenium Banner" width="100%">
+  <img src="https://raw.githubusercontent.com/lambda-alpha-labs/lambda-alpha-labs/main/assets/banner.png" alt="Graphenium Banner" width="100%">
 </p>
 
 **Graphenium is the local trust and verification layer for AI coding agents.**
