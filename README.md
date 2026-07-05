@@ -189,7 +189,6 @@ C# projects receive additional build-boundary awareness through `.sln` and `.csp
 | Document | Purpose |
 |---|---|
 | [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md) | Full coverage map from the original documentation set to this improved documentation pack |
-| [`docs/POSITIONING.md`](docs/POSITIONING.md) | Category, message, buyer pain, and recommended language |
 | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) | Guided installation, first scan, first query, and MCP setup |
 | [`docs/AGENT_WORKFLOWS.md`](docs/AGENT_WORKFLOWS.md) | Operating playbooks for agents before, during, and after code changes |
 | [`docs/COMMAND_REFERENCE.md`](docs/COMMAND_REFERENCE.md) | CLI command reference for `gm` |
