@@ -1,4 +1,6 @@
-# Graphenium
+<p align="center">
+  <img src="https://githubusercontent.com" alt="Graphenium Banner" width="100%">
+</p>
 
 **Graphenium is the local trust and verification layer for AI coding agents.**
 
