@@ -214,6 +214,12 @@ C# projects receive additional build-boundary awareness through `.sln` and `.csp
 
 **Graphenium gives AI coding agents a trusted map of your codebase and a preflight check before they change it.**
 
+## Contact
+
+- Issues and feature requests: [GitHub Issues](https://github.com/lambda-alpha-labs/Graphenium/issues)
+- Security reports: security@graphenium.dev
+- Design partners, enterprise pilots, and partnerships: hello@graphenium.dev
+
 ## License
 
 MIT. See [`docs/LICENSE.md`](docs/LICENSE.md).

@@ -24,7 +24,9 @@ If a filename pattern should be skipped by default, add the pattern and a test.
 
 Do not open a public issue for sensitive security reports.
 
-Report privately to the maintainer with:
+Report vulnerabilities privately via email: **security@graphenium.dev**
+
+Include in your report:
 
 - description of the behavior
 - steps to reproduce
