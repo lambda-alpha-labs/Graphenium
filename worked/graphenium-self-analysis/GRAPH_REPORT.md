@@ -30,16 +30,16 @@ _No warnings._
 
 | Label | Degree | Community | File |
 |-------|--------|-----------|------|
-| `Node` | 34 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/validate.rs` |
-| `tests::make_server` | 30 | 3 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/handlers.rs` |
-| `GrapheniumServer` | 30 | 3 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/handlers.rs` |
-| `GrapheniumServer::new` | 26 | 3 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/handlers.rs` |
-| `GrapheniumGraph` | 24 | 8 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/graph.rs` |
-| `Manifest` | 19 | 2 | `/Users/liamandrew/Documents/Code/Graphenium/src/main.rs` |
-| `semantic_cache` | 18 | 2 | `/Users/liamandrew/Documents/Code/Graphenium/src/semantic/mod.rs` |
-| `render_report` | 18 | 6 | `/Users/liamandrew/Documents/Code/Graphenium/src/report.rs` |
-| `tests::make_graph` | 18 | 7 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/traversal.rs` |
-| `GrapheniumGraph` | 18 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/export/mod.rs` |
+| `Node` | 34 | 1 | `/path/to/Graphenium/src/validate.rs` |
+| `tests::make_server` | 30 | 3 | `/path/to/Graphenium/src/serve/handlers.rs` |
+| `GrapheniumServer` | 30 | 3 | `/path/to/Graphenium/src/serve/handlers.rs` |
+| `GrapheniumServer::new` | 26 | 3 | `/path/to/Graphenium/src/serve/handlers.rs` |
+| `GrapheniumGraph` | 24 | 8 | `/path/to/Graphenium/src/model/graph.rs` |
+| `Manifest` | 19 | 2 | `/path/to/Graphenium/src/main.rs` |
+| `semantic_cache` | 18 | 2 | `/path/to/Graphenium/src/semantic/mod.rs` |
+| `render_report` | 18 | 6 | `/path/to/Graphenium/src/report.rs` |
+| `tests::make_graph` | 18 | 7 | `/path/to/Graphenium/src/serve/traversal.rs` |
+| `GrapheniumGraph` | 18 | 1 | `/path/to/Graphenium/src/export/mod.rs` |
 
 ---
 
@@ -69,28 +69,28 @@ _No hyperedges extracted._
 
 | ID | Focus | Size | Internal Edges | Cohesion |
 |----|-------|------|----------------|----------|
-| 0 | `Users/liamandrew/Documents/Code/Graphenium/src` | 117 | 205 | 0.030 |
-| 1 | `Users/liamandrew/Documents/Code/Graphenium/src` | 117 | 221 | 0.033 |
-| 2 | `Users/liamandrew/Documents/Code/Graphenium/src` | 96 | 195 | 0.043 |
-| 3 | `Users/liamandrew/Documents/Code/Graphenium/src/serve` | 83 | 255 | 0.075 |
-| 4 | `Users/liamandrew/Documents/Code/Graphenium/src` | 71 | 125 | 0.050 |
-| 5 | `Users/liamandrew/Documents/Code/Graphenium/src` | 68 | 144 | 0.063 |
-| 6 | `Users/liamandrew/Documents/Code/Graphenium` | 67 | 124 | 0.056 |
-| 7 | `Users/liamandrew/Documents/Code/Graphenium/src/serve` | 61 | 126 | 0.069 |
-| 8 | `Users/liamandrew/Documents/Code/Graphenium/src` | 42 | 88 | 0.102 |
-| 9 | `Users/liamandrew/Documents/Code/Graphenium/src/semantic` | 40 | 50 | 0.064 |
-| 10 | `Users/liamandrew/Documents/Code/Graphenium/src` | 34 | 73 | 0.130 |
-| 11 | `Users/liamandrew/Documents/Code/Graphenium/src/semantic` | 30 | 56 | 0.129 |
-| 12 | `Users/liamandrew/Documents/Code/Graphenium/src/cluster` | 22 | 48 | 0.208 |
-| 13 | `Users/liamandrew/Documents/Code/Graphenium/src/semantic` | 22 | 21 | 0.091 |
-| 14 | `Users/liamandrew/Documents/Code/Graphenium/src` | 20 | 32 | 0.168 |
-| 15 | `Users/liamandrew/Documents/Code/Graphenium/src/model` | 16 | 19 | 0.158 |
-| 16 | `Users/liamandrew/Documents/Code/Graphenium/src/model` | 16 | 22 | 0.183 |
-| 17 | `Users/liamandrew/Documents/Code/Graphenium/src` | 14 | 27 | 0.297 |
-| 18 | `Users/liamandrew/Documents/Code/Graphenium/src/detect` | 9 | 8 | 0.222 |
-| 19 | `Users/liamandrew/Documents/Code/Graphenium/src/detect` | 9 | 13 | 0.361 |
-| 20 | `Users/liamandrew/Documents/Code/Graphenium/src` | 2 | 2 | 2.000 |
-| 21 | `Users/liamandrew/Documents/Code/Graphenium/src/export` | 1 | 0 | 0.000 |
+| 0 | `path/to/Graphenium/src` | 117 | 205 | 0.030 |
+| 1 | `path/to/Graphenium/src` | 117 | 221 | 0.033 |
+| 2 | `path/to/Graphenium/src` | 96 | 195 | 0.043 |
+| 3 | `path/to/Graphenium/src/serve` | 83 | 255 | 0.075 |
+| 4 | `path/to/Graphenium/src` | 71 | 125 | 0.050 |
+| 5 | `path/to/Graphenium/src` | 68 | 144 | 0.063 |
+| 6 | `path/to/Graphenium` | 67 | 124 | 0.056 |
+| 7 | `path/to/Graphenium/src/serve` | 61 | 126 | 0.069 |
+| 8 | `path/to/Graphenium/src` | 42 | 88 | 0.102 |
+| 9 | `path/to/Graphenium/src/semantic` | 40 | 50 | 0.064 |
+| 10 | `path/to/Graphenium/src` | 34 | 73 | 0.130 |
+| 11 | `path/to/Graphenium/src/semantic` | 30 | 56 | 0.129 |
+| 12 | `path/to/Graphenium/src/cluster` | 22 | 48 | 0.208 |
+| 13 | `path/to/Graphenium/src/semantic` | 22 | 21 | 0.091 |
+| 14 | `path/to/Graphenium/src` | 20 | 32 | 0.168 |
+| 15 | `path/to/Graphenium/src/model` | 16 | 19 | 0.158 |
+| 16 | `path/to/Graphenium/src/model` | 16 | 22 | 0.183 |
+| 17 | `path/to/Graphenium/src` | 14 | 27 | 0.297 |
+| 18 | `path/to/Graphenium/src/detect` | 9 | 8 | 0.222 |
+| 19 | `path/to/Graphenium/src/detect` | 9 | 13 | 0.361 |
+| 20 | `path/to/Graphenium/src` | 2 | 2 | 2.000 |
+| 21 | `path/to/Graphenium/src/export` | 1 | 0 | 0.000 |
 
 **Community 0** (117 nodes, cohesion 0.03):
 > , aiprovider, arc, cachemiss, check_semantic_cache, classify, classify_classify_extension, classify_code_extensions, classify_document_extensions, classify_image_extensions, classify_is_skip_dir, classify_pdf_is_paper, classify_skip_dirs, classify_skip_extensions, contentblock, extractmode, filetype, globsetbuilder, godnode, graphdiff … +97 more
@@ -170,7 +170,7 @@ _No AMBIGUOUS edges._
 
 1 isolated node(s) with no connections:
 
-- `html_template` (`/Users/liamandrew/Documents/Code/Graphenium/src/export/html_template.rs`)
+- `html_template` (`/path/to/Graphenium/src/export/html_template.rs`)
 
 ---
 
