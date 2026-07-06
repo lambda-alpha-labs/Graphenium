@@ -3,7 +3,7 @@ name = "graphenium-harness-adapter"
 version = "0.1.0"
 edition = "2021"
 description = "Reference adapter for embedding Graphenium in an AI coding harness"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 
 [dependencies]
 graphenium = { path = "../..", default-features = false, features = ["harness"] }
