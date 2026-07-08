@@ -14,12 +14,12 @@ _No warnings._
 
 | Metric | Value |
 |--------|-------|
-| Nodes | 957 |
-| Edges | 1941 |
-| Communities | 22 |
+| Nodes | 1211 |
+| Edges | 3083 |
+| Communities | 19 |
 | Hyperedges | 0 |
-| EXTRACTED edges | 1056 (54%) |
-| INFERRED edges | 885 (46%) |
+| EXTRACTED edges | 1328 (43%) |
+| INFERRED edges | 1755 (57%) |
 | AMBIGUOUS edges | 0 (0%) |
 | Input tokens | 0 |
 | Output tokens | 0 |
@@ -30,16 +30,16 @@ _No warnings._
 
 | Label | Degree | Community | File |
 |-------|--------|-----------|------|
-| `Node` | 34 | 1 | `/path/to/Graphenium/src/validate.rs` |
-| `tests::make_server` | 30 | 3 | `/path/to/Graphenium/src/serve/handlers.rs` |
-| `GrapheniumServer` | 30 | 3 | `/path/to/Graphenium/src/serve/handlers.rs` |
-| `GrapheniumServer::new` | 26 | 3 | `/path/to/Graphenium/src/serve/handlers.rs` |
-| `GrapheniumGraph` | 24 | 8 | `/path/to/Graphenium/src/model/graph.rs` |
-| `Manifest` | 19 | 2 | `/path/to/Graphenium/src/main.rs` |
-| `semantic_cache` | 18 | 2 | `/path/to/Graphenium/src/semantic/mod.rs` |
-| `render_report` | 18 | 6 | `/path/to/Graphenium/src/report.rs` |
-| `tests::make_graph` | 18 | 7 | `/path/to/Graphenium/src/serve/traversal.rs` |
-| `GrapheniumGraph` | 18 | 1 | `/path/to/Graphenium/src/export/mod.rs` |
+| `Manifest::len` | 79 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/cache/manifest.rs` |
+| `GrapheniumGraph::upsert_node` | 62 | 3 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/graph.rs` |
+| `Edge::extracted` | 58 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/edge.rs` |
+| `GrapheniumServer` | 56 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/handlers.rs` |
+| `GrapheniumGraph::node_data` | 45 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/graph.rs` |
+| `GrapheniumServer::new` | 44 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/handlers.rs` |
+| `GrapheniumGraph::nodes` | 34 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/graph.rs` |
+| `tests::make_server` | 33 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/handlers.rs` |
+| `GrapheniumGraph::edges_iter` | 33 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/graph.rs` |
+| `Write` | 32 | 0 | `/Users/liamandrew/Documents/Code/Graphenium/src/extract/mod.rs` |
 
 ---
 
@@ -47,16 +47,16 @@ _No warnings._
 
 | Source | Target | Relation | Score | Reasons |
 |--------|--------|----------|-------|---------|
-| `detect` | `load_graphenium_ignore` | calls | 3.0 | INFERRED confidence, peripheral→hub |
-| `tests::runtime_weighted_traversal_boosts_hot_paths` | `runtime_weighted_traversal` | calls | 3.0 | INFERRED confidence, peripheral→hub |
-| `tests::hyperedge_with_too_few_nodes_removed` | `validate` | calls | 3.0 | INFERRED confidence, peripheral→hub |
-| `tests::detects_framework_import_noise` | `tests::build_graph` | calls | 3.0 | INFERRED confidence, peripheral→hub |
-| `is_framework_noise_node` | `is_framework_label` | calls | 3.0 | INFERRED confidence, peripheral→hub |
-| `top_degree_nodes_in_scope` | `top_degree_nodes_detailed_in_scope` | calls | 3.0 | INFERRED confidence, peripheral→hub |
-| `score_query_nodes_detailed_in_scope` | `matched_fields` | calls | 3.0 | INFERRED confidence, peripheral→hub |
-| `score_query_nodes_detailed_in_scope` | `merge_keywords` | calls | 3.0 | INFERRED confidence, peripheral→hub |
-| `score_query_nodes_detailed_in_scope` | `collect_matches` | calls | 3.0 | INFERRED confidence, peripheral→hub |
-| `score_query_nodes_detailed_in_scope` | `parse_keywords` | calls | 3.0 | INFERRED confidence, peripheral→hub |
+| `cluster` | `GrapheniumGraph::node_data_mut` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
+| `tests::edge_default_weight_is_one` | `Edge::extracted` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
+| `ExtractionResult::node_count` | `Manifest::len` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
+| `ExtractionResult::edge_count` | `Manifest::len` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
+| `extract_semantic` | `AiProvider::default_model` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
+| `test_planning_workspace_lifecycle` | `GrapheniumGraph::upsert_node` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
+| `DirectedProjection::node_count` | `Manifest::len` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
+| `DirectedProjection::edge_count` | `Manifest::len` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
+| `chokepoint_report` | `Manifest::len` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
+| `god_nodes_in_scope` | `Reverse` | calls | 4.0 | INFERRED confidence, cross-community, peripheral→hub |
 
 ---
 
@@ -69,93 +69,81 @@ _No hyperedges extracted._
 
 | ID | Focus | Size | Internal Edges | Cohesion |
 |----|-------|------|----------------|----------|
-| 0 | `path/to/Graphenium/src` | 117 | 205 | 0.030 |
-| 1 | `path/to/Graphenium/src` | 117 | 221 | 0.033 |
-| 2 | `path/to/Graphenium/src` | 96 | 195 | 0.043 |
-| 3 | `path/to/Graphenium/src/serve` | 83 | 255 | 0.075 |
-| 4 | `path/to/Graphenium/src` | 71 | 125 | 0.050 |
-| 5 | `path/to/Graphenium/src` | 68 | 144 | 0.063 |
-| 6 | `path/to/Graphenium` | 67 | 124 | 0.056 |
-| 7 | `path/to/Graphenium/src/serve` | 61 | 126 | 0.069 |
-| 8 | `path/to/Graphenium/src` | 42 | 88 | 0.102 |
-| 9 | `path/to/Graphenium/src/semantic` | 40 | 50 | 0.064 |
-| 10 | `path/to/Graphenium/src` | 34 | 73 | 0.130 |
-| 11 | `path/to/Graphenium/src/semantic` | 30 | 56 | 0.129 |
-| 12 | `path/to/Graphenium/src/cluster` | 22 | 48 | 0.208 |
-| 13 | `path/to/Graphenium/src/semantic` | 22 | 21 | 0.091 |
-| 14 | `path/to/Graphenium/src` | 20 | 32 | 0.168 |
-| 15 | `path/to/Graphenium/src/model` | 16 | 19 | 0.158 |
-| 16 | `path/to/Graphenium/src/model` | 16 | 22 | 0.183 |
-| 17 | `path/to/Graphenium/src` | 14 | 27 | 0.297 |
-| 18 | `path/to/Graphenium/src/detect` | 9 | 8 | 0.222 |
-| 19 | `path/to/Graphenium/src/detect` | 9 | 13 | 0.361 |
-| 20 | `path/to/Graphenium/src` | 2 | 2 | 2.000 |
-| 21 | `path/to/Graphenium/src/export` | 1 | 0 | 0.000 |
+| 0 | `Users/liamandrew/Documents/Code/Graphenium/src` | 294 | 622 | 0.014 |
+| 1 | `Users/liamandrew/Documents/Code/Graphenium/src` | 162 | 527 | 0.040 |
+| 2 | `Users/liamandrew/Documents/Code/Graphenium/src` | 161 | 325 | 0.025 |
+| 3 | `Users/liamandrew/Documents/Code/Graphenium` | 114 | 242 | 0.038 |
+| 4 | `Users/liamandrew/Documents/Code/Graphenium/src` | 112 | 227 | 0.037 |
+| 5 | `Users/liamandrew/Documents/Code/Graphenium/src` | 67 | 141 | 0.064 |
+| 6 | `Users/liamandrew/Documents/Code/Graphenium/src/semantic` | 62 | 78 | 0.041 |
+| 7 | `Users/liamandrew/Documents/Code/Graphenium` | 51 | 81 | 0.064 |
+| 8 | `Users/liamandrew/Documents/Code/Graphenium/src` | 47 | 95 | 0.088 |
+| 9 | `Users/liamandrew/Documents/Code/Graphenium/src` | 46 | 87 | 0.084 |
+| 10 | `Users/liamandrew/Documents/Code/Graphenium/src` | 36 | 73 | 0.116 |
+| 11 | `Users/liamandrew/Documents/Code/Graphenium/src` | 18 | 22 | 0.144 |
+| 12 | `Users/liamandrew/Documents/Code/Graphenium/src` | 14 | 27 | 0.297 |
+| 13 | `Users/liamandrew/Documents/Code/Graphenium/src/cluster` | 12 | 16 | 0.242 |
+| 14 | `Users/liamandrew/Documents/Code/Graphenium/src/detect` | 9 | 13 | 0.361 |
+| 15 | `Users/liamandrew/Documents/Code/Graphenium/tests/trust_bench` | 2 | 1 | 1.000 |
+| 16 | `Users/liamandrew/Documents/Code/Graphenium/src` | 2 | 2 | 2.000 |
+| 17 | `Users/liamandrew/Documents/Code/Graphenium/tests` | 1 | 0 | 0.000 |
+| 18 | `Users/liamandrew/Documents/Code/Graphenium/src/export` | 1 | 0 | 0.000 |
 
-**Community 0** (117 nodes, cohesion 0.03):
-> , aiprovider, arc, cachemiss, check_semantic_cache, classify, classify_classify_extension, classify_code_extensions, classify_document_extensions, classify_image_extensions, classify_is_skip_dir, classify_pdf_is_paper, classify_skip_dirs, classify_skip_extensions, contentblock, extractmode, filetype, globsetbuilder, godnode, graphdiff … +97 more
+**Community 0** (294 nodes, cohesion 0.01):
+> , aiprovider, analyze, cachemanager, cachemiss, check_semantic_cache, classify, classify_classify_extension, classify_code_extensions, classify_document_extensions, classify_image_extensions, classify_is_skip_dir, classify_pdf_is_paper, classify_skip_dirs, classify_skip_extensions, clusteroptions, config, config_c, config_config_for_extension, config_cpp … +274 more
 
-**Community 1** (117 nodes, cohesion 0.03):
-> confidence, diff, diff_added_edge_detected, diff_added_node_detected, diff_both_empty_graphs, diff_diff, diff_graphdiff, diff_identical_graphs_produce_empty_diff, diff_make, diff_removed_edge_detected, diff_removed_node_detected, directedprojection, doctor, doctor_check_api_keys, doctor_check_binary, doctor_check_graph, doctor_check_graph_metadata, doctor_check_graph_quality, doctor_check_tree_sitter_langs, doctor_run_doctor … +97 more
+**Community 1** (162 nodes, cohesion 0.04):
+> arcswap, directedprojection, doctor_run_doctor_json, edge_edge_extracted, god_god_nodes_in_scope, graph_grapheniumgraph_contains_node, graph_grapheniumgraph_degree, graph_grapheniumgraph_edges_iter, graph_grapheniumgraph_is_ast_only, graph_grapheniumgraph_node_data, graph_grapheniumgraph_node_edges, graph_grapheniumgraph_nodes, handlers, handlers_add_edge_persist_roundtrip_preserves_all_edges, handlers_architecture_summary_auto_tunes_for_ast_only_graphs, handlers_architecture_summary_honors_generated_code_mode, handlers_architecture_summary_reports_major_sections, handlers_common_path_focus, handlers_community_focus_label, handlers_community_overviews … +142 more
 
-**Community 2** (96 nodes, cohesion 0.04):
-> analyze, build, build_basic_build, build_build_from_extraction, build_build_merged, build_build_merged_combines_results, build_buildstats, build_dangling_edge_dropped, build_edge, build_hyperedges_added_to_graph, build_last_write_wins_for_duplicate_id, build_node, build_semantic_overrides_ast, build_token_counts_summed_in_merged, clusteroptions, debouncedevent, detectoptions, duration, export, extractoptions … +76 more
+**Community 2** (161 nodes, cohesion 0.03):
+> ci_csproj_to_extraction, cross_file, cross_file_file_stem, cross_file_find_split_points, cross_file_make_node, cross_file_non_python_files_ignored, cross_file_resolve_python_imports, cross_file_resolves_known_import, deserialize, edge, edge_confidence, edge_confidence_default_score, edge_confidence_deserializes_uppercase, edge_confidence_fmt, edge_confidence_serializes_uppercase, edge_confidence_surprise_bonus, edge_default_weight, edge_edge, edge_edge_default_weight_is_one, edge_edge_eq … +141 more
 
-**Community 3** (83 nodes, cohesion 0.07):
-> arcswap, handlers, handlers_architecture_summary_auto_tunes_for_ast_only_graphs, handlers_architecture_summary_honors_generated_code_mode, handlers_architecture_summary_reports_major_sections, handlers_common_path_focus, handlers_community_focus_label, handlers_community_overviews, handlers_communityoverview, handlers_get_community_can_include_full_member_list, handlers_get_community_not_found, handlers_get_community_returns_members, handlers_get_info_has_tool_capabilities, handlers_get_neighbors_deduplicates_duplicate_rows, handlers_get_neighbors_relation_filter, handlers_get_neighbors_returns_connected, handlers_get_node_by_id, handlers_get_node_by_label, handlers_get_node_not_found, handlers_god_nodes_honors_node_type_filter … +63 more
+**Community 3** (114 nodes, cohesion 0.04):
+> analysisresult, buildstats, communitystats, confidence, corpuswarning, detectedfile, edgeref, extractoptions, fmtwrite, fs, graph, graph_add_edge_dangling_returns_false, graph_add_edge_deduplicates_logical_duplicates, graph_add_edge_keeps_distinct_direction_or_confidence, graph_add_edge_success, graph_degree_and_neighbors, graph_grapheniumgraph, graph_grapheniumgraph_add_edge, graph_grapheniumgraph_default, graph_grapheniumgraph_edge_count … +94 more
 
-**Community 4** (71 nodes, cohesion 0.05):
-> cohesion, cohesion_clique_has_cohesion_one, cohesion_community_stats, cohesion_communitystats, cohesion_make_graph_with_edges, cohesion_no_internal_edges_cohesion_zero, cohesion_partial_connectivity, cohesion_singleton_cohesion_zero, cohesion_two_communities_reported, config, config_c, config_config_for_extension, config_cpp, config_csharp, config_java, config_javascript, config_languageconfig, config_python, config_typescript, cross_file … +51 more
+**Community 4** (112 nodes, cohesion 0.04):
+> ci, ci_ci_targets_to_extraction, ci_ci_targets_to_extraction_creates_nodes, ci_ciformat, ci_citarget, ci_detect_format, ci_detects_cargo_toml, ci_detects_github_actions, ci_parse_cargo_toml, ci_parse_cargo_toml_build_and_test, ci_parse_ci_config, ci_parse_github_actions, ci_parse_makefile, ci_parse_package_json, ci_parse_package_json_creates_build_and_test, cohesion, cohesion_clique_has_cohesion_one, cohesion_community_stats, cohesion_communitystats, cohesion_make_graph_with_edges … +92 more
 
-**Community 5** (68 nodes, cohesion 0.06):
-> gnode, go, go_collect_calls, go_descend, go_extract, go_extract_inner, go_extract_package_name, go_extract_receiver_type, go_extract_type_name, go_field_text, go_free_function_qualified_with_package, go_function_and_method, go_import, go_method_qualified_with_package_and_receiver, go_qualify, go_walk_node, god, god_build, god_empty_graph_returns_empty, god_file_level_hub_filtered … +48 more
+**Community 5** (67 nodes, cohesion 0.06):
+> graph_grapheniumgraph_edges_between, main_cmd_query, rankednode, reverse, traversal, traversal_bfs, traversal_bfs_in_scope, traversal_bfs_in_scope_ignores_neighbors_outside_scope, traversal_bfs_respects_max_nodes, traversal_bfs_visits_connected_nodes, traversal_bfs_with_filters, traversal_bfs_with_filters_respects_relation_filters, traversal_clean_windows_path, traversal_dfs, traversal_dfs_helper, traversal_dfs_in_scope, traversal_dfs_visits_connected_nodes, traversal_dfs_with_filters, traversal_display_label_with_collisions, traversal_empty_ids_returns_placeholder … +47 more
 
-**Community 6** (67 nodes, cohesion 0.06):
-> analysisresult, buildstats, communitystats, corpuswarning, detectedfile, fmtwrite, fs, grapheniumerror, lib, lib_extract_all, lib_initialize_and_summarize, lib_initialize_empty_directory, lib_initialize_graph, lib_initresult, lib_on_edge_discovered, lib_on_edge_discovered_adds_edge, lib_on_edge_invalid, lib_on_edge_invalid_no_match_returns_zero, lib_on_edge_invalid_removes_edge, lib_on_file_open … +47 more
+**Community 6** (62 nodes, cohesion 0.04):
+> client, client_anthropic_request_body_structure, client_anthropic_serializes_image_block, client_anthropiccontentblock, client_anthropicimagesource, client_anthropicmessage, client_anthropicrequest, client_anthropicresponse, client_anthropicresponseblock, client_anthropicusage, client_claude_client_is_backward_compatible, client_claudeclient, client_claudeclient_messages, client_claudeclient_new, client_content_block_image_creates_correctly, client_content_block_text_creates_correctly, client_contentblock, client_contentblock_image, client_contentblock_serialize, client_contentblock_text … +42 more
 
-**Community 7** (61 nodes, cohesion 0.07):
-> rankednode, reverse, traversal, traversal_bfs, traversal_bfs_in_scope, traversal_bfs_in_scope_ignores_neighbors_outside_scope, traversal_bfs_respects_max_nodes, traversal_bfs_visits_connected_nodes, traversal_bfs_with_filters, traversal_bfs_with_filters_respects_relation_filters, traversal_dfs, traversal_dfs_helper, traversal_dfs_in_scope, traversal_dfs_visits_connected_nodes, traversal_dfs_with_filters, traversal_empty_ids_returns_placeholder, traversal_filtered_neighbor_edges_for_path, traversal_filtered_neighbors, traversal_filtered_node_ids, traversal_filtered_node_ids_can_exclude_generated_like_paths … +41 more
+**Community 7** (51 nodes, cohesion 0.06):
+> diff, diff_added_edge_detected, diff_added_node_detected, diff_both_empty_graphs, diff_diff, diff_graphdiff, diff_identical_graphs_produce_empty_diff, diff_make, diff_removed_edge_detected, diff_removed_node_detected, grapheniumgraph, harness, harness_check_resolution_quality, harness_planverificationreport, harness_trust_check_fails_with_low_resolution, harness_trust_check_fails_with_many_ambiguous_edges, harness_trust_check_passes_with_good_resolution, harness_trustcheckresult, harness_verify_plan, planning_bench … +31 more
 
-**Community 8** (42 nodes, cohesion 0.10):
-> edgeref, graph, graph_add_edge_dangling_returns_false, graph_add_edge_deduplicates_logical_duplicates, graph_add_edge_keeps_distinct_direction_or_confidence, graph_add_edge_success, graph_degree_and_neighbors, graph_grapheniumgraph, graph_grapheniumgraph_add_edge, graph_grapheniumgraph_contains_node, graph_grapheniumgraph_default, graph_grapheniumgraph_degree, graph_grapheniumgraph_edge_count, graph_grapheniumgraph_edges_iter, graph_grapheniumgraph_edges_with_endpoints, graph_grapheniumgraph_has_logically_equivalent_edge, graph_grapheniumgraph_inner, graph_grapheniumgraph_is_ast_only, graph_grapheniumgraph_neighbor_ids, graph_grapheniumgraph_new … +22 more
+**Community 8** (47 nodes, cohesion 0.09):
+> arc, query, query_a, query_a_consume, query_a_next, query_a_parse_atom, query_a_parse_program, query_a_peek, query_atom, query_compute_local_subgraph, query_datalogprogram, query_edb, query_edb_load_from_graph, query_interpreter, query_interpreter_get_relation, query_interpreter_new, query_interpreter_solve, query_make_test_graph, query_materialize_full_graph, query_parse … +27 more
 
-**Community 9** (40 nodes, cohesion 0.06):
-> client, client_anthropic_request_body_structure, client_anthropic_serializes_image_block, client_anthropiccontentblock, client_anthropicimagesource, client_anthropicmessage, client_anthropicrequest, client_anthropicresponse, client_anthropicresponseblock, client_anthropicusage, client_claude_client_is_backward_compatible, client_claudeclient, client_claudeclient_messages, client_claudeclient_new, client_content_block_image_creates_correctly, client_content_block_text_creates_correctly, client_contentblock, client_contentblock_image, client_contentblock_serialize, client_contentblock_text … +20 more
+**Community 9** (46 nodes, cohesion 0.08):
+> build, build_basic_build, build_build_from_extraction, build_build_merged, build_build_merged_combines_results, build_buildstats, build_dangling_edge_dropped, build_edge, build_hyperedges_added_to_graph, build_last_write_wins_for_duplicate_id, build_node, build_semantic_overrides_ast, build_token_counts_summed_in_merged, extraction, extraction_buildtarget, extraction_cijob, extraction_extractionresult, extraction_extractionresult_edge_count, extraction_extractionresult_is_empty, extraction_extractionresult_merge … +26 more
 
-**Community 10** (34 nodes, cohesion 0.13):
-> ordering, ranking, ranking_build_graph, ranking_collect_matches, ranking_degree_in_scope, ranking_detailed_query_scoring_records_match_fields_and_keywords, ranking_detailed_query_scoring_uses_fallback_reason_when_no_keywords_match, ranking_detects_framework_import_noise, ranking_fallback_degree_ranking_skips_framework_noise, ranking_is_framework_label, ranking_is_framework_noise_node, ranking_is_import_only_node, ranking_matched_fields, ranking_merge_keywords, ranking_node_allowed, ranking_parse_keywords, ranking_query_rank_multiplier, ranking_query_scoring_downranks_framework_matches, ranking_querymode, ranking_querymode_from_str … +14 more
+**Community 10** (36 nodes, cohesion 0.12):
+> ordering, ranking, ranking_build_graph, ranking_collect_matches, ranking_degree_in_scope, ranking_detailed_query_scoring_records_match_fields_and_keywords, ranking_detects_framework_import_noise, ranking_fallback_degree_ranking_skips_framework_noise, ranking_is_framework_label, ranking_is_framework_noise_node, ranking_is_import_only_node, ranking_matched_fields, ranking_merge_keywords, ranking_node_allowed, ranking_parse_keywords, ranking_query_rank_multiplier, ranking_query_scoring_downranks_framework_matches, ranking_querymode, ranking_querymode_from_str, ranking_rankednode … +16 more
 
-**Community 11** (30 nodes, cohesion 0.13):
-> deserialize, parse, parse_build_edge, parse_build_hyperedge, parse_build_node, parse_build_result, parse_completely_unparseable_returns_empty, parse_confidence_score_clamped, parse_confidence_variants_parsed, parse_empty_id_node_dropped, parse_empty_input_returns_empty, parse_extract_braces, parse_extract_code_block, parse_extract_json, parse_file_type_variants_parsed, parse_hyperedge_with_three_nodes_kept, parse_hyperedge_with_two_nodes_dropped, parse_layer1_direct_parse, parse_layer2_json_code_block, parse_layer2_plain_code_block … +10 more
+**Community 11** (18 nodes, cohesion 0.14):
+> trust, trust_claim, trust_claim_created_with_defaults, trust_claim_new, trust_claim_with_support, trust_claimtype, trust_evidence_span_created_with_hashes, trust_evidence_validation_detects_stale, trust_evidencespan, trust_evidencespan_mark_stale, trust_evidencespan_mark_valid, trust_evidencespan_new, trust_evidencespan_validate, trust_evidencespancompact, trust_evidencestate, trust_resolution_report_formats_correctly, trust_resolutionreport, trust_resolutionreport_format
 
-**Community 12** (22 nodes, cohesion 0.21):
-> louvain, louvain_aggregate, louvain_compact_ids, louvain_fully_connected_graph_one_community, louvain_largest_community_gets_id_zero, louvain_lgraph, louvain_lgraph_add_edge, louvain_lgraph_modularity, louvain_lgraph_new, louvain_louvainconfig, louvain_louvainconfig_default, louvain_modularity_increases, louvain_no_edges_each_node_own_community, louvain_phase1, louvain_renumber_by_size, louvain_run, louvain_single_node_returns_one_community, louvain_two_triangles_detect_communities, louvain_xorshift64, louvain_xorshift64_new … +2 more
-
-**Community 13** (22 nodes, cohesion 0.09):
-> provider, provider_aiprovider, provider_aiprovider_auth_header_name, provider_aiprovider_auth_header_value, provider_aiprovider_default_model, provider_aiprovider_endpoint_url, provider_aiprovider_env_var_name, provider_aiprovider_fmt, provider_aiprovider_from_str, provider_aiprovider_request_format, provider_anthropic_auth_header_is_bare_key, provider_anthropic_uses_messages_format, provider_deepseek_auth_header_is_bearer, provider_default_models, provider_env_var_names, provider_openai_auth_header_is_bearer, provider_openai_uses_chat_completions_format, provider_parse_case_insensitive, provider_parse_provider_strings, provider_provider_urls … +2 more
-
-**Community 14** (20 nodes, cohesion 0.17):
-> telemetry, telemetry_build_overlay, telemetry_hot_path_identifies_frequent_nodes, telemetry_hot_path_query, telemetry_load_traces, telemetry_load_traces_returns_error_for_bad_file, telemetry_make_graph, telemetry_overlay_imports_spans, telemetry_resourcespans, telemetry_runtime_weighted_traversal, telemetry_runtime_weighted_traversal_boosts_hot_paths, telemetry_runtimemetadata, telemetry_runtimeoverlay, telemetry_runtimeoverlay_import_traces, telemetry_runtimeoverlay_is_empty, telemetry_runtimeoverlay_span_count, telemetry_sample_spans, telemetry_scopespans, telemetry_tracespan, telemetry_update_percentiles
-
-**Community 15** (16 nodes, cohesion 0.16):
-> id, id_all_special_chars_stripped, id_basic_join, id_empty_parts_only_returns_empty, id_filters_empty_parts, id_idempotent, id_make_id, id_make_id_owned, id_normalize_id, id_normalize_id_uses_canonical_make_id, id_normalize_label, id_normalize_label_strips_wrappers_and_whitespace, id_single_part, id_special_chars_become_single_underscore, id_strips_leading_trailing_dots_underscores, id_three_parts
-
-**Community 16** (16 nodes, cohesion 0.18):
-> edge, edge_confidence, edge_confidence_default_score, edge_confidence_deserializes_uppercase, edge_confidence_fmt, edge_confidence_serializes_uppercase, edge_confidence_surprise_bonus, edge_default_weight, edge_edge, edge_edge_default_weight_is_one, edge_edge_extracted, edge_edge_inferred_call, edge_edge_new, edge_edge_normalizes_endpoints_and_relation, edge_inferred_call_has_reduced_weight, normalize_id
-
-**Community 17** (14 nodes, cohesion 0.30):
+**Community 12** (14 nodes, cohesion 0.30):
 > validate, validate_clean_result_passes, validate_edge_with_empty_source_removed, validate_edge_with_invalid_score_removed, validate_good_edge, validate_good_node, validate_hyperedge_with_too_few_nodes_removed, validate_node_with_empty_id_removed, validate_node_with_empty_label_removed, validate_valid_hyperedge_kept, validate_validate, validate_validationissue, validate_validationreport, validate_validationreport_is_clean
 
-**Community 18** (9 nodes, cohesion 0.22):
-> lazy, regexset, sensitive, sensitive_detects_cloud_configs, sensitive_detects_credential_prefixes, sensitive_detects_dotenv, sensitive_detects_key_files, sensitive_does_not_flag_safe_files, sensitive_is_sensitive_filename
+**Community 13** (12 nodes, cohesion 0.24):
+> drift, drift_community_changes_detected, drift_count_boundary_crossings, drift_count_unique_communities, drift_detect_drift, drift_drift_report_contains_community_count, drift_driftevent, drift_driftkind, drift_driftreport, drift_driftseverity, drift_format_drift, drift_no_drift_for_identical_graphs
 
-**Community 19** (9 nodes, cohesion 0.36):
+**Community 14** (9 nodes, cohesion 0.36):
 > corpus, corpus_both_large_and_many_files, corpus_corpus_warnings, corpus_corpuswarning, corpus_corpuswarning_fmt, corpus_healthy_corpus_no_warnings, corpus_large_corpus_warns, corpus_many_files_warns, corpus_small_corpus_warns
 
-**Community 20** (2 nodes, cohesion 2.00):
+**Community 15** (2 nodes, cohesion 1.00):
+> benchmark_test, benchmark_test_benchmark_self_graph_builds_quickly
+
+**Community 16** (2 nodes, cohesion 2.00):
 > error, error_grapheniumerror
 
-**Community 21** (1 nodes, cohesion 0.00):
+**Community 17** (1 nodes, cohesion 0.00):
+> trust_bench
+
+**Community 18** (1 nodes, cohesion 0.00):
 > html_template
 
 ---
@@ -168,68 +156,72 @@ _No AMBIGUOUS edges._
 
 ## Knowledge Gaps
 
-1 isolated node(s) with no connections:
+2 isolated node(s) with no connections:
 
-- `html_template` (`/path/to/Graphenium/src/export/html_template.rs`)
+- `trust_bench` (`/Users/liamandrew/Documents/Code/Graphenium/tests/trust_bench.rs`)
+- `html_template` (`/Users/liamandrew/Documents/Code/Graphenium/src/export/html_template.rs`)
 
 ---
 
 ## Suggested Questions
 
 1. Is `Node` a bottleneck? Removing it could disconnect parts of the graph.
-   > _High betweenness centrality (0.812)._
+   > _High betweenness centrality (0.506)._
 
 2. Is `mod` a bottleneck? Removing it could disconnect parts of the graph.
-   > _High betweenness centrality (0.463)._
+   > _High betweenness centrality (0.356)._
 
-3. Is `handlers` a bottleneck? Removing it could disconnect parts of the graph.
-   > _High betweenness centrality (0.381)._
+3. Is `len` a bottleneck? Removing it could disconnect parts of the graph.
+   > _High betweenness centrality (0.251)._
 
-4. How does `make_server` interact with add_edge, new?
-   > _`make_server` is highly connected with INFERRED relationships that weren't explicitly stated in source._
+4. How does `len` interact with len, validate?
+   > _`len` is highly connected with INFERRED relationships that weren't explicitly stated in source._
 
-5. How does `new` interact with new, reload_graph_swaps_state?
-   > _`new` is highly connected with INFERRED relationships that weren't explicitly stated in source._
+5. How does `upsert_node` interact with add_node, corrupted_index_caught?
+   > _`upsert_node` is highly connected with INFERRED relationships that weren't explicitly stated in source._
 
-6. Why is `html_template` isolated? Does it connect to anything outside this corpus?
+6. How does `extracted` interact with new, good_edge?
+   > _`extracted` is highly connected with INFERRED relationships that weren't explicitly stated in source._
+
+7. Why is `trust_bench` isolated? Does it connect to anything outside this corpus?
    > _Node has no edges._
 
-7. Community 0 has low internal connectivity (3%). Should its 117 members be reorganized?
-   > _Cohesion 0.030 < 0.15 threshold._
+8. Why is `html_template` isolated? Does it connect to anything outside this corpus?
+   > _Node has no edges._
 
-8. Community 1 has low internal connectivity (3%). Should its 117 members be reorganized?
-   > _Cohesion 0.033 < 0.15 threshold._
+9. Community 0 has low internal connectivity (1%). Should its 294 members be reorganized?
+   > _Cohesion 0.014 < 0.15 threshold._
 
-9. Community 2 has low internal connectivity (4%). Should its 96 members be reorganized?
-   > _Cohesion 0.043 < 0.15 threshold._
+10. Community 1 has low internal connectivity (4%). Should its 162 members be reorganized?
+   > _Cohesion 0.040 < 0.15 threshold._
 
-10. Community 3 has low internal connectivity (7%). Should its 83 members be reorganized?
-   > _Cohesion 0.075 < 0.15 threshold._
+11. Community 2 has low internal connectivity (3%). Should its 161 members be reorganized?
+   > _Cohesion 0.025 < 0.15 threshold._
 
-11. Community 4 has low internal connectivity (5%). Should its 71 members be reorganized?
-   > _Cohesion 0.050 < 0.15 threshold._
+12. Community 3 has low internal connectivity (4%). Should its 114 members be reorganized?
+   > _Cohesion 0.038 < 0.15 threshold._
 
-12. Community 5 has low internal connectivity (6%). Should its 68 members be reorganized?
-   > _Cohesion 0.063 < 0.15 threshold._
+13. Community 4 has low internal connectivity (4%). Should its 112 members be reorganized?
+   > _Cohesion 0.037 < 0.15 threshold._
 
-13. Community 6 has low internal connectivity (6%). Should its 67 members be reorganized?
-   > _Cohesion 0.056 < 0.15 threshold._
-
-14. Community 7 has low internal connectivity (7%). Should its 61 members be reorganized?
-   > _Cohesion 0.069 < 0.15 threshold._
-
-15. Community 8 has low internal connectivity (10%). Should its 42 members be reorganized?
-   > _Cohesion 0.102 < 0.15 threshold._
-
-16. Community 9 has low internal connectivity (6%). Should its 40 members be reorganized?
+14. Community 5 has low internal connectivity (6%). Should its 67 members be reorganized?
    > _Cohesion 0.064 < 0.15 threshold._
 
-17. Community 10 has low internal connectivity (13%). Should its 34 members be reorganized?
-   > _Cohesion 0.130 < 0.15 threshold._
+15. Community 6 has low internal connectivity (4%). Should its 62 members be reorganized?
+   > _Cohesion 0.041 < 0.15 threshold._
 
-18. Community 11 has low internal connectivity (13%). Should its 30 members be reorganized?
-   > _Cohesion 0.129 < 0.15 threshold._
+16. Community 7 has low internal connectivity (6%). Should its 51 members be reorganized?
+   > _Cohesion 0.064 < 0.15 threshold._
 
-19. Community 13 has low internal connectivity (9%). Should its 22 members be reorganized?
-   > _Cohesion 0.091 < 0.15 threshold._
+17. Community 8 has low internal connectivity (9%). Should its 47 members be reorganized?
+   > _Cohesion 0.088 < 0.15 threshold._
+
+18. Community 9 has low internal connectivity (8%). Should its 46 members be reorganized?
+   > _Cohesion 0.084 < 0.15 threshold._
+
+19. Community 10 has low internal connectivity (12%). Should its 36 members be reorganized?
+   > _Cohesion 0.116 < 0.15 threshold._
+
+20. Community 11 has low internal connectivity (14%). Should its 18 members be reorganized?
+   > _Cohesion 0.144 < 0.15 threshold._
 

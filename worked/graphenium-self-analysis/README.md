@@ -2,74 +2,82 @@
 
 **Repo:** [lambda-alpha-labs/Graphenium](https://github.com/lambda-alpha-labs/Graphenium)  
 **Language:** Rust  
-**Graphenium mode:** AST-only  
+**Graphenium version:** 0.18.0  
+**Graphenium mode:** AST + Stack Graphs  
 **Schema version:** 0.2.0  
-**Nodes:** 957  
-**Edges:** 1,941  
-**Communities:** 22  
-**Generated:** 2026-06-25  
+**Nodes:** 1,211  
+**Edges:** 3,083  
+**Communities:** 19  
+**Generated:** 2026-07-08  
 
 ## What Graphenium got right
 
+### Cross-file call resolution (new in v0.18.0)
+
+The v0.18.0 Stack Graphs resolver found **927 cross-file references**.
+This means cross-file `calls` edges now carry
+`[tree-sitter-stack-graphs:resolved]` provenance — source-backed ground
+truth instead of heuristics. Import resolution is at **100%** (267/267),
+and cross-file call resolution is at **38%** (662/1,755).
+
+The trust profile breaks down as:
+- **43% EXTRACTED** (1,328 edges) — tree-sitter + resolver, ground truth
+- **57% INFERRED** (1,755 edges) — heuristic, corroborate before acting
+- **0% AMBIGUOUS** — no garbage edges
+
 ### Community detection mirrors directory structure
 
-The 19 communities map cleanly to source directories:
+The 19 communities map cleanly to source areas:
 
-- **Community 3** (83 nodes): `src/serve/`, the MCP server surface,
-  including `GrapheniumServer` and all 13 tool handlers.
-- **Community 0** (127 nodes): Core reporting, analysis, and validation
-  types from `src/report.rs`, `src/analyze/`, `src/validate.rs`.
-- **Community 1** (117 nodes): Build pipeline, watch mode, and semantic
-  extraction orchestration.
-- **Community 7**: The graph model: `GrapheniumGraph`, `Edge`,
-  `Node`, `ReplaceStats`.
+- **Community 1** (162 nodes): Core surface — `handlers.rs` (110 nodes),
+  the MCP server, plus analysis pipelines (verifier, impact, traversal).
+  527 internal edges, 254 cross-community `calls` edges.
+- **Community 3** (7 nodes): The graph model — `GrapheniumGraph`,
+  `upsert_node`, graph integrity checks.
+- **Community 9**: Build pipeline — `build_from_extraction`, `BuildTarget`,
+  `build_merged`.
 
 ### Hub nodes match architectural importance
 
 | Node | Degree | File |
 |------|--------|------|
-| `GrapheniumServer` | 30 | `src/serve/handlers.rs` |
-| `Node` | 29 | `src/validate.rs` |
-| `GrapheniumGraph` | 24 | `src/model/graph.rs` |
-| `Manifest` | 19 | `src/main.rs` |
-| `render_report` | 18 | `src/report.rs` |
+| `Manifest::len` | 79 | `src/cache/manifest.rs` |
+| `GrapheniumGraph::upsert_node` | 62 | `src/model/graph.rs` |
+| `Edge::extracted` | 58 | `src/model/edge.rs` |
+| `GrapheniumServer` | 56 | `src/serve/handlers.rs` |
+| `GrapheniumGraph::node_data` | 45 | `src/model/graph.rs` |
 
-These are exactly the types you'd expect to be architectural hubs:
-the central server struct, the core model type, the graph engine, and
-the report generator.
-
-### Cross-community connectors identify real bridges
-
-- **`mod`** (degree 103): module re-exports bridging 6 communities
-- **`Node`** (degree 29): the core model type used by 10 communities
-- **`handlers`** (degree 59): the MCP handler module bridging 5
-  communities
+The hub list reveals that the manifest cache (`Manifest::len`, 79°) is
+actually the highest-degree node — a surprise that only graph analysis
+surfaces. The graph model and MCP server are the other central hubs, as
+expected.
 
 ### Shortest path accuracy
 
-`GrapheniumServer → handlers → GrapheniumGraph` (2 hops). Correct:
-the MCP server struct wraps the graph through the handlers module.
+`GrapheniumServer → add_planned_symbol → upsert_node → GrapheniumGraph`
+(3 hops, cost 3.60). The path is source-backed at each step:
+- `method` [tree-sitter:resolved] (EXTRACTED)
+- `calls` [tree-sitter-stack-graphs:resolved] (INFERRED)
+- `method` [tree-sitter:resolved] (EXTRACTED)
 
 ## What it missed
 
-Without semantic extraction, edges are mostly `imports`, `contains`,
-`method`, and `field_of`. What's missing:
+Without semantic extraction, some relationships are still inferred:
 
-- **`calls` edges between functions across files.** The AST extractor
-  captures intra-file `calls` via tree-sitter, but cross-file call
-  resolution requires the semantic pass.
+- **Cross-file calls at 38% resolution.** Stack Graphs cover many cases
+  but not all — the remaining 62% of cross-file calls are heuristic.
+  Running `gm run` without `--no-semantic` would fill these in via LLM.
 - **Conceptual relationships.** Edges like `delegates_to`,
   `rationale_for`, and `implements` are only available through LLM
   inference.
-- **Directional behavioural tracing.** Without `calls` edges, you can't
-  trace "what calls this function?" across module boundaries; you get
-  "what imports this module?" instead.
+- **Dynamic dispatch.** Rust trait objects and dynamic method calls are
+  not resolved by tree-sitter or Stack Graphs.
 
 ## Most useful queries
 
 ```sh
 # What is the MCP server surface?
-gm query "mcp server handlers"
+gm query "serve module handlers mcp"
 
 # How does the build pipeline work?
 gm query "graph build extraction"
@@ -81,27 +89,28 @@ gm query "community detection"
 ## MCP-style questions
 
 - "What is the shortest path from `GrapheniumServer` to `GrapheniumGraph`?"
-  → 2 hops: `GrapheniumServer → handlers → GrapheniumGraph`
+  → 3 hops: `GrapheniumServer → add_planned_symbol → upsert_node → GrapheniumGraph`
 
 - "What are the god nodes?"
-  → `GrapheniumServer` (30°), `Node` (29°), `GrapheniumGraph` (24°)
+  → `Manifest::len` (79°), `upsert_node` (62°), `Edge::extracted` (58°),
+  `GrapheniumServer` (56°), `node_data` (45°)
 
 - "What community does `handlers.rs` belong to?"
-  → Community 3 (the MCP server surface)
+  → Community 1 (the core surface, 162 nodes, 527 internal edges)
 
-- "What symbols are extracted from `src/serve/handlers.rs`?"
-  → 84 symbols: all MCP tool handlers, helpers, and test functions
+- "How trustworthy is this graph?"
+  → 43% EXTRACTED, 57% INFERRED, 0% AMBIGUOUS. All imports resolved.
+  38% cross-file calls resolved via Stack Graphs.
 
 ## Would I use this again?
 
-Yes. For any Rust project >500 files, the architectural map alone saves
-10+ minutes of orientation per session. The graph is most useful before
-reading any source. It guides you to the right files. It doesn't replace
-reading them.
+Yes. The v0.18.0 cross-file resolution is a step change: going from
+0 cross-file `calls` edges to 662 resolved ones means you can now trace
+behavioural dependencies across module boundaries on source-backed edges.
+The architectural map saves 10+ minutes of orientation per session.
 
-This graph was regenerated with Graphenium v2 and carries provenance
-metadata on every edge. The `graph_stats` MCP tool reports extractor and
-resolution status breakdowns, and `graph.json` includes schema versioning
-with build timestamps. Try `gm diff --before graph.json --after graph.json
---impact` to see the empty diff output, or `gm query "authentication" --mode
-hybrid` for combined lexical and structural retrieval.
+The managed graph (this worked example) carries provenance on every edge.
+The `graph_stats` MCP tool reports extractor and resolution status
+breakdowns. Try `gm diff --before graph.json --after graph.json --impact`
+to see the empty diff output, or `gm query "authentication" --mode hybrid`
+for combined lexical and structural retrieval.
