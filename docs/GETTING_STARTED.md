@@ -112,21 +112,26 @@ gm serve --graph graphenium-out/graph.json
 
 Then configure your AI tool to connect to the server.
 
-### Claude Desktop
+### Claude Code
 
-```json
-{
-  "mcpServers": {
-    "graphenium": {
-      "command": "gm",
-      "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
-    }
-  }
-}
+```sh
+claude mcp add graphenium --scope user -- gm serve --graph /path/to/graphenium-out/graph.json
+```
+
+### Codex
+
+Add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.graphenium]
+command = "gm"
+args = ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
 ```
 
 ### Cursor
 
+Add this to `~/.cursor/mcp.json`:
+
 ```json
 {
   "mcpServers": {
@@ -134,17 +139,6 @@ Then configure your AI tool to connect to the server.
       "command": "gm",
       "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
     }
-  }
-}
-```
-
-### CodeWhale
-
-```json
-{
-  "graphenium": {
-    "command": "gm",
-    "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
   }
 }
 ```

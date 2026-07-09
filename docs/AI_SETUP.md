@@ -128,9 +128,8 @@ Ask which AI coding tool the user uses only if it is not obvious.
 
 | Tool | Config location or setup |
 |---|---|
-| CodeWhale | `~/.codewhale/mcp.json` |
-| Claude Desktop | macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`; Linux: `~/.config/Claude/claude_desktop_config.json` |
 | Claude Code | `claude mcp add graphenium --scope user -- gm serve` |
+| Codex | `~/.codex/config.toml` |
 | Cursor | `~/.cursor/mcp.json` |
 | Other or unknown | Skip MCP and use CLI fallback |
 
@@ -143,7 +142,21 @@ GM_PATH=$(which gm)
 GRAPH_PATH=$(pwd)/graphenium-out/graph.json
 ```
 
-### Claude Desktop or Cursor
+### Claude Code
+
+```sh
+claude mcp add graphenium --scope user -- "$GM_PATH" serve --graph "$GRAPH_PATH"
+```
+
+### Codex
+
+```toml
+[mcp_servers.graphenium]
+command = "$GM_PATH"
+args = ["serve", "--graph", "$GRAPH_PATH"]
+```
+
+### Cursor
 
 ```json
 {
@@ -151,20 +164,6 @@ GRAPH_PATH=$(pwd)/graphenium-out/graph.json
     "graphenium": {
       "command": "$GM_PATH",
       "args": ["serve", "--graph", "$GRAPH_PATH"]
-    }
-  }
-}
-```
-
-### CodeWhale
-
-```json
-{
-  "servers": {
-    "graphenium": {
-      "command": "$GM_PATH",
-      "args": ["serve", "--graph", "$GRAPH_PATH"],
-      "env": {}
     }
   }
 }

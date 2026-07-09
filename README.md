@@ -85,19 +85,20 @@ Requires Rust 1.81 or later. Tree-sitter language grammars are bundled.
 
 ## MCP setup
 
-### Claude Desktop
+### Claude Code
 
-Add this to `claude_desktop_config.json`:
+```sh
+claude mcp add graphenium --scope user -- gm serve --graph /path/to/graphenium-out/graph.json
+```
 
-```json
-{
-  "mcpServers": {
-    "graphenium": {
-      "command": "gm",
-      "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
-    }
-  }
-}
+### Codex
+
+Add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.graphenium]
+command = "gm"
+args = ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
 ```
 
 ### Cursor
@@ -113,20 +114,6 @@ Add this to `~/.cursor/mcp.json`:
     }
   }
 }
-```
-
-### CodeWhale
-
-Add this to `~/.codewhale/mcp.json`:
-
-```json
-{
-  "graphenium": {
-    "command": "gm",
-    "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
-  }
-}
-```
 
 ## Core capabilities
 
