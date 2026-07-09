@@ -114,6 +114,7 @@ Add this to `~/.cursor/mcp.json`:
     }
   }
 }
+```
 
 ## Core capabilities
 
