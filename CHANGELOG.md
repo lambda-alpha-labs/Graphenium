@@ -2,6 +2,34 @@
 
 This file summarizes notable releases and preserves the major documentation history.
 
+## v0.19.0, 2026-07-10
+
+Theme: Datalog Standard Library and goal-directed query evaluation.
+
+Added:
+
+- Pre-loaded Datalog Standard Library (`src/analyze/query/stdlib.dl`) embedded in the binary with predicates for transitive reachability (`calls_transitive`, `depends_transitive`), topology (`same_community`, `is_hub`, `is_orphan`), and architectural constraints (`circular_dependency`, `bypasses_layer`).
+- Typed EDB relations (`calls`, `imports`, `contains`, `inherits`, `implements`, `degree`, `hub`) alongside legacy `edge` and `node` facts.
+- Goal-directed rule selection: only stdlib rules reachable from query goals are evaluated; EDB-only queries skip fixpoint iteration entirely.
+- Cached stdlib AST parsing via `OnceLock` and `parsed_stdlib_rules()` in `src/cache/query.rs`.
+- Integration tests in `tests/datalog_stdlib_test.rs`.
+
+Changed:
+
+- `run_datalog_query` automatically merges stdlib rules into every query.
+- `run_datalog` MCP tool description documents pre-loaded predicates and base EDB relations.
+- Graphenium skill (`skills/graphenium/SKILL.md`) instructs agents to use stdlib predicates instead of hand-written recursion.
+
+Fixed:
+
+- Anonymous `_` variables in Datalog rules no longer collide across atoms (fixes negation in `is_orphan` and related predicates).
+- Goal evaluation respects constant constraints (e.g. `same_community("x1", X)` no longer returns unrelated matches).
+- Fixpoint solver returns an explicit error when the step budget is exhausted without convergence.
+
+Performance:
+
+- EDB queries on the 1,211-node self-analysis graph complete in under one second (previously hung indefinitely while evaluating full transitive closures).
+
 ## v0.18.0, 2026-07-03
 
 Theme: working cross-file resolution improvements, especially for C#.
