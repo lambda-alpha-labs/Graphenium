@@ -1,0 +1,57 @@
+# Graphenium Datalog Standard Library
+# Pre-loaded predicates for codebase reasoning. Do not redefine in user queries.
+
+# ── Transitive Closures (Pathfinding & Reachability) ─────────────────────────
+
+# Transitive calls: X directly or indirectly calls Y
+calls_transitive(X, Y) :- calls(X, Y, _).
+calls_transitive(X, Y) :- calls(X, Z, _), calls_transitive(Z, Y).
+
+# Transitive imports: X directly or indirectly imports Y
+imports_transitive(X, Y) :- imports(X, Y, _).
+imports_transitive(X, Y) :- imports(X, Z, _), imports_transitive(Z, Y).
+
+# Generic dependency: X directly depends on Y (calls, imports, inherits, implements, contains)
+depends_on(X, Y) :- calls(X, Y, _).
+depends_on(X, Y) :- imports(X, Y, _).
+depends_on(X, Y) :- inherits(X, Y, _).
+depends_on(X, Y) :- implements(X, Y, _).
+depends_on(X, Y) :- contains(X, Y, _).
+
+depends_transitive(X, Y) :- depends_on(X, Y).
+depends_transitive(X, Y) :- depends_on(X, Z), depends_transitive(Z, Y).
+
+# ── Topological Helpers ────────────────────────────────────────────────────────
+
+# Same community: X and Y belong to the same Louvain cluster
+same_community(X, Y) :-
+    node(X, _, _, _, CommId),
+    node(Y, _, _, _, CommId).
+
+# Architectural Hub (God Node): degree > 15 (hub/1 seeded from degree in EDB)
+is_hub(X) :- hub(X).
+
+# Orphaned Node: zero call/import connections (knowledge gap)
+is_orphan(X) :-
+    node(X, _, _, _, _),
+    not calls(X, _, _),
+    not calls(_, X, _),
+    not imports(X, _, _),
+    not imports(_, X, _).
+
+# ── Architectural Gating & Constraints ───────────────────────────────────────
+
+# Helper for inequality via negation (parser has no X /= Y syntax)
+identical(X, X) :- node(X, _, _, _, _).
+
+# Circular dependency: X and Y call each other transitively
+circular_dependency(X, Y) :-
+    calls_transitive(X, Y),
+    calls_transitive(Y, X),
+    not identical(X, Y).
+
+# Bypass verification: X depends on Z transitively, bypassing intermediary Y
+bypasses_layer(X, Y, Z) :-
+    depends_transitive(X, Z),
+    node(Y, _, _, _, _),
+    not depends_transitive(X, Y).

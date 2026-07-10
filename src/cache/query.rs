@@ -234,6 +234,15 @@ mod tests {
     }
 }
 
+// ── Datalog Standard Library cache ───────────────────────────────────────────
+
+/// Cached standard-library Datalog rules (parsed once at first use).
+/// The embedded `stdlib.dl` is static, so this behaves like a Salsa memo
+/// without invalidation overhead.
+pub fn parsed_stdlib_rules() -> std::sync::Arc<Vec<crate::analyze::query::Rule>> {
+    crate::analyze::query::stdlib_rules()
+}
+
 /// Materialize the full workspace graph from the Salsa database.
 pub fn materialize_full_graph(
     db: &salsa::DatabaseImpl,

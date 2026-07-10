@@ -65,6 +65,21 @@ gm run . --no-semantic --no-viz
 | What changed since a snapshot? | `what_changed` or `diff_graph` |
 | Need a custom constraint query | `run_datalog` |
 
+## Datalog Queries (Advanced Pathfinding)
+
+Graphenium features a pre-loaded Datalog Standard Library. **Do not write recursive rules manually**; instead, use the pre-loaded predicates:
+
+- **Check if a component bypasses the service layer:**
+  `?- bypasses_layer('auth_controller', 'auth_service', 'auth_repository').`
+- **Find circular dependencies in a module:**
+  `?- circular_dependency(X, Y), node(X, _, _, 'src/parser/mod.rs', _).`
+- **Find all transitively called dependencies of a target:**
+  `?- calls_transitive('auth_service', X).`
+
+Available stdlib predicates: `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`.
+
+Base EDB relations (always available): `node`, `calls`, `imports`, `contains`, `inherits`, `implements`, `degree`, `edge`.
+
 ## Trust model
 
 Every edge carries confidence.

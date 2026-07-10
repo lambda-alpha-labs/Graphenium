@@ -9,7 +9,11 @@
 //! Phase 6: Tests. Phase 5 (MCP/CLI) lives in handlers.rs and main.rs.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
+
+/// Embedded Datalog standard library — compiled into the binary.
+const STDLIB_SOURCE: &str = include_str!("query/stdlib.dl");
 
 /// Empty relation singleton for unknown relation names.
 
@@ -84,17 +88,64 @@ impl Edb {
         }
         self.relations.insert("node".to_string(), nodes);
 
-        // 2. edge(Src, Tgt, Relation, Confidence)
+        // 2. Typed relations: calls, imports, contains, inherits, implements
+        let mut calls = HashSet::new();
+        let mut imports = HashSet::new();
+        let mut contains = HashSet::new();
+        let mut inherits = HashSet::new();
+        let mut implements = HashSet::new();
         let mut edges = HashSet::new();
         for e in graph.edges_iter() {
+            let conf = Val::Str(format!("{:?}", e.confidence));
+            let tuple = vec![
+                Val::Str(e.source.clone()),
+                Val::Str(e.target.clone()),
+                conf.clone(),
+            ];
+            match e.relation.as_str() {
+                "calls" => {
+                    calls.insert(tuple);
+                }
+                "imports" => {
+                    imports.insert(tuple);
+                }
+                "contains" => {
+                    contains.insert(tuple);
+                }
+                "inherits" => {
+                    inherits.insert(tuple);
+                }
+                "implements" => {
+                    implements.insert(tuple);
+                }
+                _ => {}
+            }
             edges.insert(vec![
                 Val::Str(e.source.clone()),
                 Val::Str(e.target.clone()),
                 Val::Str(e.relation.clone()),
-                Val::Str(format!("{:?}", e.confidence)),
+                conf,
             ]);
         }
+        self.relations.insert("calls".to_string(), calls);
+        self.relations.insert("imports".to_string(), imports);
+        self.relations.insert("contains".to_string(), contains);
+        self.relations.insert("inherits".to_string(), inherits);
+        self.relations.insert("implements".to_string(), implements);
         self.relations.insert("edge".to_string(), edges);
+
+        // 3. degree(NodeId, Count) and hub(NodeId) for is_hub/1
+        let mut degrees = HashSet::new();
+        let mut hubs = HashSet::new();
+        for n in graph.nodes() {
+            let count = graph.degree(&n.id) as i64;
+            degrees.insert(vec![Val::Str(n.id.clone()), Val::Int(count)]);
+            if count > 15 {
+                hubs.insert(vec![Val::Str(n.id.clone())]);
+            }
+        }
+        self.relations.insert("degree".to_string(), degrees);
+        self.relations.insert("hub".to_string(), hubs);
     }
 }
 
@@ -123,6 +174,35 @@ pub struct DatalogProgram {
     pub facts: Vec<Atom>,
     pub rules: Vec<Rule>,
     pub goal: Vec<Atom>,
+}
+
+impl DatalogProgram {
+    /// Merge standard library rules into the parsed program.
+    /// Stdlib rules are prepended so they are evaluated before user rules.
+    pub fn merge_stdlib(&mut self, stdlib_rules: Vec<Rule>) {
+        let mut combined = stdlib_rules;
+        combined.append(&mut self.rules);
+        self.rules = combined;
+    }
+}
+
+/// Parse a complete Datalog program from source text.
+pub fn parse_datalog_program(source: &str) -> Result<DatalogProgram, String> {
+    let tokens = tokenize(source)?;
+    parse(&tokens)
+}
+
+static STDLIB_RULES: OnceLock<Arc<Vec<Rule>>> = OnceLock::new();
+
+/// Return cached standard-library rules (parsed once at first use).
+pub fn stdlib_rules() -> Arc<Vec<Rule>> {
+    STDLIB_RULES
+        .get_or_init(|| {
+            let program = parse_datalog_program(STDLIB_SOURCE)
+                .expect("embedded Datalog standard library must parse successfully");
+            Arc::new(program.rules)
+        })
+        .clone()
 }
 
 /// Tokenize a Datalog query string.
@@ -230,13 +310,18 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
 
 /// Parse a Datalog program from tokens.
 pub fn parse(tokens: &[Token]) -> Result<DatalogProgram, String> {
-    let mut p = Parser { tokens, pos: 0 };
+    let mut p = Parser {
+        tokens,
+        pos: 0,
+        anon_counter: 0,
+    };
     p.parse_program()
 }
 
 struct Parser<'a> {
     tokens: &'a [Token],
     pos: usize,
+    anon_counter: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -334,7 +419,9 @@ impl<'a> Parser<'a> {
                     terms.push(Term::Const(Val::Str(s.clone())));
                 }
                 Some(Token::Underscore) => {
-                    terms.push(Term::Var(format!("_{}", terms.len()))); // unique anonymous variable
+                    let name = format!("__anon_{}", self.anon_counter);
+                    self.anon_counter += 1;
+                    terms.push(Term::Var(name));
                 }
                 Some(Token::IntLiteral(n)) => {
                     terms.push(Term::Const(Val::Int(*n)));
@@ -413,6 +500,7 @@ impl Interpreter {
         }
 
         // Fixed-point iteration
+        let mut reached_fixpoint = false;
         for _step in 0..step_budget {
             if start.elapsed().as_secs() > 30 {
                 return Err("Datalog evaluation timed out (>30s)".to_string());
@@ -500,8 +588,16 @@ impl Interpreter {
 
             self.idb = next_idb;
             if !changed {
+                reached_fixpoint = true;
                 break;
             }
+        }
+
+        if !reached_fixpoint {
+            return Err(format!(
+                "Datalog execution exceeded maximum step limit of {}",
+                step_budget
+            ));
         }
 
         // Format goal results
@@ -526,8 +622,20 @@ impl Interpreter {
                 .collect();
 
             if !var_positions.is_empty() {
-                // Project only variable columns from each matching tuple
+                // Project variable columns, respecting constant constraints in the goal
                 for tuple in relation {
+                    let mut matches = true;
+                    for (i, term) in goal_atom.terms.iter().enumerate() {
+                        if let Term::Const(expected) = term {
+                            if tuple.get(i) != Some(expected) {
+                                matches = false;
+                                break;
+                            }
+                        }
+                    }
+                    if !matches {
+                        continue;
+                    }
                     let projected: Vec<Val> = var_positions
                         .iter()
                         .filter_map(|&pos| pos.map(|p| tuple.get(p).cloned()).flatten())
@@ -602,8 +710,9 @@ pub fn run_datalog_query(
     // Step 1: Tokenize
     let tokens = tokenize(query)?;
 
-    // Step 2: Parse
-    let program = parse(&tokens)?;
+    // Step 2: Parse and merge standard library
+    let mut program = parse(&tokens)?;
+    program.merge_stdlib(stdlib_rules().as_ref().clone());
 
     // Step 3: Load EDB
     let mut edb = Edb::default();
@@ -757,14 +866,11 @@ mod tests {
         );
     }
 
-    /// NEGATION SEMANTICS NEED REFINEMENT: runs correctly in isolation,
-    /// but test-ordering dependency causes edge EDB to appear empty in full suite.
-    #[ignore]
     #[test]
     fn test_negation_filtering() {
         let graph = make_test_graph();
         let query = r#"
-            is_sink(X) :- node(X, _, _, _, _), not edge(X, _, "calls", _).
+            is_sink(X) :- node(X, _, _, _, _), not calls(X, _, _).
             ?- is_sink(X).
         "#;
 
@@ -805,16 +911,100 @@ mod tests {
     }
 
     #[test]
-    fn test_large_query_gives_timeout_gracefully() {
+    fn test_step_limit_exceeded_returns_error() {
+        let mut graph = crate::model::GrapheniumGraph::new();
+        let nodes = ["n0", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8", "n9"];
+        for id in nodes {
+            graph.upsert_node(Node::new(id, id, FileType::Code, "chain.rs"));
+        }
+        for i in 0..nodes.len() - 1 {
+            graph.add_edge(Edge::extracted(
+                nodes[i],
+                nodes[i + 1],
+                "calls",
+                "chain.rs",
+            ));
+        }
+
+        let query = "?- calls_transitive(\"n0\", X).";
+        let result = run_datalog_query(&graph, query, 3);
+        assert!(result.is_err(), "Should exceed step budget before fixpoint");
+        assert!(
+            result.unwrap_err().contains("maximum step limit"),
+            "Error should mention step limit"
+        );
+    }
+
+    #[test]
+    fn test_is_orphan_negation_filters_connected_nodes() {
         let graph = make_test_graph();
-        let query = r#"
-            path(X, Y) :- edge(X, Y, "calls", _).
-            path(X, Z) :- edge(X, Y, "calls", _), path(Y, Z).
-            ?- path(X, Y).
-        "#;
-        let result = run_datalog_query(&graph, query, 10).unwrap();
-        // With small budget it should produce a truncated result, not crash
-        assert!(!result.is_empty());
+        let mut edb = Edb::default();
+        edb.load_from_graph(&graph);
+        let mut interpreter = Interpreter::new(edb);
+
+        let program = parse_datalog_program(
+            r#"
+            is_orphan(X) :- node(X, _, _, _, _), not calls(X, _, _).
+            ?- is_orphan(X).
+        "#,
+        )
+        .unwrap();
+
+        let results = interpreter.solve(&program, 100).unwrap();
+        let orphans: Vec<_> = results[0]
+            .1
+            .iter()
+            .map(|t| match &t[0] {
+                Val::Str(s) => s.clone(),
+                _ => String::new(),
+            })
+            .collect();
+
+        assert!(
+            orphans.contains(&"db_conn".to_string()),
+            "db_conn has no outgoing calls: {:?}",
+            orphans
+        );
+        assert!(
+            !orphans.contains(&"app_ctrl".to_string()),
+            "app_ctrl has outgoing calls: {:?}",
+            orphans
+        );
+        assert!(
+            !orphans.contains(&"auth_svc".to_string()),
+            "auth_svc has outgoing calls: {:?}",
+            orphans
+        );
+    }
+
+    #[test]
+    fn test_stdlib_embedded_source_parses() {
+        let rules = stdlib_rules();
+        assert!(!rules.is_empty());
+        assert!(rules.iter().any(|r| r.head.name == "calls_transitive"));
+        assert!(rules.iter().any(|r| r.head.name == "depends_transitive"));
+        assert!(rules.iter().any(|r| r.head.name == "is_hub"));
+    }
+
+    #[test]
+    fn test_stdlib_transitive_calls_via_run_query() {
+        let graph = make_test_graph();
+        let result = run_datalog_query(&graph, r#"?- calls_transitive("app_ctrl", X)."#, 1000)
+            .unwrap();
+        assert!(result.contains("auth_svc"), "direct callee: {result}");
+        assert!(result.contains("db_conn"), "transitive callee: {result}");
+    }
+
+    #[test]
+    fn test_edb_loads_typed_relations() {
+        let graph = make_test_graph();
+        let mut edb = Edb::default();
+        edb.load_from_graph(&graph);
+        assert!(edb.relations.contains_key("calls"));
+        assert!(edb.relations.contains_key("imports"));
+        assert!(edb.relations.contains_key("degree"));
+        assert_eq!(edb.relations["calls"].len(), 2);
+        assert_eq!(edb.relations["node"].len(), 3);
     }
 
     #[test]

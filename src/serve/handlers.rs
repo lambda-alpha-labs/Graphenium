@@ -2399,7 +2399,17 @@ impl GrapheniumServer {
     // ── run_datalog ─────────────────────────────────────────────────────────
 
     #[tool(
-        description = "Run a Datalog query against the loaded knowledge graph. Supports rules (:-, ?-), facts, goals, and negation (not). Budget-bounded to prevent runaway evaluation (max 10,000 steps)."
+        description = "Run a logic query over the codebase graph. Standard library predicates are pre-loaded (do not redefine them):\n\
+                        - calls_transitive(X, Y) : X transitively calls Y\n\
+                        - imports_transitive(X, Y) : X transitively imports Y\n\
+                        - depends_transitive(X, Y) : X transitively depends on Y\n\
+                        - same_community(X, Y) : X and Y are in the same Louvain cluster\n\
+                        - is_hub(X) : X has > 15 connections\n\
+                        - is_orphan(X) : X has no incoming/outgoing edges\n\
+                        - circular_dependency(X, Y) : X and Y call each other\n\
+                        - bypasses_layer(X, Y, Z) : X depends on Z, bypassing intermediary Y\n\
+                        Base EDB relations: node, calls, imports, contains, inherits, implements, degree, edge.\n\
+                        Supports user rules (:-), goals (?-), facts, and negation (not). Budget-bounded (max 10,000 steps)."
     )]
     fn run_datalog(
         &self,
