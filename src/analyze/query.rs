@@ -449,8 +449,52 @@ impl<'a> Parser<'a> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Phase 3: Semi-Naive Evaluation Engine
+// Phase 3: Goal-Directed Rule Selection & Semi-Naive Evaluation
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/// Backward-chaining: collect predicates that must be materialized for the goals.
+/// EDB predicates terminate expansion; only rules on the goal→EDB path are kept.
+fn compute_needed_predicates(program: &DatalogProgram, edb: &Edb) -> HashSet<String> {
+    let mut needed = HashSet::new();
+    let mut pending: Vec<String> = program.goal.iter().map(|a| a.name.clone()).collect();
+
+    let mut rules_by_head: HashMap<String, Vec<&Rule>> = HashMap::new();
+    for rule in &program.rules {
+        rules_by_head
+            .entry(rule.head.name.clone())
+            .or_default()
+            .push(rule);
+    }
+
+    while let Some(pred) = pending.pop() {
+        if !needed.insert(pred.clone()) {
+            continue;
+        }
+        if edb.relations.contains_key(&pred) {
+            continue;
+        }
+        if let Some(defining_rules) = rules_by_head.get(&pred) {
+            for rule in defining_rules {
+                for atom in &rule.body {
+                    if !needed.contains(&atom.name) {
+                        pending.push(atom.name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    needed
+}
+
+/// Return only rules whose heads are required to answer the query goals.
+fn select_active_rules<'a>(program: &'a DatalogProgram, needed: &HashSet<String>) -> Vec<&'a Rule> {
+    program
+        .rules
+        .iter()
+        .filter(|r| needed.contains(&r.head.name))
+        .collect()
+}
 
 /// The Datalog interpreter: loads EDB, evaluates rules, returns results.
 pub struct Interpreter {
@@ -499,9 +543,24 @@ impl Interpreter {
             self.idb.entry(fact.name.clone()).or_default().insert(vals);
         }
 
-        // Fixed-point iteration
-        let mut reached_fixpoint = false;
+        let needed = compute_needed_predicates(program, &self.edb);
+        let active_rules = select_active_rules(program, &needed);
+
+        if cfg!(test) {
+            eprintln!(
+                "DEBUG goal-directed: {} active rules of {} (needed: {:?})",
+                active_rules.len(),
+                program.rules.len(),
+                needed
+            );
+        }
+
+        // Fixed-point iteration — only over goal-reachable rules
+        let mut reached_fixpoint = active_rules.is_empty();
         for _step in 0..step_budget {
+            if reached_fixpoint {
+                break;
+            }
             if start.elapsed().as_secs() > 30 {
                 return Err("Datalog evaluation timed out (>30s)".to_string());
             }
@@ -509,7 +568,7 @@ impl Interpreter {
             let mut changed = false;
             let mut next_idb = self.idb.clone();
 
-            for rule in &program.rules {
+            for rule in &active_rules {
                 let mut substitutions = vec![HashMap::<String, Val>::new()];
 
                 // Evaluate positive body atoms
@@ -975,6 +1034,106 @@ mod tests {
             "auth_svc has outgoing calls: {:?}",
             orphans
         );
+    }
+
+    #[test]
+    fn test_goal_directed_edb_query_selects_no_rules() {
+        let graph = make_test_graph();
+        let mut edb = Edb::default();
+        edb.load_from_graph(&graph);
+        let mut program =
+            parse_datalog_program(r#"?- calls(X, "app_ctrl", _)."#).unwrap();
+        program.merge_stdlib(stdlib_rules().as_ref().clone());
+
+        let needed = compute_needed_predicates(&program, &edb);
+        assert!(needed.contains("calls"));
+        assert!(!needed.contains("calls_transitive"));
+        assert!(!needed.contains("depends_transitive"));
+
+        let active = select_active_rules(&program, &needed);
+        assert!(active.is_empty(), "EDB-only goals need zero rules");
+    }
+
+    #[test]
+    fn test_goal_directed_transitive_query_selects_closure_rules_only() {
+        let graph = make_test_graph();
+        let mut edb = Edb::default();
+        edb.load_from_graph(&graph);
+        let mut program =
+            parse_datalog_program(r#"?- calls_transitive("app_ctrl", X)."#).unwrap();
+        program.merge_stdlib(stdlib_rules().as_ref().clone());
+
+        let needed = compute_needed_predicates(&program, &edb);
+        assert!(needed.contains("calls_transitive"));
+        assert!(needed.contains("calls"));
+        assert!(!needed.contains("depends_transitive"));
+        assert!(!needed.contains("is_orphan"));
+
+        let active = select_active_rules(&program, &needed);
+        assert!(active.iter().all(|r| r.head.name == "calls_transitive"));
+        assert_eq!(active.len(), 2, "two calls_transitive clauses");
+    }
+
+    #[test]
+    fn test_goal_directed_edb_query_is_instant_on_long_chain() {
+        let mut graph = crate::model::GrapheniumGraph::new();
+        for i in 0..80 {
+            graph.upsert_node(Node::new(
+                &format!("n{i}"),
+                &format!("N{i}"),
+                FileType::Code,
+                "chain.rs",
+            ));
+        }
+        for i in 0..79 {
+            graph.add_edge(Edge::extracted(
+                &format!("n{i}"),
+                &format!("n{}", i + 1),
+                "calls",
+                "chain.rs",
+            ));
+        }
+
+        let start = Instant::now();
+        let result = run_datalog_query(&graph, "?- calls(_, _, _).", 1000).unwrap();
+        assert!(
+            start.elapsed().as_millis() < 200,
+            "EDB query should be instant, took {:?}",
+            start.elapsed()
+        );
+        assert!(!result.contains("no results"), "{result}");
+    }
+
+    #[test]
+    fn test_self_analysis_graph_edb_queries_are_fast() {
+        let path = std::path::Path::new("worked/graphenium-self-analysis/graph.json");
+        if !path.exists() {
+            return;
+        }
+        let graph = crate::export::json::load_graph(path).expect("load self-analysis graph");
+
+        let start = Instant::now();
+        let hubs = run_datalog_query(&graph, "?- hub(X).", 1000).unwrap();
+        assert!(
+            start.elapsed().as_secs() < 2,
+            "hub/1 EDB query took {:?}",
+            start.elapsed()
+        );
+        assert!(!hubs.contains("no results"), "{hubs}");
+
+        let start = Instant::now();
+        let callers = run_datalog_query(
+            &graph,
+            r#"?- calls(X, "query_run_datalog_query", _)."#,
+            1000,
+        )
+        .unwrap();
+        assert!(
+            start.elapsed().as_secs() < 2,
+            "calls/3 EDB query took {:?}",
+            start.elapsed()
+        );
+        assert!(!callers.contains("no results"), "{callers}");
     }
 
     #[test]
