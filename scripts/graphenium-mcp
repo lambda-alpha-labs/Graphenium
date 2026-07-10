@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Graphenium MCP launcher for Grok / Cursor / Codex.
+# Prefers a local release build over the globally installed binary and
+# rebuilds the graph when source or binary is newer than graph.json.
+set -euo pipefail
+
+ROOT="${GROK_PROJECT_ROOT:-}"
+if [[ -z "$ROOT" ]]; then
+  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+cd "$ROOT"
+
+# Binary resolution: GM_BIN > project release > PATH
+if [[ -n "${GM_BIN:-}" ]]; then
+  GM="$GM_BIN"
+elif [[ -x "$ROOT/target/release/gm" ]]; then
+  RELEASE="$ROOT/target/release/gm"
+  INSTALLED="$(command -v gm 2>/dev/null || true)"
+  if [[ -z "$INSTALLED" ]] || [[ "$RELEASE" -nt "$INSTALLED" ]]; then
+    GM="$RELEASE"
+  else
+    GM="$INSTALLED"
+  fi
+else
+  GM="$(command -v gm 2>/dev/null || true)"
+fi
+
+if [[ -z "$GM" ]]; then
+  echo "graphenium-mcp: gm not found. Build with: cargo build --release" >&2
+  exit 1
+fi
+
+GRAPH="graphenium-out/graph.json"
+
+needs_rebuild() {
+  [[ ! -f "$GRAPH" ]] && return 0
+  [[ "$GM" -nt "$GRAPH" ]] && return 0
+  if [[ -d "$ROOT/src" ]]; then
+    local newer
+    newer="$(find "$ROOT/src" -type f \( -name '*.rs' -o -name '*.py' -o -name '*.go' -o -name '*.ts' -o -name '*.js' \) -newer "$GRAPH" -print -quit 2>/dev/null || true)"
+    [[ -n "$newer" ]] && return 0
+  fi
+  return 1
+}
+
+if needs_rebuild; then
+  if [[ ! -f "$GRAPH" ]]; then
+    echo "[graphenium-mcp] No graph at $ROOT/$GRAPH; building..." >&2
+  else
+    echo "[graphenium-mcp] Graph stale (source or binary newer); rebuilding..." >&2
+  fi
+  "$GM" init >&2 || true
+  "$GM" run . --no-semantic --no-viz >&2
+fi
+
+echo "[graphenium-mcp] Using gm: $GM" >&2
+exec "$GM" serve --graph "$GRAPH" --watch

@@ -84,6 +84,24 @@ impl GrapheniumServer {
         self.graph_store.load_full()
     }
 
+    fn default_graph_path(&self) -> Option<PathBuf> {
+        self.default_path
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())
+    }
+
+    fn staleness_warning(&self) -> Option<String> {
+        let graph_path = self.default_graph_path()?;
+        let graph = self.graph();
+        let project_root = graph
+            .metadata
+            .project_root
+            .as_deref()
+            .map(Path::new);
+        super::freshness::check_staleness(&graph_path, project_root).warning_message()
+    }
+
     /// Resolve a node by exact ID, or by case-insensitive label match.
     fn resolve_id(&self, id_or_label: &str) -> Option<String> {
         let graph = self.graph();
@@ -2768,12 +2786,25 @@ impl GrapheniumServer {
             *guard = Some(resolved_path.clone());
         }
 
-        format!(
+        let mut msg = format!(
             "Reloaded graph from '{}': {} nodes, {} edges.",
             resolved_path.display(),
             n,
             e
-        )
+        );
+        let graph = self.graph();
+        let project_root = graph
+            .metadata
+            .project_root
+            .as_deref()
+            .map(Path::new);
+        if let Some(warning) =
+            super::freshness::check_staleness(&resolved_path, project_root).warning_message()
+        {
+            msg.push('\n');
+            msg.push_str(&warning);
+        }
+        msg
     }
 
     #[tool(description = "Re-run community detection on the loaded graph. \
@@ -3695,6 +3726,13 @@ impl GrapheniumServer {
             .collect::<std::collections::BTreeSet<_>>()
             .len();
         out.push_str(&format!("**Communities:** {communities}\n"));
+        if let Some(path) = self.default_graph_path() {
+            out.push_str(&format!("**Graph path:** {}\n", path.display()));
+        }
+        if let Some(warning) = self.staleness_warning() {
+            out.push('\n');
+            out.push_str(&warning);
+        }
 
         // Trust banner: mode and resolution status (reflect actual cross-file resolution).
         let is_ast = graph.is_ast_only();

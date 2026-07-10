@@ -8,6 +8,7 @@
 /// - `graph_stats`   — Summary statistics
 /// - `architecture_summary` — Repo-level structural highlights
 /// - `shortest_path` — Path search between two nodes
+pub mod freshness;
 pub mod handlers;
 pub mod traversal;
 
@@ -34,6 +35,12 @@ pub async fn serve_with_watch(graph_path: &Path, watch: bool) -> crate::Result<(
                 g.node_count(),
                 g.edge_count()
             );
+            let project_root = g.metadata.project_root.as_deref().map(Path::new);
+            if let Some(warning) =
+                freshness::check_staleness(graph_path, project_root).warning_message()
+            {
+                eprintln!("[graphenium] {warning}");
+            }
             (g, graph_path.to_path_buf(), false)
         }
         Err(e) if graph_path.exists() => {

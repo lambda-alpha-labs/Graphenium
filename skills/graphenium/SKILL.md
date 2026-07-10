@@ -45,6 +45,14 @@ If no graph is available, suggest:
 gm run . --no-semantic --no-viz
 ```
 
+If `graph_info` reports the graph may be stale (source or binary newer than graph.json), rebuild before trusting structural queries:
+
+```sh
+gm run . --no-semantic --no-viz
+```
+
+Then call `reload_graph` (no path needed) to hot-swap without restarting MCP.
+
 ## MCP tool selection
 
 | User asks | Use |
