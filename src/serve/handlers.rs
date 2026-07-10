@@ -94,11 +94,7 @@ impl GrapheniumServer {
     fn staleness_warning(&self) -> Option<String> {
         let graph_path = self.default_graph_path()?;
         let graph = self.graph();
-        let project_root = graph
-            .metadata
-            .project_root
-            .as_deref()
-            .map(Path::new);
+        let project_root = graph.metadata.project_root.as_deref().map(Path::new);
         super::freshness::check_staleness(&graph_path, project_root).warning_message()
     }
 
@@ -2793,11 +2789,7 @@ impl GrapheniumServer {
             e
         );
         let graph = self.graph();
-        let project_root = graph
-            .metadata
-            .project_root
-            .as_deref()
-            .map(Path::new);
+        let project_root = graph.metadata.project_root.as_deref().map(Path::new);
         if let Some(warning) =
             super::freshness::check_staleness(&resolved_path, project_root).warning_message()
         {
