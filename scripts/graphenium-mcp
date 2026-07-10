@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Graphenium MCP launcher for Grok / Cursor / Codex.
-# Prefers a local release build over the globally installed binary and
-# rebuilds the graph when source or binary is newer than graph.json.
+# Prefers a local release build over the globally installed binary.
+# Auto-builds only when graph.json is missing (fast session starts on large repos).
+# Set GRAPHENIUM_AUTO_REBUILD=1 to also rebuild when source or binary is newer.
 set -euo pipefail
 
 ROOT="${GROK_PROJECT_ROOT:-}"
@@ -34,6 +35,7 @@ GRAPH="graphenium-out/graph.json"
 
 needs_rebuild() {
   [[ ! -f "$GRAPH" ]] && return 0
+  [[ "${GRAPHENIUM_AUTO_REBUILD:-}" == "1" ]] || return 1
   [[ "$GM" -nt "$GRAPH" ]] && return 0
   if [[ -d "$ROOT/src" ]]; then
     local newer
@@ -47,7 +49,7 @@ if needs_rebuild; then
   if [[ ! -f "$GRAPH" ]]; then
     echo "[graphenium-mcp] No graph at $ROOT/$GRAPH; building..." >&2
   else
-    echo "[graphenium-mcp] Graph stale (source or binary newer); rebuilding..." >&2
+    echo "[graphenium-mcp] Graph stale (GRAPHENIUM_AUTO_REBUILD=1); rebuilding..." >&2
   fi
   "$GM" init >&2 || true
   "$GM" run . --no-semantic --no-viz >&2

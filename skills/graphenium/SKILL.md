@@ -53,6 +53,8 @@ gm run . --no-semantic --no-viz
 
 Then call `reload_graph` (no path needed) to hot-swap without restarting MCP.
 
+The MCP launcher only auto-builds when `graph.json` is missing. Stale graphs are served with a warning so large-repo session starts stay fast. Set `GRAPHENIUM_AUTO_REBUILD=1` to opt back into rebuild-on-stale at startup.
+
 ## MCP tool selection
 
 | User asks | Use |
