@@ -85,10 +85,26 @@ Requires Rust 1.81 or later. Tree-sitter language grammars are bundled.
 
 ## MCP setup
 
+For Grok and project-local development, use the `scripts/graphenium-mcp` launcher. It prefers `target/release/gm`, auto-builds only when `graph.json` is missing, and starts `gm serve --watch`. Set `GRAPHENIUM_AUTO_REBUILD=1` to also rebuild when source or binary is newer than the graph.
+
+```sh
+install -m 755 scripts/graphenium-mcp ~/.local/bin/graphenium-mcp
+```
+
+See `docs/AI_SETUP.md` for full per-tool configuration.
+
 ### Claude Code
 
 ```sh
-claude mcp add graphenium --scope user -- gm serve --graph /path/to/graphenium-out/graph.json
+claude mcp add graphenium --scope user -- gm serve --graph /path/to/graphenium-out/graph.json --watch
+```
+
+### Grok
+
+```toml
+[mcp_servers.graphenium]
+command = "/Users/<you>/.local/bin/graphenium-mcp"
+args = []
 ```
 
 ### Codex
@@ -98,7 +114,7 @@ Add this to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.graphenium]
 command = "gm"
-args = ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
+args = ["serve", "--graph", "/path/to/graphenium-out/graph.json", "--watch"]
 ```
 
 ### Cursor
@@ -110,7 +126,7 @@ Add this to `~/.cursor/mcp.json`:
   "mcpServers": {
     "graphenium": {
       "command": "gm",
-      "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
+      "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json", "--watch"]
     }
   }
 }

@@ -26,13 +26,24 @@ Use write tools only after source inspection.
 
 ### `graph_info`
 
-Returns project root, schema version, build timestamp, extraction mode, languages, node counts, edge counts, and graph identity.
+Returns project root, schema version, build timestamp, extraction mode, languages, node counts, edge counts, graph path, and graph identity.
+
+When the loaded `graph.json` is older than the serving `gm` binary or project source files, the response includes a **Graph may be stale** warning with the specific reason. The server still serves the existing graph so session starts stay fast on large repositories.
 
 Use when:
 
 - starting a session
 - confirming the loaded graph
 - checking whether the agent is using the right repository
+- deciding whether to rebuild before trusting structural queries
+
+If stale, rebuild and hot-swap:
+
+```sh
+gm run . --no-semantic --no-viz
+```
+
+Then call `reload_graph` (no path needed).
 
 ### `graph_stats`
 
@@ -165,7 +176,22 @@ Use when:
 
 ### `run_datalog`
 
-Runs a Datalog query against the loaded graph.
+Runs a Datalog query against the loaded graph. A standard library of predicates is pre-loaded on every query; you do not need to define transitive closure or hub detection yourself.
+
+**Pre-loaded stdlib predicates:**
+
+| Predicate | Purpose |
+|---|---|
+| `calls_transitive/2` | Transitive call reachability |
+| `imports_transitive/2` | Transitive import reachability |
+| `depends_transitive/2` | Transitive dependency (calls or imports) |
+| `same_community/2` | Same Louvain community |
+| `is_hub/1` | High-degree hub node |
+| `is_orphan/1` | Node with no edges |
+| `circular_dependency/2` | Mutual dependency cycle |
+| `bypasses_layer/3` | Layering violation |
+
+**Base EDB relations:** `calls/3`, `imports/3`, `contains/3`, `inherits/3`, `implements/3`, `degree/2`, `hub/1`, plus legacy `edge/5` and `node/5`.
 
 Use when:
 
@@ -173,11 +199,16 @@ Use when:
 - finding constraint violations
 - building custom graph analyses
 
-Example:
+Examples:
 
 ```text
-?- calls(X, Y, _).
+?- calls_transitive("handlers_run_datalog", X).
+?- is_hub(X).
+?- circular_dependency(X, Y).
+?- bypasses_layer(X, Y, Z).
 ```
+
+Requires a `gm` binary that includes the Datalog stdlib (v0.19.0+). If results are empty on an old server process, restart MCP or confirm `gm --version`.
 
 ## Composite tools
 
@@ -315,6 +346,22 @@ Removes a false positive or stale relationship.
 
 Re-runs community detection after meaningful manual edits.
 
+### `reload_graph`
+
+Hot-swaps the in-memory graph from a `graph.json` file without restarting the MCP server.
+
+| Parameter | Purpose |
+|---|---|
+| `graph_path` | Optional path to a graph file; defaults to the path the server was launched with |
+
+Use when:
+
+- picking up changes after `gm run . --no-semantic --no-viz`
+- pointing the server at a different repository's graph
+- refreshing after the file watcher reloads on disk
+
+The response includes node and edge counts. If the reloaded file is stale relative to source or binary, a warning is appended (same logic as `graph_info`).
+
 ## Diff tools
 
 ### `diff_graph`
@@ -332,6 +379,7 @@ Use when preparing pull request review for agent-authored changes.
 | Goal | Best first tool |
 |---|---|
 | Confirm graph identity | `graph_info` |
+| Refresh graph after rebuild | `reload_graph` |
 | Understand repository shape | `architecture_summary` |
 | Find code related to a feature | `query_graph` |
 | Understand a symbol | `analyse_symbol` |

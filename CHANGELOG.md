@@ -30,6 +30,13 @@ Performance:
 
 - EDB queries on the 1,211-node self-analysis graph complete in under one second (previously hung indefinitely while evaluating full transitive closures).
 
+MCP deployment:
+
+- `scripts/graphenium-mcp` launcher for Grok, Cursor, and Codex: prefers local `target/release/gm`, auto-builds only when `graph.json` is missing, starts `gm serve --watch`.
+- `GRAPHENIUM_AUTO_REBUILD=1` opt-in to rebuild on session start when source or binary is newer than the graph.
+- Graph freshness detection (`src/serve/freshness.rs`): staleness warnings in `graph_info`, `reload_graph`, and MCP serve startup.
+- `graph_info` now reports the graph file path.
+
 ## v0.18.0, 2026-07-03
 
 Theme: working cross-file resolution improvements, especially for C#.

@@ -107,15 +107,25 @@ gm query --datalog "?- node(X, _, _, _, _)."
 ## Start MCP for an AI agent
 
 ```sh
-gm serve --graph graphenium-out/graph.json
+gm serve --graph graphenium-out/graph.json --watch
 ```
 
-Then configure your AI tool to connect to the server.
+Or use the launcher script (recommended for Grok): install `scripts/graphenium-mcp` to `~/.local/bin/` and point your MCP config at it. The launcher auto-builds only when `graph.json` is missing; stale graphs are served immediately with a warning in `graph_info`.
+
+Then configure your AI tool to connect to the server. See `docs/AI_SETUP.md` for per-tool config, including Grok.
 
 ### Claude Code
 
 ```sh
-claude mcp add graphenium --scope user -- gm serve --graph /path/to/graphenium-out/graph.json
+claude mcp add graphenium --scope user -- gm serve --graph /path/to/graphenium-out/graph.json --watch
+```
+
+### Grok
+
+```toml
+[mcp_servers.graphenium]
+command = "/Users/<you>/.local/bin/graphenium-mcp"
+args = []
 ```
 
 ### Codex
@@ -125,7 +135,7 @@ Add this to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.graphenium]
 command = "gm"
-args = ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
+args = ["serve", "--graph", "/path/to/graphenium-out/graph.json", "--watch"]
 ```
 
 ### Cursor
@@ -137,7 +147,7 @@ Add this to `~/.cursor/mcp.json`:
   "mcpServers": {
     "graphenium": {
       "command": "gm",
-      "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json"]
+      "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json", "--watch"]
     }
   }
 }
@@ -183,7 +193,9 @@ Through MCP, use:
 
 ## Live development
 
-Watch mode keeps the graph fresh during edits.
+Keep the graph fresh during edits with watch mode or MCP hot-reload.
+
+**CLI watch** (rebuilds on file changes):
 
 ```sh
 gm watch . --impact
@@ -195,6 +207,14 @@ A typical two-terminal flow:
 Terminal 1: gm watch . --impact
 Terminal 2: edit code, run tests, ask the agent to inspect impact
 ```
+
+**MCP hot-reload** (when using `gm serve --watch` or `graphenium-mcp`):
+
+1. Edit code.
+2. Rebuild: `gm run . --no-semantic --no-viz` (or `gm run . --update --no-semantic --no-viz` for incremental extraction).
+3. Ask the agent to call `reload_graph`, or let the file watcher pick up the new `graph.json` automatically.
+
+Call `graph_info` first. If it reports **Graph may be stale**, rebuild before trusting structural queries.
 
 ## Keep the graph focused
 

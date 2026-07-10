@@ -121,6 +121,7 @@ Detailed stages:
 | `analyze/query.rs` | Datalog query engine |
 | `semantic/` | LLM-based semantic extraction |
 | `serve/` | MCP server and tool handlers |
+| `serve/freshness.rs` | Detects when `graph.json` is older than binary or source tree |
 | `telemetry.rs` | Runtime telemetry overlay |
 | `trust.rs` | Evidence spans, claims, stale detection, resolution reports |
 | `watch.rs` | File watcher for incremental rebuilds |

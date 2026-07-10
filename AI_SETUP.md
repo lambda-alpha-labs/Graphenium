@@ -128,6 +128,7 @@ Ask which AI coding tool the user uses only if it is not obvious.
 
 | Tool | Config location or setup |
 |---|---|
+| Grok | `~/.grok/config.toml` |
 | Claude Code | `claude mcp add graphenium --scope user -- gm serve` |
 | Codex | `~/.codex/config.toml` |
 | Cursor | `~/.cursor/mcp.json` |
@@ -135,7 +136,35 @@ Ask which AI coding tool the user uses only if it is not obvious.
 
 ## Step 7: Configure MCP
 
-Use absolute paths.
+### Recommended: `graphenium-mcp` launcher
+
+For Grok and other tools that start MCP from the project directory, use the launcher script. It prefers a local `target/release/gm` over the globally installed binary, auto-builds only when `graph.json` is missing, and starts the server with `--watch`.
+
+```sh
+# Install once (from a Graphenium checkout)
+install -m 755 scripts/graphenium-mcp ~/.local/bin/graphenium-mcp
+```
+
+**Grok** (`~/.grok/config.toml`):
+
+```toml
+[mcp_servers.graphenium]
+command = "/Users/<you>/.local/bin/graphenium-mcp"
+args = []
+enabled = true
+```
+
+Environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `GM_BIN` | Force a specific `gm` binary path |
+| `GROK_PROJECT_ROOT` | Project root when not inferred from git |
+| `GRAPHENIUM_AUTO_REBUILD=1` | Also rebuild when source or binary is newer than the graph (off by default; keeps large-repo session starts fast) |
+
+### Direct `gm serve` (manual setup)
+
+Use absolute paths when configuring MCP without the launcher.
 
 ```sh
 GM_PATH=$(which gm)
@@ -145,7 +174,7 @@ GRAPH_PATH=$(pwd)/graphenium-out/graph.json
 ### Claude Code
 
 ```sh
-claude mcp add graphenium --scope user -- "$GM_PATH" serve --graph "$GRAPH_PATH"
+claude mcp add graphenium --scope user -- "$GM_PATH" serve --graph "$GRAPH_PATH" --watch
 ```
 
 ### Codex
@@ -153,7 +182,7 @@ claude mcp add graphenium --scope user -- "$GM_PATH" serve --graph "$GRAPH_PATH"
 ```toml
 [mcp_servers.graphenium]
 command = "$GM_PATH"
-args = ["serve", "--graph", "$GRAPH_PATH"]
+args = ["serve", "--graph", "$GRAPH_PATH", "--watch"]
 ```
 
 ### Cursor
@@ -163,7 +192,7 @@ args = ["serve", "--graph", "$GRAPH_PATH"]
   "mcpServers": {
     "graphenium": {
       "command": "$GM_PATH",
-      "args": ["serve", "--graph", "$GRAPH_PATH"]
+      "args": ["serve", "--graph", "$GRAPH_PATH", "--watch"]
     }
   }
 }
@@ -189,6 +218,15 @@ Successful response should mention:
 - extraction mode
 - languages
 - nodes and edges
+- graph path
+
+If the response includes **Graph may be stale**, rebuild and hot-swap without restarting MCP:
+
+```sh
+gm run . --no-semantic --no-viz
+```
+
+Then ask the agent to call `reload_graph`.
 
 ## Optional: semantic extraction
 
@@ -216,10 +254,15 @@ gm watch . --impact
 
 ## Optional: Datalog
 
+Datalog queries automatically include the standard library (v0.19.0+). Prefer stdlib predicates over hand-written recursion.
+
 ```sh
-gm query --datalog "?- node(X, 'AuthSvc', _, _, _)."
-gm query --datalog "?- calls(X, Y, _)."
+gm query "hubs" --datalog "?- is_hub(X)."
+gm query "reachability" --datalog "?- calls_transitive('main', X)."
+gm query "layers" --datalog "?- bypasses_layer(X, Y, Z)."
 ```
+
+Stdlib predicates: `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`.
 
 ## Optional: telemetry overlay
 
@@ -239,6 +282,8 @@ Telemetry is experimental and requires explicit trace data.
 | MCP config path does not exist | Tool not installed | Use CLI fallback |
 | MCP connection fails | Tool not restarted | Fully quit and relaunch |
 | `gm query` errors | Wrong graph path | Confirm `graphenium-out/graph.json` exists |
+| `graph_info` reports stale graph | Source or binary newer than graph | `gm run . --no-semantic --no-viz`, then `reload_graph` |
+| `run_datalog` returns no results | Old MCP server binary | Restart AI tool or set `GM_BIN` to a current `gm` |
 | Too much noise | Vendor or generated code included | Tune `.grapheniumignore` |
 
 ## Final report to user

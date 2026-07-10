@@ -131,6 +131,8 @@ Avoid these behaviors:
 - claiming full correctness without compiler-backed extraction
 - using stale graphs after major edits
 
+When `graph_info` reports **Graph may be stale**, the loaded graph predates recent source changes or a newer `gm` binary. The server still answers queries, but structural results may be incomplete. Rebuild with `gm run . --no-semantic --no-viz`, then call `reload_graph` to hot-swap without restarting MCP. See `docs/MCP_TOOLS.md` for `graph_info` and `reload_graph` details.
+
 ## Review checklist
 
 Before accepting an agent-generated change, ask:

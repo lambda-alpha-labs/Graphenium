@@ -87,12 +87,15 @@ gm query --datalog "<program>"
 | `--ast-only-tuning` | bool | auto | Tune output for AST-only graphs |
 | `--include-tests` | bool | false | Include test nodes |
 
+Datalog queries automatically merge the standard library (v0.19.0+). Pre-loaded predicates include `calls_transitive/2`, `imports_transitive/2`, `depends_transitive/2`, `same_community/2`, `is_hub/1`, `is_orphan/1`, `circular_dependency/2`, and `bypasses_layer/3`. Base EDB relations: `calls/3`, `imports/3`, `contains/3`, `inherits/3`, `implements/3`, `degree/2`, `hub/1`.
+
 Examples:
 
 ```sh
 gm query "authentication flow" --mode hybrid --budget 3000
 gm query "Parser.parse_file" --safe --depth 2 --budget 1500
-gm query --datalog "?- calls(X, Y, _)."
+gm query "hubs" --datalog "?- is_hub(X)."
+gm query "reach" --datalog "?- calls_transitive('main', X)."
 ```
 
 ## `gm serve`
