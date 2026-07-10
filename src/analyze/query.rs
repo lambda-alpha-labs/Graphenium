@@ -977,12 +977,7 @@ mod tests {
             graph.upsert_node(Node::new(id, id, FileType::Code, "chain.rs"));
         }
         for i in 0..nodes.len() - 1 {
-            graph.add_edge(Edge::extracted(
-                nodes[i],
-                nodes[i + 1],
-                "calls",
-                "chain.rs",
-            ));
+            graph.add_edge(Edge::extracted(nodes[i], nodes[i + 1], "calls", "chain.rs"));
         }
 
         let query = "?- calls_transitive(\"n0\", X).";
@@ -1041,8 +1036,7 @@ mod tests {
         let graph = make_test_graph();
         let mut edb = Edb::default();
         edb.load_from_graph(&graph);
-        let mut program =
-            parse_datalog_program(r#"?- calls(X, "app_ctrl", _)."#).unwrap();
+        let mut program = parse_datalog_program(r#"?- calls(X, "app_ctrl", _)."#).unwrap();
         program.merge_stdlib(stdlib_rules().as_ref().clone());
 
         let needed = compute_needed_predicates(&program, &edb);
@@ -1059,8 +1053,7 @@ mod tests {
         let graph = make_test_graph();
         let mut edb = Edb::default();
         edb.load_from_graph(&graph);
-        let mut program =
-            parse_datalog_program(r#"?- calls_transitive("app_ctrl", X)."#).unwrap();
+        let mut program = parse_datalog_program(r#"?- calls_transitive("app_ctrl", X)."#).unwrap();
         program.merge_stdlib(stdlib_rules().as_ref().clone());
 
         let needed = compute_needed_predicates(&program, &edb);
@@ -1148,8 +1141,8 @@ mod tests {
     #[test]
     fn test_stdlib_transitive_calls_via_run_query() {
         let graph = make_test_graph();
-        let result = run_datalog_query(&graph, r#"?- calls_transitive("app_ctrl", X)."#, 1000)
-            .unwrap();
+        let result =
+            run_datalog_query(&graph, r#"?- calls_transitive("app_ctrl", X)."#, 1000).unwrap();
         assert!(result.contains("auth_svc"), "direct callee: {result}");
         assert!(result.contains("db_conn"), "transitive callee: {result}");
     }

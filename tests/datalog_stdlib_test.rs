@@ -1,7 +1,7 @@
 //! Integration tests for the pre-loaded Datalog Standard Library.
 
 use graphenium::analyze::query::{run_datalog_query, stdlib_rules, DatalogProgram};
-use graphenium::model::{Edge, FileType, Node, GrapheniumGraph};
+use graphenium::model::{Edge, FileType, GrapheniumGraph, Node};
 
 fn chain_graph() -> GrapheniumGraph {
     let mut graph = GrapheniumGraph::new();
@@ -27,8 +27,14 @@ fn test_stdlib_transitive_calls() {
     let graph = chain_graph();
     let result = run_datalog_query(&graph, r#"?- calls_transitive("a", X)."#, 1000).unwrap();
 
-    assert!(result.contains("b"), "Should find direct callee b: {result}");
-    assert!(result.contains("c"), "Should find transitive callee c: {result}");
+    assert!(
+        result.contains("b"),
+        "Should find direct callee b: {result}"
+    );
+    assert!(
+        result.contains("c"),
+        "Should find transitive callee c: {result}"
+    );
 }
 
 #[test]
@@ -54,8 +60,14 @@ fn test_stdlib_same_community() {
     graph.upsert_node(c);
 
     let result = run_datalog_query(&graph, r#"?- same_community("x1", X)."#, 1000).unwrap();
-    assert!(result.contains("x2"), "x1 and x2 share community 3: {result}");
-    assert!(!result.contains("y1"), "x1 and y1 are in different communities: {result}");
+    assert!(
+        result.contains("x2"),
+        "x1 and x2 share community 3: {result}"
+    );
+    assert!(
+        !result.contains("y1"),
+        "x1 and y1 are in different communities: {result}"
+    );
 }
 
 #[test]
@@ -83,8 +95,14 @@ fn test_stdlib_circular_dependency() {
     graph.add_edge(Edge::extracted("q", "p", "calls", "q.rs"));
 
     let result = run_datalog_query(&graph, r#"?- circular_dependency(X, Y)."#, 1000).unwrap();
-    assert!(result.contains("p"), "Should detect cycle involving p: {result}");
-    assert!(result.contains("q"), "Should detect cycle involving q: {result}");
+    assert!(
+        result.contains("p"),
+        "Should detect cycle involving p: {result}"
+    );
+    assert!(
+        result.contains("q"),
+        "Should detect cycle involving q: {result}"
+    );
 }
 
 #[test]
@@ -95,12 +113,8 @@ fn test_stdlib_bypasses_layer() {
     graph.upsert_node(Node::new("repo", "Repository", FileType::Code, "repo.rs"));
     graph.add_edge(Edge::extracted("ctrl", "repo", "calls", "ctrl.rs"));
 
-    let result = run_datalog_query(
-        &graph,
-        r#"?- bypasses_layer("ctrl", "svc", "repo")."#,
-        1000,
-    )
-    .unwrap();
+    let result =
+        run_datalog_query(&graph, r#"?- bypasses_layer("ctrl", "svc", "repo")."#, 1000).unwrap();
     assert!(
         !result.contains("no results"),
         "ctrl bypasses svc to reach repo: {result}"
