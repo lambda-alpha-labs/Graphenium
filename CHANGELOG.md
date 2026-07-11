@@ -2,9 +2,9 @@
 
 This file summarizes notable releases and preserves the major documentation history.
 
-## v0.19.0, 2026-07-10
+## v0.19.0, 2026-07-11
 
-Theme: Datalog Standard Library and goal-directed query evaluation.
+Themes: Datalog Standard Library, MCP deployment hardening, and pre-flight architecture policy validation.
 
 Added:
 
@@ -13,12 +13,21 @@ Added:
 - Goal-directed rule selection: only stdlib rules reachable from query goals are evaluated; EDB-only queries skip fixpoint iteration entirely.
 - Cached stdlib AST parsing via `OnceLock` and `parsed_stdlib_rules()` in `src/cache/query.rs`.
 - Integration tests in `tests/datalog_stdlib_test.rs`.
+- `ArchRule` and `ArchPolicyConfig` in `src/policy.rs` — declarative rules loaded from `.graphenium/policy.json` (`forbidden_dependency`, `strict_layering`, `banned_symbol`).
+- Pre-flight evaluation engine in `src/harness.rs` — `validate_plan_preflight`, `PreFlightReport`, and planned subgraph isolation.
+- `depends_transitive` helper in `src/analyze/query.rs` for transitive layer violation checks.
+- `validate_plan` MCP tool — explicit pre-flight check before coding.
+- Automatic pre-flight gate in `add_planned_symbol` (returns `PRE_FLIGHT_VIOLATION` on failure).
+- Optional `plan_id` on `agent_change_gate` for combined trust and architecture policy checks.
+- Example `.graphenium/policy.json` for the Graphenium repository.
+- Integration tests in `tests/planning_bench.rs` and `src/harness.rs`.
 
 Changed:
 
 - `run_datalog_query` automatically merges stdlib rules into every query.
 - `run_datalog` MCP tool description documents pre-loaded predicates and base EDB relations.
 - Graphenium skill (`skills/graphenium/SKILL.md`) instructs agents to use stdlib predicates instead of hand-written recursion.
+- `gm check --plan` now runs pre-flight policy validation before post-facto compliance.
 
 Fixed:
 
