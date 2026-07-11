@@ -53,10 +53,7 @@ pub enum ArchRule {
     },
     /// Enforce a strict hierarchy where layer[i] can only call layer[i+1]..layer[n],
     /// never backwards. E.g. `["src/controllers", "src/services", "src/repositories"]`.
-    StrictLayering {
-        layers: Vec<String>,
-        reason: String,
-    },
+    StrictLayering { layers: Vec<String>, reason: String },
     /// Banned symbol or namespace (e.g. direct usage of legacy raw SQL modules).
     BannedSymbol {
         symbol_label: String,
@@ -276,10 +273,8 @@ mod tests {
 
     #[test]
     fn arch_policy_defaults_when_missing() {
-        let dir = std::env::temp_dir().join(format!(
-            "graphenium-policy-test-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("graphenium-policy-test-{}", std::process::id()));
         let config = ArchPolicyConfig::load_from_file(&dir.join("policy.json")).unwrap();
         assert!(config.rules.is_empty());
     }

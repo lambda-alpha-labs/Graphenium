@@ -325,7 +325,10 @@ fn check_strict_layering_violations(
 
     for (i, from_matcher) in matchers.iter().enumerate() {
         let Ok(from_glob) = from_matcher else {
-            violations.push(format!("Invalid strict_layering layer pattern '{}'", layers[i]));
+            violations.push(format!(
+                "Invalid strict_layering layer pattern '{}'",
+                layers[i]
+            ));
             continue;
         };
         for j in 0..i {
@@ -405,9 +408,10 @@ fn check_transitive_violations_with_datalog(
                         if from_node.id == to_node.id {
                             continue;
                         }
-                        if violations.iter().any(|v| {
-                            v.contains(&from_node.id) && v.contains(&to_node.id)
-                        }) {
+                        if violations
+                            .iter()
+                            .any(|v| v.contains(&from_node.id) && v.contains(&to_node.id))
+                        {
                             continue;
                         }
                         match crate::analyze::query::depends_transitive(

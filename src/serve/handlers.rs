@@ -113,7 +113,10 @@ impl GrapheniumServer {
         crate::harness::validate_plan_preflight(&graph, plan_id, &policy.rules)
     }
 
-    fn format_preflight_violation(plan_id: &str, report: &crate::harness::PreFlightReport) -> String {
+    fn format_preflight_violation(
+        plan_id: &str,
+        report: &crate::harness::PreFlightReport,
+    ) -> String {
         let violations = serde_json::to_string(&report.violations).unwrap_or_else(|_| "[]".into());
         format!(
             "PRE_FLIGHT_VIOLATION: The proposed plan '{}' violates repository architecture policies.\n\
@@ -3222,7 +3225,9 @@ impl GrapheniumServer {
         #[schemars(description = "Override: maximum allowed ambiguous edges (default 10)")]
         max_ambiguous: Option<usize>,
         #[tool(param)]
-        #[schemars(description = "Optional planning workspace ID to run pre-flight architecture policy validation")]
+        #[schemars(
+            description = "Optional planning workspace ID to run pre-flight architecture policy validation"
+        )]
         plan_id: Option<String>,
     ) -> String {
         let graph = self.graph_store.load();
