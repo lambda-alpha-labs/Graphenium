@@ -87,6 +87,19 @@ Block or slow down the agent when:
 - the agent has not read the recommended source files
 - the change modifies files outside the declared planning workspace
 
+## Architecture policy vs trust policy
+
+Graphenium distinguishes two policy layers:
+
+| Layer | Config | When it runs | What it gates |
+|---|---|---|---|
+| Trust quality | `gm check` thresholds, `agent_change_gate` defaults | After graph build or before review | Resolution %, ambiguous edge counts |
+| Architecture | `.graphenium/policy.json` | Before coding (pre-flight) | Forbidden dependencies, layer hierarchy, banned symbols |
+
+Pre-flight architecture validation operates on the virtual planning subgraph (`plan_id` nodes and edges). Trust gates operate on the full extracted graph. Use both: architecture policy prevents invalid designs; trust policy ensures the graph is reliable enough to plan against.
+
+See [`docs/CI_AND_GOVERNANCE.md`](CI_AND_GOVERNANCE.md#architecture-policy-pre-flight).
+
 ## CI policy examples
 
 Start permissive:

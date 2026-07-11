@@ -98,6 +98,31 @@ impl GrapheniumServer {
         super::freshness::check_staleness(&graph_path, project_root).warning_message()
     }
 
+    fn load_arch_policy(&self) -> crate::policy::ArchPolicyConfig {
+        let graph = self.graph();
+        let Some(project_root) = graph.metadata.project_root.as_deref() else {
+            return crate::policy::ArchPolicyConfig::default();
+        };
+        crate::policy::ArchPolicyConfig::load_for_project(Path::new(project_root))
+            .unwrap_or_default()
+    }
+
+    fn validate_plan_preflight(&self, plan_id: &str) -> crate::harness::PreFlightReport {
+        let graph = self.graph();
+        let policy = self.load_arch_policy();
+        crate::harness::validate_plan_preflight(&graph, plan_id, &policy.rules)
+    }
+
+    fn format_preflight_violation(plan_id: &str, report: &crate::harness::PreFlightReport) -> String {
+        let violations = serde_json::to_string(&report.violations).unwrap_or_else(|_| "[]".into());
+        format!(
+            "PRE_FLIGHT_VIOLATION: The proposed plan '{}' violates repository architecture policies.\n\
+             Violations: {violations}\n\
+             Fix the plan structure before writing code.",
+            plan_id
+        )
+    }
+
     /// Resolve a node by exact ID, or by case-insensitive label match.
     fn resolve_id(&self, id_or_label: &str) -> Option<String> {
         let graph = self.graph();
@@ -3196,6 +3221,9 @@ impl GrapheniumServer {
         #[tool(param)]
         #[schemars(description = "Override: maximum allowed ambiguous edges (default 10)")]
         max_ambiguous: Option<usize>,
+        #[tool(param)]
+        #[schemars(description = "Optional planning workspace ID to run pre-flight architecture policy validation")]
+        plan_id: Option<String>,
     ) -> String {
         let graph = self.graph_store.load();
         let ids: Vec<String> = changed_nodes
@@ -3294,6 +3322,23 @@ impl GrapheniumServer {
                 r.threshold,
                 if r.passed { "✅ PASS" } else { "❌ FAIL" },
             ));
+        }
+
+        if let Some(ref pid) = plan_id {
+            output.push_str("\n## Pre-Flight Architecture Policy\n\n");
+            let preflight = self.validate_plan_preflight(pid);
+            if preflight.passes {
+                output.push_str(&format!(
+                    "Plan `{}`: ✅ PASS ({} rules checked)\n",
+                    pid,
+                    self.load_arch_policy().rules.len()
+                ));
+            } else {
+                output.push_str(&format!("Plan `{}`: ❌ FAIL\n\n", pid));
+                for v in &preflight.violations {
+                    output.push_str(&format!("- {v}\n"));
+                }
+            }
         }
 
         output
@@ -3565,6 +3610,40 @@ impl GrapheniumServer {
 
     // ── Planning workspace tools (k) ────────────────────────────────────────
 
+    #[tool(
+        description = "Perform pre-flight architecture policy check on a planning workspace before writing code. \
+        Loads rules from .graphenium/policy.json and returns structural violations if any."
+    )]
+    fn validate_plan(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "The workspace plan identifier to validate")]
+        plan_id: String,
+    ) -> String {
+        let policy = self.load_arch_policy();
+        if policy.rules.is_empty() {
+            return format!(
+                "Plan `{}`: ✅ PASS (no architecture policy rules configured in .graphenium/policy.json)",
+                plan_id
+            );
+        }
+
+        let report = self.validate_plan_preflight(&plan_id);
+        if report.passes {
+            return format!(
+                "Plan `{}`: ✅ PASS ({} rules checked)",
+                plan_id,
+                policy.rules.len()
+            );
+        }
+
+        let mut output = format!("Plan `{}`: ❌ PRE_FLIGHT_VIOLATION\n\n", plan_id);
+        for v in &report.violations {
+            output.push_str(&format!("- {v}\n"));
+        }
+        output
+    }
+
     #[tool(description = "Creates a new virtual planning workspace to group intended changes.")]
     fn create_planning_workspace(
         &self,
@@ -3642,10 +3721,18 @@ impl GrapheniumServer {
             crate::model::Confidence::Inferred,
             &file_path,
         );
-        p_edge.plan_id = Some(plan_id);
+        p_edge.plan_id = Some(plan_id.clone());
         p_edge.extractor = Some("virtual-planner".to_string());
         p_edge.resolution_status = Some("planned".to_string());
         graph.add_edge(p_edge);
+
+        let policy = self.load_arch_policy();
+        if !policy.rules.is_empty() {
+            let report = crate::harness::validate_plan_preflight(&graph, &plan_id, &policy.rules);
+            if !report.passes {
+                return Self::format_preflight_violation(&plan_id, &report);
+            }
+        }
 
         self.graph_store.store(Arc::new(graph));
         let _persist = self.persist_graph().ok();

@@ -1151,9 +1151,38 @@ fn cmd_check(
 ) -> graphenium::Result<()> {
     let graph = export::json::load_graph(graph_path)?;
 
-    // Handle plan compliance verification
+    // Handle plan workspace validation (pre-flight + post-facto compliance)
     if let Some(plan_id) = plan {
-        println!("=== Graphenium Plan Compliance Gate ===");
+        let mut plan_failed = false;
+
+        let project_root = graph.metadata.project_root.as_deref().map(Path::new);
+        let arch_policy = project_root
+            .map(graphenium::policy::ArchPolicyConfig::load_for_project)
+            .transpose()?
+            .unwrap_or_default();
+
+        println!("=== Graphenium Pre-Flight Architecture Policy Gate ===");
+        if arch_policy.rules.is_empty() {
+            println!("No rules in .graphenium/policy.json — skipping pre-flight checks.");
+        } else {
+            let preflight = harness::validate_plan_preflight(&graph, &plan_id, &arch_policy.rules);
+            println!("Plan ID: {}", preflight.plan_id);
+            println!(
+                "Pre-flight: {}",
+                if preflight.passes { "PASS" } else { "FAIL" }
+            );
+            if !preflight.violations.is_empty() {
+                println!("\nViolations:");
+                for v in &preflight.violations {
+                    println!("  - {v}");
+                }
+            }
+            if !preflight.passes {
+                plan_failed = true;
+            }
+        }
+
+        println!("\n=== Graphenium Plan Compliance Gate ===");
         let report = harness::verify_plan(&graph, &plan_id);
         println!("Plan ID: {}", report.plan_id);
         println!(
@@ -1173,7 +1202,10 @@ fn cmd_check(
         if !report.unplanned_modified_files.is_empty() {
             println!("Unplanned changes: {:?}", report.unplanned_modified_files);
         }
-        if !report.passes_compliance && strict {
+        if !report.passes_compliance {
+            plan_failed = true;
+        }
+        if plan_failed && strict {
             std::process::exit(1);
         }
         return Ok(());

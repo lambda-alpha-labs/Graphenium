@@ -163,13 +163,15 @@ Useful tools:
 
 ### 3. In-edit planning workspaces
 
-For multi-file changes, agents can declare intended symbols before writing code. Graphenium stores the plan as a virtual workspace and later compares it to the extracted physical graph.
+For multi-file changes, agents can declare intended symbols before writing code. Graphenium stores the plan as a virtual workspace, validates it against architecture policy in `.graphenium/policy.json`, and later compares it to the extracted physical graph.
 
 ```text
-Plan declared       Implementation written       Compliance checked
--------------       ----------------------       ------------------
-planned symbols --> actual code symbols     --> implemented, missing, unplanned
+Plan declared       Pre-flight gate passes       Implementation written       Compliance checked
+-------------       --------------------       ----------------------       ------------------
+planned symbols --> policy rules OK        --> actual code symbols     --> implemented, missing, unplanned
 ```
+
+Use `validate_plan` (MCP) or `gm check --plan <id>` (CLI) to gate plans in CI.
 
 ### 4. Post-edit verification and CI gates
 

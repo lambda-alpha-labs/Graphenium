@@ -288,21 +288,31 @@ Use before and after agent edits.
 
 ### `agent_change_gate`
 
-Evaluates policy gates such as minimum resolution and maximum ambiguous edges.
+Evaluates trust-quality policy gates such as minimum resolution and maximum ambiguous edges.
 
-Use in CI or pre-review agent workflows.
+Optional parameter:
+
+| Parameter | Purpose |
+|---|---|
+| `plan_id` | Run pre-flight architecture policy validation for a planning workspace |
+
+Use in CI or pre-review agent workflows. When `plan_id` is provided, the response includes a pre-flight section alongside the trust gate table.
 
 ## Planning workspace tools
 
-Planning tools support the design-then-verify loop.
+Planning tools support the design-then-verify loop with a **pre-flight gate** before coding and a **compliance audit** after implementation.
 
 ```mermaid
 graph LR
     A[Create plan] --> B[Declare intended symbols]
-    B --> C[Write implementation]
+    B --> P[Pre-flight policy check]
+    P -->|pass| C[Write implementation]
+    P -->|fail| R[Revise plan]
     C --> D[Compare planned graph to physical graph]
     D --> E[Report implemented, missing, unplanned]
 ```
+
+Pre-flight rules load from `.graphenium/policy.json` in the project root (see [`docs/CI_AND_GOVERNANCE.md`](CI_AND_GOVERNANCE.md)).
 
 ### `create_planning_workspace`
 
@@ -314,7 +324,19 @@ Use when starting a multi-step architectural change.
 
 Registers an intended symbol or relationship before implementation.
 
+When `.graphenium/policy.json` defines architecture rules, this tool runs a pre-flight check automatically. If the proposed symbol or edge would violate policy, the tool returns `PRE_FLIGHT_VIOLATION` and does not persist the change.
+
 Use when declaring the design the agent intends to implement.
+
+### `validate_plan`
+
+Performs pre-flight architecture policy validation on a planning workspace **before** writing code.
+
+| Parameter | Purpose |
+|---|---|
+| `plan_id` | Planning workspace to validate |
+
+Returns pass or fail with a list of structural violations (forbidden dependencies, banned symbols, layer bypasses). Use after declaring planned symbols and before implementation.
 
 ### `get_plan_details`
 
@@ -322,7 +344,7 @@ Returns the virtual subgraph of the plan and implementation status.
 
 Use before review to compare intent with result.
 
-Important: compliance checking is performed by reviewing plan details and using `verification_plan`. The core library also has a `verify_plan` engine for embedded harnesses.
+Post-facto compliance checking is performed by reviewing plan details, using `verification_plan`, or running `gm check --plan`. The core library exposes `verify_plan` for embedded harnesses.
 
 ## Write tools
 
@@ -390,7 +412,8 @@ Use when preparing pull request review for agent-authored changes.
 | Plan verification after editing | `verification_plan` |
 | Measure downstream impact | `blast_radius` |
 | Review a changed graph | `what_changed` or `review_plan` |
-| Enforce policy | `agent_change_gate` |
+| Enforce trust policy | `agent_change_gate` |
+| Validate plan before coding | `validate_plan` |
 | Run custom logic | `run_datalog` |
 
 ## Output interpretation

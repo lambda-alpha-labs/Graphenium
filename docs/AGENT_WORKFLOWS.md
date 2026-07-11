@@ -125,7 +125,7 @@ Use this when an agent is about to implement a multi-file architectural change.
 ### Agent prompt
 
 ```text
-Use Graphenium to create a planning workspace for the proposed change. Declare the intended symbols and relationships before writing code. After implementation, verify compliance with verification_plan and get_plan_details, then report implemented, missing, and unplanned symbols.
+Use Graphenium to create a planning workspace for the proposed change. Declare the intended symbols and relationships before writing code. Run validate_plan to confirm the design passes repository architecture policy. After implementation, verify compliance with verification_plan and get_plan_details, then report implemented, missing, and unplanned symbols.
 ```
 
 ### Recommended tool sequence
@@ -133,15 +133,17 @@ Use Graphenium to create a planning workspace for the proposed change. Declare t
 1. `create_planning_workspace`
 2. `graph_info` plus `get_neighbors`
 3. `add_planned_symbol` for each new or modified symbol
-4. Implement the code
-5. `get_plan_details` plus `verification_plan`
-6. `blast_radius`
-7. `agent_change_gate`
+4. `validate_plan` (or rely on the automatic pre-flight check inside `add_planned_symbol`)
+5. Implement the code only after pre-flight passes
+6. `get_plan_details` plus `verification_plan`
+7. `blast_radius`
+8. `agent_change_gate` (optionally pass `plan_id` to re-run pre-flight alongside trust gates)
 
 ### Expected output shape
 
 ```text
 Plan: refactor-auth-service
+Pre-flight: PASS (4 architecture rules checked)
 Implemented nodes: new_auth_service, token_provider_adapter (2 of 3)
 Missing nodes: session_manager
 Unplanned modified files: src/middleware/unrelated.rs

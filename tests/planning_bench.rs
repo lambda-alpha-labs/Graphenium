@@ -1,6 +1,7 @@
-use graphenium::harness::verify_plan;
+use graphenium::harness::{validate_plan_preflight, verify_plan};
 use graphenium::model::graph::GrapheniumGraph;
-use graphenium::model::{Edge, FileType, Node};
+use graphenium::model::{Confidence, Edge, FileType, Node};
+use graphenium::policy::ArchRule;
 
 #[test]
 fn test_planning_workspace_lifecycle() {
@@ -59,4 +60,47 @@ fn test_planning_workspace_lifecycle() {
         "Expected PASS after implementation"
     );
     assert!(report.missing_nodes.is_empty());
+}
+
+#[test]
+fn test_preflight_forbidden_dependency() {
+    let mut graph = GrapheniumGraph::new();
+
+    let rules = vec![ArchRule::ForbiddenDependency {
+        from_pattern: "src/controllers/**".to_string(),
+        to_pattern: "src/db/**".to_string(),
+        reason: "Controllers must use services, not access DB directly".to_string(),
+    }];
+
+    graph.upsert_node(Node::new(
+        "db_svc",
+        "DatabaseConnection",
+        FileType::Code,
+        "src/db/connection.rs",
+    ));
+
+    let mut controller = Node::new(
+        "auth_ctrl",
+        "AuthController",
+        FileType::Code,
+        "src/controllers/auth.rs",
+    );
+    controller.plan_id = Some("plan-xyz".to_string());
+    graph.upsert_node(controller);
+
+    let mut edge = Edge::new(
+        "auth_ctrl",
+        "db_svc",
+        "calls",
+        Confidence::Extracted,
+        "src/controllers/auth.rs",
+    );
+    edge.plan_id = Some("plan-xyz".to_string());
+    graph.add_edge(edge);
+
+    let report = validate_plan_preflight(&graph, "plan-xyz", &rules);
+
+    assert!(!report.passes, "Expected pre-flight check to fail");
+    assert_eq!(report.violations.len(), 1);
+    assert!(report.violations[0].contains("violates forbidden dependency"));
 }

@@ -34,8 +34,8 @@ gm query "test" --budget 100
 | Module | Key concepts |
 |---|---|
 | `src/trust.rs` | EvidenceSpan, Claim, ResolutionReport |
-| `src/harness.rs` | TrustCheckResult, plan verification, compliance auditing |
-| `src/policy.rs` | Policy evaluation |
+| `src/harness.rs` | TrustCheckResult, pre-flight plan validation, post-facto plan verification |
+| `src/policy.rs` | Trust quality policy evaluation and `ArchRule` / `ArchPolicyConfig` schema |
 | `src/analyze/verifier.rs` | VerificationPlan and post-edit review planning |
 | `src/analyze/surprise.rs` | Architectural anomaly scoring |
 | `src/cluster/drift.rs` | DriftEvent and architecture drift detection |

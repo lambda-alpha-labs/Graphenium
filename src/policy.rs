@@ -3,6 +3,13 @@
 //! Policies are simple rules checked after graph generation or during CI.
 //! They gate on metrics like resolution coverage, ambiguous edge counts,
 //! evidence staleness, and community drift.
+//!
+//! Architecture policy rules (`ArchRule`) declare structural dependency
+//! boundaries evaluated during pre-flight plan validation.
+
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
 
 use crate::model::GrapheniumGraph;
 use crate::trust::ResolutionReport;
@@ -31,6 +38,59 @@ pub struct PolicyResult {
     pub actual: f64,
     pub threshold: f64,
     pub message: String,
+}
+
+/// Declarative architecture constraint for pre-flight plan validation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ArchRule {
+    /// Prevent any edge (imports, calls) from matching `from_pattern` to `to_pattern`.
+    /// Patterns use glob-style paths (e.g. from `src/routes/**` to `src/db/**`).
+    ForbiddenDependency {
+        from_pattern: String,
+        to_pattern: String,
+        reason: String,
+    },
+    /// Enforce a strict hierarchy where layer[i] can only call layer[i+1]..layer[n],
+    /// never backwards. E.g. `["src/controllers", "src/services", "src/repositories"]`.
+    StrictLayering {
+        layers: Vec<String>,
+        reason: String,
+    },
+    /// Banned symbol or namespace (e.g. direct usage of legacy raw SQL modules).
+    BannedSymbol {
+        symbol_label: String,
+        reason: String,
+    },
+}
+
+/// Repository architecture policy loaded from `.graphenium/policy.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ArchPolicyConfig {
+    #[serde(default)]
+    pub rules: Vec<ArchRule>,
+}
+
+impl ArchPolicyConfig {
+    /// Path to the policy file inside a repository root.
+    pub fn policy_path(project_root: &Path) -> PathBuf {
+        project_root.join(".graphenium").join("policy.json")
+    }
+
+    /// Load architecture policy from disk. Returns defaults when the file is missing.
+    pub fn load_from_file(path: &Path) -> Result<Self, crate::GrapheniumError> {
+        if !path.exists() {
+            return Ok(Self::default());
+        }
+        let content = std::fs::read_to_string(path)?;
+        let config: Self = serde_json::from_str(&content)?;
+        Ok(config)
+    }
+
+    /// Load policy from the standard location under `project_root`.
+    pub fn load_for_project(project_root: &Path) -> Result<Self, crate::GrapheniumError> {
+        Self::load_from_file(&Self::policy_path(project_root))
+    }
 }
 
 /// Default Graphenium policies for CI gates.
@@ -212,5 +272,33 @@ mod tests {
     fn default_policies_are_non_empty() {
         let p = default_policies();
         assert!(!p.is_empty());
+    }
+
+    #[test]
+    fn arch_policy_defaults_when_missing() {
+        let dir = std::env::temp_dir().join(format!(
+            "graphenium-policy-test-{}",
+            std::process::id()
+        ));
+        let config = ArchPolicyConfig::load_from_file(&dir.join("policy.json")).unwrap();
+        assert!(config.rules.is_empty());
+    }
+
+    #[test]
+    fn arch_policy_roundtrip() {
+        let json = r#"{
+            "rules": [{
+                "type": "forbidden_dependency",
+                "from_pattern": "src/controllers/**",
+                "to_pattern": "src/db/**",
+                "reason": "Use services"
+            }]
+        }"#;
+        let config: ArchPolicyConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.rules.len(), 1);
+        assert!(matches!(
+            &config.rules[0],
+            ArchRule::ForbiddenDependency { .. }
+        ));
     }
 }

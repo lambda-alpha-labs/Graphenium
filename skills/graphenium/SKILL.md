@@ -72,6 +72,7 @@ The MCP launcher only auto-builds when `graph.json` is missing. Stale graphs are
 | Is the graph trustworthy? | `resolution_report` |
 | What should I verify after editing? | `verification_plan` |
 | Should this change pass policy? | `agent_change_gate` |
+| Should this plan pass architecture policy before coding? | `validate_plan` |
 | What changed since a snapshot? | `what_changed` or `diff_graph` |
 | Need a custom constraint query | `run_datalog` |
 

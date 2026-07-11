@@ -113,9 +113,9 @@ Detailed stages:
 | `embed.rs` | TF text embeddings and structural embeddings |
 | `export/` | JSON and HTML export |
 | `extract/` | Tree-sitter extraction per language |
-| `harness.rs` | Trust check harness and plan verification engine |
+| `harness.rs` | Trust check harness, pre-flight plan validation, and post-facto plan verification |
 | `model/` | Graph, node, edge, hyperedge, and extraction result types |
-| `policy.rs` | Trust quality policy evaluation |
+| `policy.rs` | Trust quality policy evaluation and architecture policy schema (`ArchRule`, `ArchPolicyConfig`) |
 | `ranking.rs` | Lexical, structural, and hybrid query scoring |
 | `resolver.rs` | Cross-file import and reference resolution |
 | `analyze/query.rs` | Datalog query engine |
@@ -169,6 +169,27 @@ The verification engine compares:
 | Declared file scope | Modified files | Unplanned modifications |
 
 This enables formal design-then-verify workflows for agents.
+
+### Pre-flight architecture policy validation
+
+Before an agent writes code, Graphenium can evaluate the virtual plan subgraph against declarative rules in `.graphenium/policy.json`:
+
+```text
+Agent proposed workspace plan (virtual nodes and edges)
+        │
+        ▼
+  Harness engine (harness.rs)
+    ├── isolate plan_id subgraph
+    ├── evaluate ArchRule boundaries (policy.rs)
+    └── run Datalog transitive checks for strict_layering
+        │
+        ├─► Passed: plan authorized
+        └─► Failed: rejected with structural hints
+```
+
+Rule types: `forbidden_dependency`, `strict_layering`, and `banned_symbol`. Direct edge violations are checked in Rust; transitive layer bypasses use the Datalog `depends_transitive` closure from `src/analyze/query/stdlib.dl`.
+
+Post-facto compliance (`verify_plan`) still runs after implementation to detect missing symbols and unplanned file changes.
 
 ## Betweenness and anomaly detection
 

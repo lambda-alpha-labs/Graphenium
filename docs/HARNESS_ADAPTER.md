@@ -49,15 +49,20 @@ Harnesses should use planning workspaces for multi-file agent changes.
 
 1. Create a planning workspace.
 2. Register intended symbols and relationships.
-3. Let the agent implement the change.
-4. Re-extract modified files.
-5. Compare the planned virtual graph with the physical graph.
-6. Report implemented, missing, and unplanned symbols.
+3. Run pre-flight architecture policy validation (`validate_plan_preflight` in `src/harness.rs`, or `validate_plan` via MCP).
+4. Let the agent implement the change only if pre-flight passes.
+5. Re-extract modified files.
+6. Compare the planned virtual graph with the physical graph (`verify_plan`).
+7. Report implemented, missing, and unplanned symbols.
+
+Architecture rules load from `.graphenium/policy.json` via `ArchPolicyConfig::load_for_project` in `src/policy.rs`.
 
 ```mermaid
 graph LR
     A[Agent intent] --> B[Virtual plan graph]
-    B --> C[Implementation]
+    B --> P[Pre-flight policy gate]
+    P -->|pass| C[Implementation]
+    P -->|fail| R[Revise plan]
     C --> D[Physical extracted graph]
     D --> E[Compliance audit]
 ```

@@ -747,6 +747,25 @@ fn unify(
 // Phase 4: Safety Guardrails
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Check whether `from` transitively depends on `to` using the stdlib closure.
+pub fn depends_transitive(
+    graph: &crate::model::GrapheniumGraph,
+    from: &str,
+    to: &str,
+    step_budget: usize,
+) -> Result<bool, String> {
+    let query = format!(r#"?- depends_transitive("{from}", "{to}")."#);
+    let tokens = tokenize(&query)?;
+    let mut program = parse(&tokens)?;
+    program.merge_stdlib(stdlib_rules().as_ref().clone());
+
+    let mut edb = Edb::default();
+    edb.load_from_graph(graph);
+    let mut interpreter = Interpreter::new(edb);
+    let results = interpreter.solve(&program, step_budget)?;
+    Ok(results.iter().any(|(_, tuples)| !tuples.is_empty()))
+}
+
 /// Run a complete Datalog query against a graph with safety guardrails.
 pub fn run_datalog_query(
     graph: &crate::model::GrapheniumGraph,

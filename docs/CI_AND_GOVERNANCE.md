@@ -84,6 +84,66 @@ Reviewer notes:
 | 4. Gate all agent PRs | Require blast radius and verification plan | Standardize agent review |
 | 5. Enforce architecture boundaries | Use graph diff and policy rules | Prevent drift |
 
+## Architecture policy (pre-flight)
+
+Graphenium can block agent plans that violate structural dependency boundaries **before** any source code is written. Rules are declared in `.graphenium/policy.json` at the repository root.
+
+### Policy file format
+
+```json
+{
+  "rules": [
+    {
+      "type": "forbidden_dependency",
+      "from_pattern": "src/controllers/**",
+      "to_pattern": "src/db/**",
+      "reason": "Controllers must use services, not access DB directly"
+    },
+    {
+      "type": "strict_layering",
+      "layers": [
+        "src/serve/**",
+        "src/analyze/**",
+        "src/extract/**",
+        "src/model/**"
+      ],
+      "reason": "Respect tiered architecture: serve → analyze → extract → model"
+    },
+    {
+      "type": "banned_symbol",
+      "symbol_label": "LegacyRawSql",
+      "reason": "Use the repository abstraction instead"
+    }
+  ]
+}
+```
+
+| Rule type | What it checks |
+|---|---|
+| `forbidden_dependency` | Planned edges from `from_pattern` to `to_pattern` (glob paths) |
+| `strict_layering` | No planned node in layer *i* may depend on layer *j* where *j < i*; transitive violations use Datalog `depends_transitive` |
+| `banned_symbol` | Planned symbols or dependency targets matching a label |
+
+Patterns use glob syntax (same as `.grapheniumignore`). An empty or missing policy file skips pre-flight checks.
+
+### When pre-flight runs
+
+| Entry point | Behavior |
+|---|---|
+| `validate_plan` MCP tool | Explicit pre-flight check on a `plan_id` |
+| `add_planned_symbol` | Automatic check; rejects with `PRE_FLIGHT_VIOLATION` on failure |
+| `agent_change_gate` | Optional `plan_id` parameter adds a pre-flight section |
+| `gm check --plan <id>` | Pre-flight gate, then post-facto compliance |
+
+### CI example with planning workspace
+
+```sh
+gm run . --no-semantic --no-viz
+gm check --graph graphenium-out/graph.json --plan agent-refactor-auth --strict
+```
+
+This fails if the declared plan violates architecture policy or if implementation does not match the plan.
+
 ## Recommended initial thresholds
 
 For a new repository:

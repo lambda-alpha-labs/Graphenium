@@ -2,6 +2,22 @@
 
 This file summarizes notable releases and preserves the major documentation history.
 
+## Unreleased
+
+Theme: pre-flight architecture policy validation for planning workspaces.
+
+Added:
+
+- `ArchRule` and `ArchPolicyConfig` in `src/policy.rs` — declarative rules loaded from `.graphenium/policy.json` (`forbidden_dependency`, `strict_layering`, `banned_symbol`).
+- Pre-flight evaluation engine in `src/harness.rs` — `validate_plan_preflight`, `PreFlightReport`, and planned subgraph isolation.
+- `depends_transitive` helper in `src/analyze/query.rs` for transitive layer violation checks.
+- `validate_plan` MCP tool — explicit pre-flight check before coding.
+- Automatic pre-flight gate in `add_planned_symbol` (returns `PRE_FLIGHT_VIOLATION` on failure).
+- Optional `plan_id` on `agent_change_gate` for combined trust and architecture policy checks.
+- `gm check --plan` now runs pre-flight policy validation before post-facto compliance.
+- Example `.graphenium/policy.json` for the Graphenium repository.
+- Integration tests in `tests/planning_bench.rs` and `src/harness.rs`.
+
 ## v0.19.0, 2026-07-10
 
 Theme: Datalog Standard Library and goal-directed query evaluation.

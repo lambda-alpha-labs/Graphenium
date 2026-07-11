@@ -159,12 +159,20 @@ gm check [flags]
 | `--min-resolution` | float | 80.0 | Minimum import or call resolution percentage |
 | `--max-ambiguous` | integer | 10 | Maximum allowed ambiguous edges |
 | `--strict` | bool | false | Fail on warnings |
-| `--plan` | string | none | Verify a planning workspace |
+| `--plan` | string | none | Validate a planning workspace (pre-flight policy + post-facto compliance) |
+
+When `--plan` is set, `gm check` runs two gates in sequence:
+
+1. **Pre-flight** — evaluates the virtual plan against rules in `.graphenium/policy.json`
+2. **Compliance** — compares planned symbols to the extracted physical graph (`verify_plan`)
+
+Use `--strict` to exit non-zero if either gate fails.
 
 Example:
 
 ```sh
 gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 10
+gm check --graph graphenium-out/graph.json --plan refactor-auth --strict
 ```
 
 ## `gm diff`

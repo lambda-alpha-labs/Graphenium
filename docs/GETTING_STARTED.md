@@ -174,22 +174,27 @@ Expected behavior:
 
 Use this for multi-file changes.
 
+Optional: declare architecture boundaries in `.graphenium/policy.json` so Graphenium can reject invalid plans before coding. See [`docs/CI_AND_GOVERNANCE.md`](CI_AND_GOVERNANCE.md#architecture-policy-pre-flight).
+
 ```sh
 gm plan create --name "refactor-auth"
 gm plan add-symbol --plan "refactor-auth" --symbol "new_auth_service" --kind function
-# Write the code.
+# Pre-flight is checked automatically when using MCP add_planned_symbol.
+# Write the code only after the plan passes.
 gm run . --update --no-semantic --no-viz
+gm check --graph graphenium-out/graph.json --plan refactor-auth --strict
 gm plan get --plan "refactor-auth"
 ```
 
 Through MCP, use:
 
 - `create_planning_workspace`
-- `add_planned_symbol`
+- `add_planned_symbol` (runs pre-flight automatically when policy rules exist)
+- `validate_plan` (explicit pre-flight check)
 - `get_plan_details`
 - `verification_plan`
 - `blast_radius`
-- `agent_change_gate`
+- `agent_change_gate` (optional `plan_id` for pre-flight + trust gates)
 
 ## Live development
 

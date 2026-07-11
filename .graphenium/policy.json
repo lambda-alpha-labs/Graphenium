@@ -1,0 +1,32 @@
+{
+  "rules": [
+    {
+      "type": "forbidden_dependency",
+      "from_pattern": "src/model/**",
+      "to_pattern": "src/serve/**",
+      "reason": "Core graph model must not depend on the MCP server layer"
+    },
+    {
+      "type": "forbidden_dependency",
+      "from_pattern": "src/model/**",
+      "to_pattern": "src/extract/**",
+      "reason": "Core graph model must stay independent of language extractors"
+    },
+    {
+      "type": "forbidden_dependency",
+      "from_pattern": "src/extract/**",
+      "to_pattern": "src/serve/**",
+      "reason": "Extractors must not depend on MCP handlers"
+    },
+    {
+      "type": "strict_layering",
+      "layers": [
+        "src/serve/**",
+        "src/analyze/**",
+        "src/extract/**",
+        "src/model/**"
+      ],
+      "reason": "Respect Graphenium's tiered architecture: serve → analyze → extract → model"
+    }
+  ]
+}

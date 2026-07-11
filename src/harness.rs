@@ -3,8 +3,11 @@
 //! Use this to gate CI pipelines on trust quality:
 //!   gm check --min-resolution 90 --max-stale 5
 
+use globset::{Glob, GlobMatcher};
+
 use crate::model::graph::GrapheniumGraph;
-use crate::model::Node;
+use crate::model::{Edge, Node};
+use crate::policy::ArchRule;
 use crate::trust::ResolutionReport;
 
 /// Result of a trust check, suitable for CI gate logic.
@@ -183,6 +186,253 @@ pub fn verify_plan(graph: &GrapheniumGraph, plan_id: &str) -> PlanVerificationRe
     }
 }
 
+// ── Pre-Flight Architecture Policy Validation ────────────────────────────────
+
+/// Result of pre-flight architecture policy validation on a planning workspace.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PreFlightReport {
+    pub plan_id: String,
+    pub passes: bool,
+    pub violations: Vec<String>,
+}
+
+/// Isolates the planned (virtual) nodes and edges for evaluation.
+pub fn get_planned_subgraph(graph: &GrapheniumGraph, plan_id: &str) -> (Vec<Node>, Vec<Edge>) {
+    let nodes: Vec<Node> = graph
+        .nodes()
+        .filter(|n| n.plan_id.as_deref() == Some(plan_id))
+        .cloned()
+        .collect();
+
+    let edges: Vec<Edge> = graph
+        .edges_iter()
+        .filter(|e| e.plan_id.as_deref() == Some(plan_id))
+        .cloned()
+        .collect();
+
+    (nodes, edges)
+}
+
+fn compile_glob(pattern: &str) -> Result<GlobMatcher, String> {
+    Ok(Glob::new(pattern)
+        .map_err(|e| format!("Invalid glob pattern '{pattern}': {e}"))?
+        .compile_matcher())
+}
+
+/// Validate a planning workspace against architecture policy rules before coding.
+pub fn validate_plan_preflight(
+    graph: &GrapheniumGraph,
+    plan_id: &str,
+    rules: &[ArchRule],
+) -> PreFlightReport {
+    let (p_nodes, p_edges) = get_planned_subgraph(graph, plan_id);
+    let mut violations = Vec::new();
+
+    for rule in rules {
+        match rule {
+            ArchRule::ForbiddenDependency {
+                from_pattern,
+                to_pattern,
+                reason,
+            } => {
+                let Ok(from_glob) = compile_glob(from_pattern) else {
+                    violations.push(format!(
+                        "Invalid forbidden_dependency from_pattern '{from_pattern}'"
+                    ));
+                    continue;
+                };
+                let Ok(to_glob) = compile_glob(to_pattern) else {
+                    violations.push(format!(
+                        "Invalid forbidden_dependency to_pattern '{to_pattern}'"
+                    ));
+                    continue;
+                };
+
+                for edge in &p_edges {
+                    let src_file = resolve_edge_source_file(graph, edge);
+                    let Some(target_node) = graph.node_data(&edge.target) else {
+                        continue;
+                    };
+                    if from_glob.is_match(&src_file) && to_glob.is_match(&target_node.source_file) {
+                        violations.push(format!(
+                            "Planned edge {} -> {} violates forbidden dependency rule: {from_pattern} -> {to_pattern} (Reason: {reason})",
+                            edge.source, edge.target
+                        ));
+                    }
+                }
+            }
+            ArchRule::BannedSymbol {
+                symbol_label,
+                reason,
+            } => {
+                let banned = symbol_label.trim();
+                for node in &p_nodes {
+                    if node.label == banned || node.id == banned {
+                        violations.push(format!(
+                            "Planned symbol '{banned}' is banned (Reason: {reason})"
+                        ));
+                    }
+                }
+                for edge in &p_edges {
+                    if edge.target == banned
+                        || graph
+                            .node_data(&edge.target)
+                            .is_some_and(|n| n.label == banned)
+                    {
+                        violations.push(format!(
+                            "Planned call/dependency target '{banned}' is banned (Reason: {reason})"
+                        ));
+                    }
+                }
+            }
+            ArchRule::StrictLayering { layers, reason } => {
+                check_strict_layering_violations(graph, plan_id, layers, reason, &mut violations);
+            }
+        }
+    }
+
+    check_transitive_violations_with_datalog(graph, plan_id, rules, &mut violations);
+
+    PreFlightReport {
+        plan_id: plan_id.to_string(),
+        passes: violations.is_empty(),
+        violations,
+    }
+}
+
+fn resolve_edge_source_file(graph: &GrapheniumGraph, edge: &Edge) -> String {
+    graph
+        .node_data(&edge.source)
+        .map(|n| n.source_file.clone())
+        .unwrap_or_else(|| edge.source_file.clone())
+}
+
+fn check_strict_layering_violations(
+    graph: &GrapheniumGraph,
+    plan_id: &str,
+    layers: &[String],
+    reason: &str,
+    violations: &mut Vec<String>,
+) {
+    if layers.len() < 2 {
+        return;
+    }
+
+    let matchers: Vec<Result<GlobMatcher, String>> =
+        layers.iter().map(|l| compile_glob(l)).collect();
+
+    let (_, p_edges) = get_planned_subgraph(graph, plan_id);
+
+    for (i, from_matcher) in matchers.iter().enumerate() {
+        let Ok(from_glob) = from_matcher else {
+            violations.push(format!("Invalid strict_layering layer pattern '{}'", layers[i]));
+            continue;
+        };
+        for j in 0..i {
+            let Ok(to_glob) = &matchers[j] else {
+                violations.push(format!(
+                    "Invalid strict_layering layer pattern '{}'",
+                    layers[j]
+                ));
+                continue;
+            };
+
+            for edge in &p_edges {
+                let src_file = resolve_edge_source_file(graph, edge);
+                let Some(target_node) = graph.node_data(&edge.target) else {
+                    continue;
+                };
+                if from_glob.is_match(&src_file) && to_glob.is_match(&target_node.source_file) {
+                    violations.push(format!(
+                        "Planned edge {} -> {} violates strict layering: {} must not depend on {} (Reason: {reason})",
+                        edge.source, edge.target, layers[i], layers[j]
+                    ));
+                }
+            }
+        }
+    }
+}
+
+fn check_transitive_violations_with_datalog(
+    graph: &GrapheniumGraph,
+    plan_id: &str,
+    rules: &[ArchRule],
+    violations: &mut Vec<String>,
+) {
+    let has_layering = rules
+        .iter()
+        .any(|r| matches!(r, ArchRule::StrictLayering { .. }));
+    if !has_layering {
+        return;
+    }
+
+    let (p_nodes, _) = get_planned_subgraph(graph, plan_id);
+    if p_nodes.is_empty() {
+        return;
+    }
+
+    for rule in rules {
+        let ArchRule::StrictLayering { layers, reason } = rule else {
+            continue;
+        };
+        if layers.len() < 2 {
+            continue;
+        }
+
+        let matchers: Vec<Result<GlobMatcher, String>> =
+            layers.iter().map(|l| compile_glob(l)).collect();
+
+        for (i, from_matcher) in matchers.iter().enumerate() {
+            let Ok(from_glob) = from_matcher else {
+                continue;
+            };
+            for j in 0..i {
+                let Ok(to_glob) = &matchers[j] else {
+                    continue;
+                };
+
+                let from_nodes: Vec<_> = p_nodes
+                    .iter()
+                    .filter(|n| from_glob.is_match(&n.source_file))
+                    .collect();
+                let to_nodes: Vec<_> = graph
+                    .nodes()
+                    .filter(|n| to_glob.is_match(&n.source_file))
+                    .collect();
+
+                for from_node in &from_nodes {
+                    for to_node in &to_nodes {
+                        if from_node.id == to_node.id {
+                            continue;
+                        }
+                        if violations.iter().any(|v| {
+                            v.contains(&from_node.id) && v.contains(&to_node.id)
+                        }) {
+                            continue;
+                        }
+                        match crate::analyze::query::depends_transitive(
+                            graph,
+                            &from_node.id,
+                            &to_node.id,
+                            1000,
+                        ) {
+                            Ok(true) => violations.push(format!(
+                                "Transitive layering violation in plan '{plan_id}': {} ({}) depends on {} ({}) (Reason: {reason})",
+                                from_node.label,
+                                layers[i],
+                                to_node.label,
+                                layers[j]
+                            )),
+                            Ok(false) => {}
+                            Err(_) => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,5 +473,49 @@ mod tests {
         let graph = GrapheniumGraph::new();
         let result = check_resolution_quality(&graph, &report, 90.0, 5);
         assert!(!result.passed);
+    }
+
+    #[test]
+    fn preflight_forbidden_dependency_detects_violation() {
+        use crate::model::{Confidence, FileType};
+        use crate::policy::ArchRule;
+
+        let mut graph = GrapheniumGraph::new();
+        let rules = vec![ArchRule::ForbiddenDependency {
+            from_pattern: "src/controllers/**".to_string(),
+            to_pattern: "src/db/**".to_string(),
+            reason: "Controllers must use services, not access DB directly".to_string(),
+        }];
+
+        graph.upsert_node(Node::new(
+            "db_svc",
+            "DatabaseConnection",
+            FileType::Code,
+            "src/db/connection.rs",
+        ));
+
+        let mut controller = Node::new(
+            "auth_ctrl",
+            "AuthController",
+            FileType::Code,
+            "src/controllers/auth.rs",
+        );
+        controller.plan_id = Some("plan-xyz".to_string());
+        graph.upsert_node(controller);
+
+        let mut edge = Edge::new(
+            "auth_ctrl",
+            "db_svc",
+            "calls",
+            Confidence::Extracted,
+            "src/controllers/auth.rs",
+        );
+        edge.plan_id = Some("plan-xyz".to_string());
+        graph.add_edge(edge);
+
+        let report = validate_plan_preflight(&graph, "plan-xyz", &rules);
+        assert!(!report.passes);
+        assert_eq!(report.violations.len(), 1);
+        assert!(report.violations[0].contains("violates forbidden dependency"));
     }
 }
