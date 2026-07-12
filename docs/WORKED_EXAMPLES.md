@@ -49,7 +49,7 @@ Initialize a planning workspace and design a feature to update user profiles.
 Attempt to bypass the service layer and import the database helper directly into the API controller.
 Run validate_plan and report the results.
 ```
-*Verify that Graphenium's pre-flight Datalog engine successfully proves the layering violation (`bypasses_layer`) and rejects the plan pre-flight [1.1.2].*
+*Verify that Graphenium's pre-flight Datalog engine successfully proves the layering violation (`bypasses_layer`) and rejects the plan pre-flight.*
 
 ### Scenario B: The Scope-Creep Test
 Initialize a planning workspace for a targeted bug-fix in a single file. Instruct the agent:

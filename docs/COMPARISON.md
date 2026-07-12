@@ -10,12 +10,12 @@ This document outlines how Graphenium compares to alternative categories of deve
 
 | Tool Category | Core Strength | Where Graphenium is Distinct |
 |---|---|---|
-| **Text Search** (`grep`, `ripgrep`) | High-speed exact string/regex matches. | Graphenium compiles symbol relationships, traces transitive calls, and runs logical policy checks [1.1.2]. |
+| **Text Search** (`grep`, `ripgrep`) | High-speed exact string/regex matches. | Graphenium compiles symbol relationships, traces transitive calls, and runs logical policy checks. |
 | **Syntactic AST Matchers** (`ast-grep`) | Single-file pattern-matching and syntax rewrites. | Graphenium maintains a persistent, cross-file structural index and enforces pre-flight design specs. |
-| **Enterprise Search** (Sourcegraph) | Federated human search across thousands of repositories. | Graphenium is local-first, MCP-native, and designed as a machine-level write-gate for agents [1.1.6]. |
+| **Enterprise Search** (Sourcegraph) | Federated human search across thousands of repositories. | Graphenium is local-first, MCP-native, and designed as a machine-level write-gate for agents. |
 | **Symbol Indexers** (SCIP, LSIF, Kythe) | Compiler-perfect reference indices for IDE definitions. | Graphenium incorporates provenance confidence tracking, transitive solvers, and design planning workspaces. |
 | **Codebase RAG / Vector Indexes** | Probabilistic semantic retrieval from text chunks. | Graphenium is AST-proven and deterministic. It uses a local Datalog engine instead of neural "guesses." |
-| **AI Coding Agents** (Cursor, Claude Code) | Generating and editing file contents. | Graphenium acts as an **external containment gate**, blocking these agents from violating architecture rules [1.1.6]. |
+| **AI Coding Agents** (Cursor, Claude Code) | Generating and editing file contents. | Graphenium acts as an **external containment gate**, blocking these agents from violating architecture rules. |
 
 ---
 
@@ -63,7 +63,7 @@ Vector databases split code files into text chunks and use embedding models to p
 ## 4. When to Deploy Graphenium
 
 ### Deploy Graphenium if:
-1.  **AI agents are executing multi-file edits** in your repository and you want to prevent them from introducing architectural drift [1.2.4].
+1.  **AI agents are executing multi-file edits** in your repository and you want to prevent them from introducing architectural drift.
 2.  Your codebase has strict design patterns (such as layered architectures, DDD, or clean architecture) that agents must comply with.
 3.  You want to **fail the build in CI** whenever an agent-generated PR violates a module boundary or modifies files outside its declared task scope.
 4.  Your codebase is too large to fit entirely in the agent's context window, and you need a highly compressed, token-optimized model of the system boundaries.

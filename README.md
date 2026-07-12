@@ -28,9 +28,9 @@ Status: AST + Stack Graphs resolver stable, pre-flight policy engine stable, tel
 
 AI coding agents are highly efficient at local edits, but they suffer from **structural blindness and context decay**. Over a long chat session, an agent will lose track of your system instructions and optimize for the path of least resistance (e.g., writing a raw database call inside an HTTP controller to make a local test pass). 
 
-Relying on "soft" guardrails like `CLAUDE.md` or system prompts to maintain design patterns does not work. When context windows get full, these constraints are dropped [1.1.1, 1.1.8].
+Relying on "soft" guardrails like `CLAUDE.md` or system prompts to maintain design patterns does not work. When context windows get full, these constraints are dropped.
 
-Graphenium establishes **external engineering governance** [1.1.6]. It operates outside the LLM context, treating architectural boundaries as a strict, compiled contract.
+Graphenium establishes **external engineering governance**. It operates outside the LLM context, treating architectural boundaries as a strict, compiled contract.
 
 ```mermaid
 graph TD
@@ -98,7 +98,7 @@ Most AI developer tools use LLMs to guess how modules depend on each other, lead
 *   `AMBIGUOUS` **(Collisions):** Identifier collisions that force the agent to halt and inspect source files directly.
 
 ### 2. Datalog-Powered Policy Solving
-Static linters can check direct imports, but they are blind to multi-hop architectural bypasses. Graphenium solves this by compiling your codebase structure into logical facts and running an embedded **Datalog inference engine** (`src/analyze/query.rs` & `stdlib.dl`) [1.1.2]. 
+Static linters can check direct imports, but they are blind to multi-hop architectural bypasses. Graphenium solves this by compiling your codebase structure into logical facts and running an embedded **Datalog inference engine** (`src/analyze/query.rs` & `stdlib.dl`). 
 
 It uses first-order logic and fixed-point iteration to mathematically prove boundary violations over an infinite number of dependency hops.
 

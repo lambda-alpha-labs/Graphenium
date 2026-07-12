@@ -91,7 +91,7 @@ When evaluating Graphenium's gating pipelines on a new repository, aim for the f
 |---|---|---|
 | **Query Payload Size** | Under 10,000 characters | Ensures metadata fits comfortably within agent context windows without crowding out reasoning space. |
 | **Query Execution Latency** | Under 50 ms | Keeps MCP tool calls interactive, preventing background agent stalls. |
-| **Datalog Solver Execution** | Under 100 ms (Step budget: 1,000) | Ensures transitive layering proofs complete instantly during pre-flight policy evaluations [1.1.2]. |
+| **Datalog Solver Execution** | Under 100 ms (Step budget: 1,000) | Ensures transitive layering proofs complete instantly during pre-flight policy evaluations. |
 | **AST Import Resolution Ratio** | Over 80% (`gm doctor --resolution`) | Indicates that Graphenium has successfully mapped the project's physical import boundaries. |
 
 ### Concerning Signals to Monitor:
@@ -112,7 +112,7 @@ Graphenium uses a 5-point quality scale to measure how effectively it prevents a
 | **2** | **Direct Call Validation** | The agent verified direct callers and read targeted files, but bypassed pre-flight planning. |
 | **3** | **Boundary Compliance** | The agent verified boundaries, read target files, and validated its design against local policies. |
 | **4** | **Transitive Path Proof** | The agent resolved multi-hop paths, verified its plan pre-flight, and completed a scope-creep audit. |
-| **5** | **Fully Contained Execution** | Pre-flight policy checks passed via Datalog, the physical code conformed strictly to the virtual plan, and post-edit verification verified no scope creep occurred [1.1.2, 1.2.4]. |
+| **5** | **Fully Contained Execution** | Pre-flight policy checks passed via Datalog, the physical code conformed strictly to the virtual plan, and post-edit verification verified no scope creep occurred. |
 
 ---
 

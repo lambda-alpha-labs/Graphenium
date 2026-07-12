@@ -51,10 +51,10 @@ Our documentation refactoring enforces a strict paradigm shift in terminology an
 | Old Concept (Passive & Saturated) | New Concept (Active & High-Value) |
 | :--- | :--- |
 | **Durable Structural Memory** | **AST-Proven Codebase Index / Pre-Flight Gate** |
-| Helping agents search and navigate the codebase. | **Stopping agents from violating boundaries and creating code bloat [1.2.4].** |
-| Passive visualization diagrams (HTML outputs). | **Automated pre-commit hooks, Datalog proofs, and CI gates [1.1.2, 1.1.6].** |
+| Helping agents search and navigate the codebase. | **Stopping agents from violating boundaries and creating code bloat.** |
+| Passive visualization diagrams (HTML outputs). | **Automated pre-commit hooks, Datalog proofs, and CI gates.** |
 | Fictional "knowledge graph RAG" similarity guesses. | **Compiler-backed facts (`EXTRACTED`) vs. exploratory hypotheses (`INFERRED`).** |
-| AI prompts (`AGENTS.md`, `CLAUDE.md`) | **External, mechanical constraints (`policy.json` / `verify_plan`) [1.1.6].** |
+| AI prompts (`AGENTS.md`, `CLAUDE.md`) | **External, mechanical constraints (`policy.json` / `verify_plan`).** |
 
 ---
 
@@ -63,7 +63,7 @@ Our documentation refactoring enforces a strict paradigm shift in terminology an
 Graphenium's documentation set is written to address three distinct engineering profiles:
 
 1.  **Platform & DevEx Engineers:** Targeted by `docs/CI_AND_GOVERNANCE.md`, `docs/GETTING_STARTED.md`, and `AI_SETUP.md`. They need to know how to install `gm`, construct automated pre-commit gates, and standardize agent containment across development teams.
-2.  **Software Architects & Tech Leads:** Targeted by `docs/POSITIONING.md`, `docs/ARCHITECTURE.md`, `docs/TRUST_MODEL.md`, and `.graphenium/policy.json` schemas. They need to know how Graphenium uses Datalog to mathematically prove boundary safety and how to declare strict module layers [1.1.2].
+2.  **Software Architects & Tech Leads:** Targeted by `docs/POSITIONING.md`, `docs/ARCHITECTURE.md`, `docs/TRUST_MODEL.md`, and `.graphenium/policy.json` schemas. They need to know how Graphenium uses Datalog to mathematically prove boundary safety and how to declare strict module layers.
 3.  **AI Assistant Engines:** Targeted by `skills/graphenium/SKILL.md` and `docs/MCP_TOOLS.md`. These files provide structured rules and handshake protocols that the agent parses to govern its own change planning.
 
 ---

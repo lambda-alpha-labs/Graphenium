@@ -90,7 +90,7 @@ These tools link structural pathfinding with first-order logic proofs, enabling 
 ### `run_datalog`
 *   **Purpose:** Executes a declarative, first-order logic program over Graphenium's compiled EDB.
 *   **Standard Library:** Automatically includes `stdlib.dl` predicates (`calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, etc.) without requiring manual rule definitions.
-*   **When to Use:** To mathematically prove transitive boundary violations, circular dependencies, or identify orphaned nodes [1.1.2].
+*   **When to Use:** To mathematically prove transitive boundary violations, circular dependencies, or identify orphaned nodes.
 
 ---
 

@@ -66,7 +66,7 @@ gm check --graph graphenium-out/graph.json --plan <id>
 
 *   *Detail how Graphenium's local AST index successfully mapped the codebase's boundaries.*
 *   *Explain which declarative policies in `.graphenium/policy.json` were triggered.*
-*   *Describe how Graphenium's pre-flight Datalog engine successfully proved structural violations before code was written [1.1.2].*
+*   *Describe how Graphenium's pre-flight Datalog engine successfully proved structural violations before code was written.*
 
 ---
 
@@ -88,7 +88,7 @@ gm check --graph graphenium-out/graph.json --plan <id>
 ## 8. Agent Containment Workflow Impact
 
 *   *Describe how Graphenium's pre-flight design gating changed the agent's task execution.*
-*   *Did the post-edit compliance audit successfully detect any scope creep (unplanned file modifications) [1.2.4]?*
+*   *Did the post-edit compliance audit successfully detect any scope creep (unplanned file modifications)?*
 *   *How many unnecessary file reads (context bloat) did Graphenium prevent the agent from executing?*
 
 ---

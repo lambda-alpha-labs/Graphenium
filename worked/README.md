@@ -2,7 +2,7 @@
 
 This directory contains **worked case studies** documenting Graphenium's performance and behavioral guardrails across real-world, production repositories. 
 
-These case studies are designed to demonstrate Graphenium's ability to mechanically enforce engineering safety, detect AI-driven codebase erosion, and block unauthorized transitive dependencies [1.1.2, 1.2.4].
+These case studies are designed to demonstrate Graphenium's ability to mechanically enforce engineering safety, detect AI-driven codebase erosion, and block unauthorized transitive dependencies.
 
 ---
 
@@ -11,7 +11,7 @@ These case studies are designed to demonstrate Graphenium's ability to mechanica
 To maintain technical depth, each documented case study must provide an honest, objective analysis of Graphenium's capabilities, evaluating both its strengths and its limitations:
 
 *   **Compiler-Level Truth vs. Generative Heuristics:** Demonstrating how Graphenium's local AST and Stack Graphs extraction prevents hallucinated dependencies.
-*   **Active Pre-Flight Gating:** Illustrating how Graphenium's Datalog solver evaluates proposed design workspaces and blocks violations before physical code is touched [1.1.2].
+*   **Active Pre-Flight Gating:** Illustrating how Graphenium's Datalog solver evaluates proposed design workspaces and blocks violations before physical code is touched.
 *   **PR Compliance Audits:** Showing how Graphenium's post-edit verification pipeline (`gm check --plan`) detects scope creep and unplanned edits.
 *   **Hotspot Analysis:** Explaining how PageRank, betweenness centrality, and Surprise Connection metrics help agents protect production hot-paths.
 *   **System Limitations:** Detailing where static AST extraction has gaps (e.g., dynamic dispatch, runtime reflection) and how these were resolved.

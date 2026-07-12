@@ -28,7 +28,7 @@ Verify the following index properties before planning edits:
 | **Handshake & Freshness** | `graph_info` | Verify index integrity and check for stale warning flags. |
 | **Codebase Orientation** | `architecture_summary` | Review top-level folder domains and cohesive module boundaries. |
 | **Verify Design Pre-Flight** | `validate_plan` | Mathematically prove design safety against `.graphenium/policy.json`. |
-| **Trace Transitive Paths** | `run_datalog` | Evaluate multi-hop dependency chains using compiled stdlib rules [1.1.2]. |
+| **Trace Transitive Paths** | `run_datalog` | Evaluate multi-hop dependency chains using compiled stdlib rules. |
 | **Single Symbol Audit** | `analyse_symbol` | Retrieve AST-proven callers, dependencies, and identifier collisions. |
 | **Check Direct Callers** | `get_neighbors` | View incoming callers and outgoing targets (set `extracted_only = true`). |
 | **Identify Hotspots** | `god_nodes` | Identify highly coupled bottlenecks to target for refactoring risk. |
@@ -41,7 +41,7 @@ Verify the following index properties before planning edits:
 
 ## 3. Datalog Queries (Transitive Path Proving)
 
-Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`) [1.1.2]. **Never write manual recursive rules** to trace dependencies; instead, invoke Graphenium's pre-loaded standard library predicates via `run_datalog`:
+Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`). **Never write manual recursive rules** to trace dependencies; instead, invoke Graphenium's pre-loaded standard library predicates via `run_datalog`:
 
 *   **Audit Layer Bypassing:**
     `?- bypasses_layer('auth_controller', 'auth_service', 'db_helper').`
@@ -67,7 +67,7 @@ Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`) [1.1.2
 
 You must explicitly separate AST-proven facts from semantic guesswork when planning edits:
 
-*   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, class boundaries, method calls). Use as the **planning backbone** [1.1.7].
+*   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, class boundaries, method calls). Use as the **planning backbone**.
 *   `INFERRED` **(Heuristics):** Semantic similarity or naming guesses. Treat as a **hypothesis**—you are strictly blocked from editing these targets until you read their source files directly.
 *   `AMBIGUOUS` **(Collisions):** Symbol name collisions. **Risk gated**—stop and run `get_node` to resolve the collision before proceeding.
 

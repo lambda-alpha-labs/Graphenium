@@ -46,7 +46,7 @@ During the self-audit, Graphenium's pre-flight Datalog engine executed a transit
 ```prolog
 ?- depends_transitive(X, Y), node(X, _, _, 'src/model/graph.rs', _), node(Y, _, _, 'src/serve/handlers.rs', _).
 ```
-The solver completed in **12 ms**, returning zero results and mathematically proving that the core model remains perfectly decoupled from the server layer [1.1.2].
+The solver completed in **12 ms**, returning zero results and mathematically proving that the core model remains perfectly decoupled from the server layer.
 
 ---
 
@@ -90,4 +90,4 @@ gm query --datalog "?- depends_transitive('graphenium_graph', X)."
 
 ## 6. Engineering Assessment: Would we deploy this gate again?
 
-**Yes.** Enforcing Graphenium's structural gates on Graphenium itself has prevented several occurrences of architectural drift during development. Forcing AI assistants to prove their designs pre-flight via Datalog before they touch core modules like `src/model/graph.rs` prevents the codebase from decaying into spaghetti code [1.1.2, 1.2.4].
+**Yes.** Enforcing Graphenium's structural gates on Graphenium itself has prevented several occurrences of architectural drift during development. Forcing AI assistants to prove their designs pre-flight via Datalog before they touch core modules like `src/model/graph.rs` prevents the codebase from decaying into spaghetti code.

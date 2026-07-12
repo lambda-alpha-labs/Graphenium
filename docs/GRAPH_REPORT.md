@@ -5,7 +5,7 @@ Whenever Graphenium parses and indexes your repository, it automatically compile
 graphenium-out/GRAPH_REPORT.md
 ```
 
-This report acts as a **comprehensive architectural audit and compiler diagnostic summary** of your codebase [1.1.2]. It compresses Graphenium's structural analysis—module boundaries, coupled hotspots, dependency anomalies, and resolution gaps—into a single, reviewable document for human architects and AI assistants.
+This report acts as a **comprehensive architectural audit and compiler diagnostic summary** of your codebase. It compresses Graphenium's structural analysis—module boundaries, coupled hotspots, dependency anomalies, and resolution gaps—into a single, reviewable document for human architects and AI assistants.
 
 ---
 

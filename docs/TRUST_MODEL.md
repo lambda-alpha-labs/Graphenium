@@ -66,7 +66,7 @@ Graphenium distinguishes between two independent policy layers in your governanc
 | Policy Layer | Primary Config | Enforcement Target | Metric Evaluated |
 |---|---|---|---|
 | **Trust Quality** | `gm check` options | Index-Wide Health | Import resolution ratio, maximum allowed ambiguity, and evidence freshness. |
-| **Architecture** | `.graphenium/policy.json` | Agent Design Spec | Forbidden dependencies, strict layering domains, and banned symbols [1.1.2]. |
+| **Architecture** | `.graphenium/policy.json` | Agent Design Spec | Forbidden dependencies, strict layering domains, and banned symbols. |
 
 Use **Trust Quality** policies to ensure Graphenium's index is complete and healthy enough to plan against. Use **Architecture** policies to block agents from committing bad designs.
 

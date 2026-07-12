@@ -77,7 +77,7 @@ AI agents can easily hallucinate dependency chains that do not physically exist.
 Use this workflow whenever the user asks the agent to make a multi-file, cross-boundary, or architectural change.
 
 ### Core Premise
-Agents should not blindly edit files and hope they respect your architecture. Graphenium forces the agent to declare its design intent and mathematically validate compliance against your `.graphenium/policy.json` before it writes a single line of code [1.1.2].
+Agents should not blindly edit files and hope they respect your architecture. Graphenium forces the agent to declare its design intent and mathematically validate compliance against your `.graphenium/policy.json` before it writes a single line of code.
 
 ### Step-by-Step Execution:
 1.  **Initialize Workspace:** Execute `create_planning_workspace` with a descriptive ID for the task (`refactor-session-handling`).

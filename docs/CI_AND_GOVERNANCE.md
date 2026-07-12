@@ -7,7 +7,7 @@ Traditional continuous integration (CI) environments verify syntax, type safety,
 
 For AI-generated changes, these checks are necessary but fundamentally insufficient. Agents can write code that passes tests while quietly eroding your architecture—bypassing module boundaries, introducing transitive circular dependencies, or modifying unplanned files. 
 
-Graphenium integrates into your CI/CD pipeline and git hooks as an **external structural gate**, mechanically verifying the architectural integrity of agent-authored PRs before they reach a human reviewer [1.1.6].
+Graphenium integrates into your CI/CD pipeline and git hooks as an **external structural gate**, mechanically verifying the architectural integrity of agent-authored PRs before they reach a human reviewer.
 
 ---
 
@@ -66,7 +66,7 @@ Architectural constraints are declared in `.graphenium/policy.json` at the root 
 
 ### Supported Rule Types:
 *   **`forbidden_dependency`:** Blocks any direct import or call from files matching `from_pattern` to files matching `to_pattern` (supports standard glob wildcards).
-*   **`strict_layering`:** Enforces a rigid top-down hierarchy. No code in `layer[i]` may depend on `layer[j]` where `j < i`. Graphenium runs its local Datalog solver to prove transitive, multi-hop bypasses (`bypasses_layer`) [1.1.2].
+*   **`strict_layering`:** Enforces a rigid top-down hierarchy. No code in `layer[i]` may depend on `layer[j]` where `j < i`. Graphenium runs its local Datalog solver to prove transitive, multi-hop bypasses (`bypasses_layer`).
 *   **`banned_symbol`:** Rejects any design plan that attempts to introduce, modify, or reference a restricted identifier (e.g., deprecated utilities, legacy database connectors).
 
 ---
@@ -80,7 +80,7 @@ Graphenium enforces these policies at multiple checkpoints in the development li
 | **`validate_plan` (MCP)** | Pre-Flight (Agent Session) | Runs explicit pre-flight checks on a proposed planning workspace. |
 | **`add_planned_symbol`** | Pre-Flight (Agent Session) | Automatic pre-flight hook. If the proposed class/method violates policy, Graphenium returns `PRE_FLIGHT_VIOLATION` and blocks the plan. |
 | **`gm check --plan <id>`** | CI / Pre-Commit Hook | Double Gate: Evaluates pre-flight design compliance first, then performs a post-facto scope-creep audit. |
-| **`agent_change_gate`** | CI / PR Pipeline | Evaluates global trust quality metrics (import resolution ratio, maximum allowed ambiguity) [1.1.2]. |
+| **`agent_change_gate`** | CI / PR Pipeline | Evaluates global trust quality metrics (import resolution ratio, maximum allowed ambiguity). |
 
 ---
 
