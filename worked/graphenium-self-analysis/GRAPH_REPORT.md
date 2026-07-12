@@ -30,16 +30,16 @@ _No warnings._
 
 | Label | Degree | Community | File |
 |-------|--------|-----------|------|
-| `Manifest::len` | 79 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/cache/manifest.rs` |
-| `GrapheniumGraph::upsert_node` | 62 | 3 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/graph.rs` |
-| `Edge::extracted` | 58 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/edge.rs` |
-| `GrapheniumServer` | 56 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/handlers.rs` |
-| `GrapheniumGraph::node_data` | 45 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/graph.rs` |
-| `GrapheniumServer::new` | 44 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/handlers.rs` |
-| `GrapheniumGraph::nodes` | 34 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/graph.rs` |
-| `tests::make_server` | 33 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/serve/handlers.rs` |
-| `GrapheniumGraph::edges_iter` | 33 | 1 | `/Users/liamandrew/Documents/Code/Graphenium/src/model/graph.rs` |
-| `Write` | 32 | 0 | `/Users/liamandrew/Documents/Code/Graphenium/src/extract/mod.rs` |
+| `Manifest::len` | 79 | 1 | `src/cache/manifest.rs` |
+| `GrapheniumGraph::upsert_node` | 62 | 3 | `src/model/graph.rs` |
+| `Edge::extracted` | 58 | 1 | `src/model/edge.rs` |
+| `GrapheniumServer` | 56 | 1 | `src/serve/handlers.rs` |
+| `GrapheniumGraph::node_data` | 45 | 1 | `src/model/graph.rs` |
+| `GrapheniumServer::new` | 44 | 1 | `src/serve/handlers.rs` |
+| `GrapheniumGraph::nodes` | 34 | 1 | `src/model/graph.rs` |
+| `tests::make_server` | 33 | 1 | `src/serve/handlers.rs` |
+| `GrapheniumGraph::edges_iter` | 33 | 1 | `src/model/graph.rs` |
+| `Write` | 32 | 0 | `src/extract/mod.rs` |
 
 ---
 
@@ -69,25 +69,25 @@ _No hyperedges extracted._
 
 | ID | Focus | Size | Internal Edges | Cohesion |
 |----|-------|------|----------------|----------|
-| 0 | `Users/liamandrew/Documents/Code/Graphenium/src` | 294 | 622 | 0.014 |
-| 1 | `Users/liamandrew/Documents/Code/Graphenium/src` | 162 | 527 | 0.040 |
-| 2 | `Users/liamandrew/Documents/Code/Graphenium/src` | 161 | 325 | 0.025 |
-| 3 | `Users/liamandrew/Documents/Code/Graphenium` | 114 | 242 | 0.038 |
-| 4 | `Users/liamandrew/Documents/Code/Graphenium/src` | 112 | 227 | 0.037 |
-| 5 | `Users/liamandrew/Documents/Code/Graphenium/src` | 67 | 141 | 0.064 |
-| 6 | `Users/liamandrew/Documents/Code/Graphenium/src/semantic` | 62 | 78 | 0.041 |
-| 7 | `Users/liamandrew/Documents/Code/Graphenium` | 51 | 81 | 0.064 |
-| 8 | `Users/liamandrew/Documents/Code/Graphenium/src` | 47 | 95 | 0.088 |
-| 9 | `Users/liamandrew/Documents/Code/Graphenium/src` | 46 | 87 | 0.084 |
-| 10 | `Users/liamandrew/Documents/Code/Graphenium/src` | 36 | 73 | 0.116 |
-| 11 | `Users/liamandrew/Documents/Code/Graphenium/src` | 18 | 22 | 0.144 |
-| 12 | `Users/liamandrew/Documents/Code/Graphenium/src` | 14 | 27 | 0.297 |
-| 13 | `Users/liamandrew/Documents/Code/Graphenium/src/cluster` | 12 | 16 | 0.242 |
-| 14 | `Users/liamandrew/Documents/Code/Graphenium/src/detect` | 9 | 13 | 0.361 |
-| 15 | `Users/liamandrew/Documents/Code/Graphenium/tests/trust_bench` | 2 | 1 | 1.000 |
-| 16 | `Users/liamandrew/Documents/Code/Graphenium/src` | 2 | 2 | 2.000 |
-| 17 | `Users/liamandrew/Documents/Code/Graphenium/tests` | 1 | 0 | 0.000 |
-| 18 | `Users/liamandrew/Documents/Code/Graphenium/src/export` | 1 | 0 | 0.000 |
+| 0 | `src` | 294 | 622 | 0.014 |
+| 1 | `src` | 162 | 527 | 0.040 |
+| 2 | `src` | 161 | 325 | 0.025 |
+| 3 | `./` | 114 | 242 | 0.038 |
+| 4 | `src` | 112 | 227 | 0.037 |
+| 5 | `src` | 67 | 141 | 0.064 |
+| 6 | `src/semantic` | 62 | 78 | 0.041 |
+| 7 | `./` | 51 | 81 | 0.064 |
+| 8 | `src` | 47 | 95 | 0.088 |
+| 9 | `src` | 46 | 87 | 0.084 |
+| 10 | `src` | 36 | 73 | 0.116 |
+| 11 | `src` | 18 | 22 | 0.144 |
+| 12 | `src` | 14 | 27 | 0.297 |
+| 13 | `src/cluster` | 12 | 16 | 0.242 |
+| 14 | `src/detect` | 9 | 13 | 0.361 |
+| 15 | `tests/trust_bench` | 2 | 1 | 1.000 |
+| 16 | `src` | 2 | 2 | 2.000 |
+| 17 | `tests` | 1 | 0 | 0.000 |
+| 18 | `src/export` | 1 | 0 | 0.000 |
 
 **Community 0** (294 nodes, cohesion 0.01):
 > , aiprovider, analyze, cachemanager, cachemiss, check_semantic_cache, classify, classify_classify_extension, classify_code_extensions, classify_document_extensions, classify_image_extensions, classify_is_skip_dir, classify_pdf_is_paper, classify_skip_dirs, classify_skip_extensions, clusteroptions, config, config_c, config_config_for_extension, config_cpp … +274 more
@@ -158,8 +158,8 @@ _No AMBIGUOUS edges._
 
 2 isolated node(s) with no connections:
 
-- `trust_bench` (`/Users/liamandrew/Documents/Code/Graphenium/tests/trust_bench.rs`)
-- `html_template` (`/Users/liamandrew/Documents/Code/Graphenium/src/export/html_template.rs`)
+- `trust_bench` (`tests/trust_bench.rs`)
+- `html_template` (`src/export/html_template.rs`)
 
 ---
 
