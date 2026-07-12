@@ -10,6 +10,7 @@ package-lock.json
 
 # Graphenium generated output
 /graphenium-out/
+worked/graphenium-self-analysis/graph.json
 
 # Personal planning and notes (not part of the project)
 /docs/plans/
