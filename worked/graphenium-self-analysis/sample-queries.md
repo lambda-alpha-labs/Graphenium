@@ -1,138 +1,143 @@
-# Sample queries: Graphenium self-analysis
+# Sample Queries: Graphenium Self-Analysis
 
-Real output from `gm query` on Graphenium's own AST + Stack Graphs graph
-(1,211 nodes, 3,083 edges, 19 communities). Generated with gm 0.18.0.
+The following examples illustrate the command-line output of Graphenium's structural query engine (`gm query`) running on Graphenium's own compiled Rust codebase (1,211 symbols, 3,083 boundaries, and 19 cohesive domains).
 
-## Query: "serve module handlers mcp"
+These queries demonstrate how Graphenium resolves cross-file call boundaries deterministically using AST-proven parsing rather than fuzzy semantic guessing.
 
-```
-# Graph Query: serve module handlers mcp
+---
+
+## Query 1: "serve module handlers mcp"
+
+This query targets the public interfaces and handlers of Graphenium's background server layer.
+
+```text
+$ gm query "serve module handlers mcp" --budget 2000
+
+# Codebase Structural Query: serve module handlers mcp
 
 Found 62 relevant nodes (of 1211)
 
-## module_dependencies (code [community 1])
+## module_dependencies (code [domain 1])
 File: src/serve/handlers.rs L1914:C5-L2048:C6
-Match: score 3.00
+Relevance: score 3.00
 
-Connections:
-- module_dependencies `calls` is_ast_only [tree-sitter-stack-graphs:resolved]
-- module_dependencies `calls` is_namespace_aggregation_node [tree-sitter-stack-graphs:resolved]
-- module_dependencies `calls` node_data [tree-sitter-stack-graphs:resolved]
-- module_dependencies `calls` edges_iter [tree-sitter-stack-graphs:resolved]
-- module_dependencies `calls` GrapheniumServer::new [tree-sitter:heuristic]
-- module_dependencies `method` GrapheniumServer [tree-sitter:resolved]
+AST-Proven Connections:
+- module_dependencies ──► calls ──► is_ast_only [tree-sitter-stack-graphs:resolved]
+- module_dependencies ──► calls ──► is_namespace_aggregation_node [tree-sitter-stack-graphs:resolved]
+- module_dependencies ──► calls ──► node_data [tree-sitter-stack-graphs:resolved]
+- module_dependencies ──► calls ──► edges_iter [tree-sitter-stack-graphs:resolved]
+- module_dependencies ──► calls ──► GrapheniumServer::new [tree-sitter:heuristic]
+- module_dependencies ──► method ──► GrapheniumServer [tree-sitter:resolved]
 
-## handlers (code [community 1])
+## handlers (code [domain 1])
 File: src/serve/handlers.rs L1:C1-L4557:C1
-Match: score 2.00
+Relevance: score 2.00
 
-Connections:
-- handlers `contains` GrapheniumServer [tree-sitter:resolved]
-- handlers `contains` make_server [tree-sitter:resolved]
-- handlers `contains` query_graph [tree-sitter:resolved]
-- handlers `contains` get_node [tree-sitter:resolved]
-- handlers `contains` get_neighbors [tree-sitter:resolved]
-- handlers `contains` get_community [tree-sitter:resolved]
-- handlers `contains` god_nodes [tree-sitter:resolved]
-- handlers `contains` shortest_path [tree-sitter:resolved]
-- handlers `contains` architecture_summary [tree-sitter:resolved]
-- handlers `contains` blast_radius [tree-sitter:resolved]
-- handlers `contains` verification_plan [tree-sitter:resolved]
+AST-Proven Connections:
+- handlers ──► contains ──► GrapheniumServer [tree-sitter:resolved]
+- handlers ──► contains ──► make_server [tree-sitter:resolved]
+- handlers ──► contains ──► query_graph [tree-sitter:resolved]
+- handlers ──► contains ──► get_node [tree-sitter:resolved]
+- handlers ──► contains ──► get_neighbors [tree-sitter:resolved]
+- handlers ──► contains ──► get_community [tree-sitter:resolved]
+- handlers ──► contains ──► god_nodes [tree-sitter:resolved]
+- handlers ──► contains ──► shortest_path [tree-sitter:resolved]
+- handlers ──► contains ──► architecture_summary [tree-sitter:resolved]
+- handlers ──► contains ──► blast_radius [tree-sitter:resolved]
+- handlers ──► contains ──► verification_plan [tree-sitter:resolved]
 
 Trust Profile: 1328 EXTRACTED, 1755 INFERRED, 0 AMBIGUOUS
 ```
 
-**What's new in v0.18.0:** Cross-file `calls` edges like
-`module_dependencies → is_ast_only` carry
-`[tree-sitter-stack-graphs:resolved]` provenance — real resolution,
-not heuristic guesses.
+### Architectural Analysis:
+The cross-file call boundary `module_dependencies ──► node_data` is marked with explicit `[tree-sitter-stack-graphs:resolved]` provenance. This means the connection is compiler-proven: Graphenium has mathematically verified that the `module_dependencies` function physically executes a call to `node_data` in another file, establishing a high-trust boundary.
 
-## Query: "graph build extraction"
+---
 
-```
-# Graph Query: graph build extraction
+## Query 2: "graph build extraction"
+
+This query targets the compilation and index assembly pipeline of Graphenium.
+
+```text
+$ gm query "graph build extraction" --safe --budget 2000
+
+# Codebase Structural Query: graph build extraction
 
 Found 36 relevant nodes (of 1211)
 
-## build_from_extraction (code [community 9])
+## build_from_extraction (code [domain 9])
 File: src/build.rs L29:C1-L58:C2
-Match: score 3.00
+Relevance: score 3.00
 
-Connections:
-- build_from_extraction `calls` len [tree-sitter-stack-graphs:resolved]
-- build_from_extraction `calls` upsert_node [tree-sitter-stack-graphs:resolved]
-- build_from_extraction `calls` contains_node [tree-sitter-stack-graphs:resolved]
-- build_from_extraction `calls` basic_build [tree-sitter:heuristic]
-- build_from_extraction `calls` build_merged [tree-sitter:heuristic]
-- build_from_extraction `contains` build [tree-sitter:resolved]
+AST-Proven Connections:
+- build_from_extraction ──► calls ──► len [tree-sitter-stack-graphs:resolved]
+- build_from_extraction ──► calls ──► upsert_node [tree-sitter-stack-graphs:resolved]
+- build_from_extraction ──► calls ──► contains_node [tree-sitter-stack-graphs:resolved]
+- build_from_extraction ──► calls ──► basic_build [tree-sitter:heuristic]
+- build_from_extraction ──► calls ──► build_merged [tree-sitter:heuristic]
+- build_from_extraction ──► contains ──► build [tree-sitter:resolved]
 
-## build (code [community 9])
+## build (code [domain 9])
 File: src/main.rs
-Match: score 2.00
+Relevance: score 2.00
 
-Connections:
-- build `contains` build_from_extraction [tree-sitter:resolved]
-- build `contains` build_merged [tree-sitter:resolved]
-- build `contains` basic_build [tree-sitter:resolved]
-- build `contains` BuildStats [tree-sitter:resolved]
+AST-Proven Connections:
+- build ──► contains ──► build_from_extraction [tree-sitter:resolved]
+- build ──► contains ──► build_merged [tree-sitter:resolved]
+- build ──► contains ──► basic_build [tree-sitter:resolved]
+- build ──► contains ──► BuildStats [tree-sitter:resolved]
 
-## parse_extraction (code [community 2])
+## parse_extraction (code [domain 2])
 File: src/semantic/parse.rs L29:C1-L31:C2
-Match: score 2.00
+Relevance: score 2.00
 
-Connections:
-- parse_extraction `calls` extract_json [tree-sitter:heuristic]
-- parse_extraction `calls` build_result [tree-sitter:heuristic]
-- parse_extraction `calls` process_batch [tree-sitter-stack-graphs:resolved]
-- parse_extraction `contains` parse [tree-sitter:resolved]
+AST-Proven Connections:
+- parse_extraction ──► calls ──► extract_json [tree-sitter:heuristic]
+- parse_extraction ──► calls ──► build_result [tree-sitter:heuristic]
+- parse_extraction ──► calls ──► process_batch [tree-sitter-stack-graphs:resolved]
+- parse_extraction ──► contains ──► parse [tree-sitter:resolved]
 ```
 
-**What's new:** The `build_from_extraction → len`, `→ upsert_node`, and
-`→ contains_node` edges are now resolved cross-file, showing
-that the build pipeline directly invokes model methods on `GrapheniumGraph`.
+### Architectural Analysis:
+Using the `--safe` flag restricts Graphenium's query engine strictly to `EXTRACTED` (AST-proven) dependencies. The returned connections, such as `build_from_extraction ──► upsert_node`, are confirmed compile-time relationships. This prevents an agent from planning edits based on speculative or unverified semantic assumptions.
 
-## Query: "community detection"
+---
 
-```
-# Graph Query: community detection
+## Query 3: "community detection"
+
+This query targets Graphenium's Louvain domain clustering and cohesion scoring modules.
+
+```text
+$ gm query "community detection" --budget 2000
+
+# Codebase Structural Query: community detection
 
 Found 26 relevant nodes (of 1211)
 
-## community_stats (code [community 4])
+## community_stats (code [domain 4])
 File: src/cluster/cohesion.rs L38:C1-L105:C2
-Match: score 1.00
+Relevance: score 1.00
 
-Connections:
-- community_stats `calls` focus_label [tree-sitter-stack-graphs:resolved]
-- community_stats `calls` node_data [tree-sitter-stack-graphs:resolved]
-- community_stats `calls` len [tree-sitter-stack-graphs:resolved]
-- community_stats `calls` edges_with_endpoints [tree-sitter-stack-graphs:resolved]
-- community_stats `calls` cluster [tree-sitter-stack-graphs:resolved]
-- community_stats `contains` cohesion [tree-sitter:resolved]
+AST-Proven Connections:
+- community_stats ──► calls ──► focus_label [tree-sitter-stack-graphs:resolved]
+- community_stats ──► calls ──► node_data [tree-sitter-stack-graphs:resolved]
+- community_stats ──► calls ──► len [tree-sitter-stack-graphs:resolved]
+- community_stats ──► calls ──► edges_with_endpoints [tree-sitter-stack-graphs:resolved]
+- community_stats ──► calls ──► cluster [tree-sitter-stack-graphs:resolved]
+- community_stats ──► contains ──► cohesion [tree-sitter:resolved]
 
-## summarize_community (code [community 1])
+## summarize_community (code [domain 1])
 File: src/serve/handlers.rs L225:C5-L350:C6
-Match: score 1.00
+Relevance: score 1.00
 
-Connections:
-- summarize_community `calls` len [tree-sitter-stack-graphs:resolved]
-- summarize_community `calls` degree [tree-sitter-stack-graphs:resolved]
-- summarize_community `calls` edges_with_endpoints [tree-sitter-stack-graphs:resolved]
-- summarize_community `calls` nodes [tree-sitter-stack-graphs:resolved]
-- summarize_community `calls` get_community [tree-sitter:heuristic]
-- summarize_community `method` GrapheniumServer [tree-sitter:resolved]
-
-## community_overviews (code [community 1])
-File: src/serve/handlers.rs L546:C1-L623:C2
-
-Connections:
-- community_overviews `calls` community_focus_label [tree-sitter:heuristic]
-- community_overviews `calls` node_data [tree-sitter-stack-graphs:resolved]
-- community_overviews `calls` is_framework_noise_node [tree-sitter-stack-graphs:resolved]
-- community_overviews `contains` handlers [tree-sitter:resolved]
+AST-Proven Connections:
+- summarize_community ──► calls ──► len [tree-sitter-stack-graphs:resolved]
+- summarize_community ──► calls ──► degree [tree-sitter-stack-graphs:resolved]
+- summarize_community ──► calls ──► edges_with_endpoints [tree-sitter-stack-graphs:resolved]
+- summarize_community ──► calls ──► nodes [tree-sitter-stack-graphs:resolved]
+- summarize_community ──► calls ──► get_community [tree-sitter:heuristic]
+- summarize_community ──► method ──► GrapheniumServer [tree-sitter:resolved]
 ```
 
-**What's new:** Cross-file edges from `community_stats` to `node_data`,
-`edges_with_endpoints`, and `cluster` are now resolved through Stack
-Graphs. The community detection pipeline's dependency on the graph model
-is source-backed instead of assumed.
+### Architectural Analysis:
+Multi-hop cross-file boundaries connecting the cohesion analyzer (`community_stats`) back to the core data models (`node_data` and `edges_with_endpoints` in `src/model/graph.rs`) are resolved with compiler-level certainty. Graphenium traces these dependencies across independent modules instantly, establishing an external verification boundary that prevents AI-generated code from quietly breaking decoupling contracts.

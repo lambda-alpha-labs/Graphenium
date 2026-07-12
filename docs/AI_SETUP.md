@@ -1,14 +1,15 @@
-# AI Setup Playbook
+# AI Assistant Setup Playbook
 
-This playbook is written for AI assistants helping a user install and use Graphenium.
+This playbook is written for AI assistants helping a user install, configure, and verify Graphenium.
 
 Goal:
+> Install `gm`, generate the first structural index for the current project, configure Graphenium's pre-flight architecture gates, connect Graphenium to the user's agentic workspace via MCP, and verify that the assistant can run pre-flight policy checks.
 
-> Install `gm`, build a local graph for the current project, connect it to the user's AI tool when possible, and verify that the agent can query the graph.
+---
 
-## Step 1: Detect environment
+## Step 1: Detect Environment
 
-Run:
+Execute the following commands to assess the workspace environment:
 
 ```sh
 uname -s
@@ -19,15 +20,17 @@ which gm
 pwd
 ```
 
-Report one line to the user:
+Report exactly one line back to the user:
 
 ```text
 OS: <os>, architecture: <arch>, Rust: <present or missing>, Graphenium: <present or missing>, project: <path>
 ```
 
-## Step 2: Install Rust if missing
+---
 
-Skip if `rustc` and `cargo` are already available.
+## Step 2: Install Rust (If Missing)
+
+Skip this step if both `rustc` and `cargo` are already available.
 
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -36,11 +39,13 @@ rustc --version
 cargo --version
 ```
 
-If verification fails, stop and report the error.
+*If compilation toolchain verification fails, halt and report the environmental error.*
+
+---
 
 ## Step 3: Install Graphenium
 
-Clone outside the project being analyzed.
+Clone Graphenium outside of the target repository being governed.
 
 ```sh
 git clone https://github.com/lambda-alpha-labs/Graphenium "$HOME/.graphenium"
@@ -49,49 +54,47 @@ cargo install --locked --path .
 ```
 
 Windows PowerShell:
-
 ```powershell
 git clone https://github.com/lambda-alpha-labs/Graphenium "$env:USERPROFILE\.graphenium"
 cd "$env:USERPROFILE\.graphenium"
 cargo install --locked --path .
 ```
 
-Verify:
-
+Verify build availability:
 ```sh
 which gm
 gm --version
 ```
 
-Optional smaller build:
-
+### Resource-Constrained Build Option
+To build with a smaller binary footprint, you can compile with support restricted to target languages:
 ```sh
 cargo install --locked --path . --no-default-features --features lang-python,lang-rust
 ```
 
-Available language features:
+Available language compilation flags:
+*   `lang-python`
+*   `lang-js`
+*   `lang-ts`
+*   `lang-rust`
+*   `lang-go`
+*   `lang-java`
+*   `lang-c`
+*   `lang-cpp`
+*   `lang-csharp`
 
-- `lang-python`
-- `lang-js`
-- `lang-ts`
-- `lang-rust`
-- `lang-go`
-- `lang-java`
-- `lang-c`
-- `lang-cpp`
-- `lang-csharp`
+---
 
-## Step 4: Build the first graph
+## Step 4: Generate the Structural Index
 
-Return to the user's project directory.
+Navigate back to the root of the user's project directory. Initialize Graphenium's configuration and build the baseline structural index using fast, local AST parsing:
 
 ```sh
 gm init
 gm run . --no-semantic --no-viz
 ```
 
-Expected output includes:
-
+Expected output log pattern:
 ```text
 Found N files
 AST: N nodes, N edges
@@ -100,53 +103,57 @@ Communities: N
 Report written to graphenium-out
 ```
 
-The primary graph file is:
-
+The compiled codebase structure is written to Graphenium's local cache:
 ```text
 graphenium-out/graph.json
 ```
 
-If the graph has 0 nodes, check:
+If 0 nodes or edges are reported, troubleshoot:
+1.  Verify the current working directory is the correct project root.
+2.  Confirm the files match Graphenium's supported extensions.
+3.  Check if `.grapheniumignore` is over-filtering target sources.
+4.  Ensure you are not analyzing exclusively vendored or generated directories.
 
-- current working directory
-- supported languages
-- `.grapheniumignore`
-- generated or vendored code exclusion
+---
 
-## Step 5: Verify the CLI
+## Step 5: Verify Linter and Index Health
+
+Confirm that the local structural index was parsed correctly and diagnostics are clean:
 
 ```sh
 gm doctor --graph graphenium-out/graph.json
 gm query "test" --budget 100
 ```
 
-The query may return no strong matches, but it should not crash.
+*The query may return zero direct matches depending on the project, but it must complete without throwing errors or crashes.*
 
-## Step 6: Detect AI tool
+---
 
-Ask which AI coding tool the user uses only if it is not obvious.
+## Step 6: Identify Agent Environment
 
-| Tool | Config location or setup |
+Identify which agentic coding tool the user is running to determine the correct MCP configuration:
+
+| Agent / IDE | Configuration Target |
 |---|---|
 | Grok | `~/.grok/config.toml` |
 | Claude Code | `claude mcp add graphenium --scope user -- gm serve` |
 | Codex | `~/.codex/config.toml` |
 | Cursor | `~/.cursor/mcp.json` |
-| Other or unknown | Skip MCP and use CLI fallback |
+| Other CLI Agents | Run local CLI commands directly |
 
-## Step 7: Configure MCP
+---
 
-### Recommended: `graphenium-mcp` launcher
+## Step 7: Configure the MCP Server
 
-For Grok and other tools that start MCP from the project directory, use the launcher script. It prefers a local `target/release/gm` over the globally installed binary, auto-builds only when `graph.json` is missing, and starts the server with `--watch`.
+### Recommended Approach: Use Graphenium's Launcher
+For Grok and other tools that initialize the MCP process from within the project directory, use Graphenium's pre-flight launcher script. It automatically targets a local workspace build if present, skips redundant index generations when sources are unchanged, and activates real-time watch modes.
 
 ```sh
-# Install once (from a Graphenium checkout)
+# Install the launcher once (run from Graphenium clone)
 install -m 755 scripts/graphenium-mcp ~/.local/bin/graphenium-mcp
 ```
 
-**Grok** (`~/.grok/config.toml`):
-
+**Grok Config** (`~/.grok/config.toml`):
 ```toml
 [mcp_servers.graphenium]
 command = "/Users/<you>/.local/bin/graphenium-mcp"
@@ -154,144 +161,122 @@ args = []
 enabled = true
 ```
 
-Environment variables:
+#### Configurable Environment Variables:
+*   `GM_BIN`: Overrides the auto-resolved Graphenium binary path.
+*   `GROK_PROJECT_ROOT`: Forces a project root location when git inference is unavailable.
+*   `GRAPHENIUM_AUTO_REBUILD=1`: Rebuilds the codebase index automatically on session startup if source files are newer than the cached index.
 
-| Variable | Purpose |
-|---|---|
-| `GM_BIN` | Force a specific `gm` binary path |
-| `GROK_PROJECT_ROOT` | Project root when not inferred from git |
-| `GRAPHENIUM_AUTO_REBUILD=1` | Also rebuild when source or binary is newer than the graph (off by default; keeps large-repo session starts fast) |
+---
 
-### Direct `gm serve` (manual setup)
-
-Use absolute paths when configuring MCP without the launcher.
+### Manual Path Configuration (Absolute Path Fallback)
+If configuring MCP without the launcher, map the absolute paths directly:
 
 ```sh
 GM_PATH=$(which gm)
-GRAPH_PATH=$(pwd)/graphenium-out/graph.json
+INDEX_PATH=$(pwd)/graphenium-out/graph.json
 ```
 
-### Claude Code
-
+**Claude Code:**
 ```sh
-claude mcp add graphenium --scope user -- "$GM_PATH" serve --graph "$GRAPH_PATH" --watch
+claude mcp add graphenium --scope user -- "$GM_PATH" serve --graph "$INDEX_PATH" --watch
 ```
 
-### Codex
-
+**Codex:**
 ```toml
 [mcp_servers.graphenium]
 command = "$GM_PATH"
-args = ["serve", "--graph", "$GRAPH_PATH", "--watch"]
+args = ["serve", "--graph", "$INDEX_PATH", "--watch"]
 ```
 
-### Cursor
-
+**Cursor:**
 ```json
 {
   "mcpServers": {
     "graphenium": {
       "command": "$GM_PATH",
-      "args": ["serve", "--graph", "$GRAPH_PATH", "--watch"]
+      "args": ["serve", "--graph", "$INDEX_PATH", "--watch"]
     }
   }
 }
 ```
 
-Preserve existing MCP server entries. Add or update only the `graphenium` entry.
+*Ensure existing server entries in the target tool config are preserved; only add or update the `graphenium` block.*
 
-After writing config, tell the user to fully quit and relaunch the AI tool.
+---
 
-## Step 8: Verify MCP from the agent
+## Step 8: Verify Architectural Integrity from the Agent
 
-Ask the AI tool:
+Once Graphenium is configured, ask your agentic interface to run a pre-flight handshake:
 
 ```text
-Use Graphenium. Call graph_info first and tell me which graph is loaded.
+Use Graphenium. Call graph_info first and tell me which codebase index is loaded.
 ```
 
-Successful response should mention:
+The agent's handshake response must successfully report:
+*   Project root path.
+*   Index schema version (`0.2.0`).
+*   Build timestamp.
+*   Languages detected.
+*   Symbol and dependency counts.
+*   The path of the loaded `graph.json` index.
 
-- project root
-- schema version
-- build timestamp
-- extraction mode
-- languages
-- nodes and edges
-- graph path
-
-If the response includes **Graph may be stale**, rebuild and hot-swap without restarting MCP:
+### Stale Index Warning Mitigation
+If `graph_info` warns that **"Graph may be stale"**, it means physical source files have changed since Graphenium last compiled its structural index. Rebuild and hot-swap the index locally without restarting the background MCP server process:
 
 ```sh
 gm run . --no-semantic --no-viz
 ```
+Then instruct the agent: `reload_graph` (this updates Graphenium's in-memory index immediately).
 
-Then ask the agent to call `reload_graph`.
+---
 
-## Optional: semantic extraction
+## Advanced Playbook Capabilities
 
-AST-only should be the default first run. Add semantic extraction only when the user wants richer inferred relationships.
+### 1. Pre-Flight Architecture Gating (First-Order Logic)
+Graphenium allows you to block invalid code design pre-flight. Define structural boundaries in `.graphenium/policy.json` at the root of the repository (e.g., controllers can never call database entities directly).
 
-```sh
-# Anthropic default
-gm run . --update --api-key sk-ant-...
+To test if a proposed change violates policy before writing any code:
+1.  Call `create_planning_workspace` to initialize a draft workspace.
+2.  Call `add_planned_symbol` to register the proposed class, method, or dependency. This automatically runs Graphenium's embedded Datalog solver.
+3.  If Graphenium returns `PRE_FLIGHT_VIOLATION`, block the agent from editing the files, and inspect the violations.
 
-# OpenAI
-gm run . --update --provider openai --api-key sk-...
-
-# DeepSeek
-gm run . --update --provider deepseek --api-key sk-...
-```
-
-Semantic relationships must be treated as inferred unless provenance says otherwise.
-
-## Optional: watch mode
+### 2. Datalog Transitive Closure Queries
+Graphenium's Datalog engine automatically includes a standard library of structural predicates (`stdlib.dl`). Instruct the agent to run declarative transitive queries rather than writing recursive prompts:
 
 ```sh
-gm serve --graph graphenium-out/graph.json --watch
-gm watch . --impact
+# Detect transitive dependency paths
+gm query "reach" --datalog "?- depends_transitive('api_controller', X)."
+
+# Identify circular module dependencies
+gm query "cycles" --datalog "?- circular_dependency(X, Y)."
+
+# Check if an agent's design bypasses a layer
+gm query "bypass" --datalog "?- bypasses_layer('auth_controller', 'auth_service', 'db_helper')."
 ```
 
-## Optional: Datalog
+---
 
-Datalog queries automatically include the standard library (v0.19.0+). Prefer stdlib predicates over hand-written recursion.
+## Error Recovery Guide
 
-```sh
-gm query "hubs" --datalog "?- is_hub(X)."
-gm query "reachability" --datalog "?- calls_transitive('main', X)."
-gm query "layers" --datalog "?- bypasses_layer(X, Y, Z)."
-```
-
-Stdlib predicates: `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`.
-
-## Optional: telemetry overlay
-
-```sh
-gm import-traces otel-traces.json
-gm build-overlay --hot-paths
-```
-
-Telemetry is experimental and requires explicit trace data.
-
-## Error recovery
-
-| Symptom | Likely cause | Action |
+| Problem | Root Cause | Resolution |
 |---|---|---|
-| `cargo install` fails | Missing build tools | Install compiler toolchain such as Xcode command line tools or build-essential |
-| `gm run` finds 0 files | Wrong directory or unsupported language | Check path and supported extensions |
-| MCP config path does not exist | Tool not installed | Use CLI fallback |
-| MCP connection fails | Tool not restarted | Fully quit and relaunch |
-| `gm query` errors | Wrong graph path | Confirm `graphenium-out/graph.json` exists |
-| `graph_info` reports stale graph | Source or binary newer than graph | `gm run . --no-semantic --no-viz`, then `reload_graph` |
-| `run_datalog` returns no results | Old MCP server binary | Restart AI tool or set `GM_BIN` to a current `gm` |
-| Too much noise | Vendor or generated code included | Tune `.grapheniumignore` |
+| `cargo install` compilation fails | C compiler toolchain missing | Install Xcode Command Line Tools (`xcode-select --install`) on macOS or `build-essential` on Linux. |
+| `gm run` reports 0 files | Unsupported language or directory mismatch | Verify Graphenium is run from the target project root, and check Graphenium's supported extensions. |
+| MCP tool initialization fails | Target tool needs restart | Fully quit and relaunch the agent's parent IDE or terminal session. |
+| `graph_info` reports stale index | Code modifications occurred post-build | Execute `gm run . --no-semantic --no-viz` and instruct the agent to run `reload_graph`. |
+| Datalog queries return no results | Old server binary is running | Verify that `GM_BIN` points to the updated compilation of `gm` and restart the agent workspace. |
+| Too much architectural noise | Build artifacts or library vendors included | Restructure `.grapheniumignore` to exclude build, target, or third-party folders. |
 
-## Final report to user
+---
+
+## Final Playbook Report
+
+Once the setup is complete, provide the user with a concise architectural summary:
 
 ```text
-Graphenium installed: <gm path>
-Graph built: <graph path>
-Graph size: <nodes> nodes, <edges> edges
-MCP configured: yes or skipped
-Next step: ask your agent to call graph_info before editing.
+Graphenium Pre-Flight Gate Active: <gm path>
+Base Codebase Index Generated: <index path>
+Current Index Scale: <nodes> symbols, <edges> boundaries
+Pre-Flight Policies Configured: <yes / no / skipped>
+Workspace Guardrails Active: Yes (agent must query codebase structure before editing)
 ```

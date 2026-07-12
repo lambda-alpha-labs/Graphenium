@@ -1,217 +1,142 @@
 # Changelog
 
-This file summarizes notable releases and preserves the major documentation history.
+This changelog summarizes key updates and engineering milestones for Graphenium, emphasizing improvements in AI-agent write-safety, structural verification, and external governance gates.
 
-## v0.19.0, 2026-07-11
+---
 
-Themes: Datalog Standard Library, MCP deployment hardening, and pre-flight architecture policy validation.
+## v0.19.0 — 2026-07-11
 
-Added:
+### Summary
+This release introduces the pre-loaded Datalog Standard Library, pre-flight architectural policy validation, and deployment hardening for agent containment.
 
-- Pre-loaded Datalog Standard Library (`src/analyze/query/stdlib.dl`) embedded in the binary with predicates for transitive reachability (`calls_transitive`, `depends_transitive`), topology (`same_community`, `is_hub`, `is_orphan`), and architectural constraints (`circular_dependency`, `bypasses_layer`).
-- Typed EDB relations (`calls`, `imports`, `contains`, `inherits`, `implements`, `degree`, `hub`) alongside legacy `edge` and `node` facts.
-- Goal-directed rule selection: only stdlib rules reachable from query goals are evaluated; EDB-only queries skip fixpoint iteration entirely.
-- Cached stdlib AST parsing via `OnceLock` and `parsed_stdlib_rules()` in `src/cache/query.rs`.
-- Integration tests in `tests/datalog_stdlib_test.rs`.
-- `ArchRule` and `ArchPolicyConfig` in `src/policy.rs` — declarative rules loaded from `.graphenium/policy.json` (`forbidden_dependency`, `strict_layering`, `banned_symbol`).
-- Pre-flight evaluation engine in `src/harness.rs` — `validate_plan_preflight`, `PreFlightReport`, and planned subgraph isolation.
-- `depends_transitive` helper in `src/analyze/query.rs` for transitive layer violation checks.
-- `validate_plan` MCP tool — explicit pre-flight check before coding.
-- Automatic pre-flight gate in `add_planned_symbol` (returns `PRE_FLIGHT_VIOLATION` on failure).
-- Optional `plan_id` on `agent_change_gate` for combined trust and architecture policy checks.
-- Example `.graphenium/policy.json` for the Graphenium repository.
-- Integration tests in `tests/planning_bench.rs` and `src/harness.rs`.
+### Added
+*   **Datalog Standard Library (`src/analyze/query/stdlib.dl`):** Compiled directly into the binary, providing pre-loaded first-order logic predicates for transitive reachability analysis (`calls_transitive`, `depends_transitive`), structural topology (`is_hub`, `is_orphan`), and architectural constraints (`circular_dependency`, `bypasses_layer`).
+*   **Strongly-Typed EDB Relations:** Introduced typed Extensional Database (EDB) relations (`calls`, `imports`, `contains`, `inherits`, `implements`, `degree`, `hub`) to operate alongside low-level structural facts.
+*   **Goal-Directed Query Pruning:** Optimizes solver performance by evaluating only the stdlib rules reachable from the query's goals. EDB-only queries completely bypass fixed-point iteration, preventing execution hangs on large codebases.
+*   **Pre-Flight Architectural Policy Engine (`src/policy.rs` & `src/harness.rs`):** Implements declarative rule evaluations loaded from `.graphenium/policy.json`. Supports `forbidden_dependency`, `strict_layering`, and `banned_symbol` validation.
+*   **Transitive Layer Checks:** Integrated the Datalog `depends_transitive` closure into the pre-flight engine to mathematically prove layer-bypassing violations before an agent writes code.
+*   **`validate_plan` MCP Tool:** Exposes explicit, pre-flight structural checks on virtual planning workspaces.
+*   **Automated Workspace Gates:** Gated `add_planned_symbol` to automatically run pre-flight policy checks, returning `PRE_FLIGHT_VIOLATION` to block invalid agent designs.
+*   **`agent_change_gate` Upgrades:** Added an optional `plan_id` parameter to run combined pre-flight policy checks and post-facto compliance audits in a single workflow.
+*   **freshness detection (`src/serve/freshness.rs`):** Compares the cached index modification times (`graph.json`) against the running binary and physical source files, appending warnings to `graph_info` and `reload_graph` if the index is stale.
 
-Changed:
+### Changed
+*   `run_datalog_query` now automatically merges Graphenium's Datalog standard library into all custom queries.
+*   The `run_datalog` MCP tool description has been updated to document pre-loaded standard library predicates and EDB relations.
+*   The system skill instruction set (`skills/graphenium/SKILL.md`) now directs agents to use pre-loaded Datalog predicates instead of implementing manual recursive rules.
+*   `gm check --plan` now executes two gates in sequence: pre-flight policy validation, followed by post-facto compliance auditing.
 
-- `run_datalog_query` automatically merges stdlib rules into every query.
-- `run_datalog` MCP tool description documents pre-loaded predicates and base EDB relations.
-- Graphenium skill (`skills/graphenium/SKILL.md`) instructs agents to use stdlib predicates instead of hand-written recursion.
-- `gm check --plan` now runs pre-flight policy validation before post-facto compliance.
+### Fixed
+*   Resolved an issue where anonymous `_` variables in Datalog rules collided across atoms, correcting the behavior of negation filters like `is_orphan`.
+*   Corrected goal evaluation constraints so that scoped queries (e.g., `same_community("node_x", X)`) do more than project arbitrary tuples.
+*   Fixed-point solver now returns an explicit execution error instead of spinning indefinitely if its step budget is exhausted before convergence.
 
-Fixed:
+---
 
-- Anonymous `_` variables in Datalog rules no longer collide across atoms (fixes negation in `is_orphan` and related predicates).
-- Goal evaluation respects constant constraints (e.g. `same_community("x1", X)` no longer returns unrelated matches).
-- Fixpoint solver returns an explicit error when the step budget is exhausted without convergence.
+## v0.18.0 — 2026-07-03
 
-Performance:
+### Summary
+This release hardens cross-file symbol resolution across the compilation pipeline, focusing heavily on enterprise C# codebase structures.
 
-- EDB queries on the 1,211-node self-analysis graph complete in under one second (previously hung indefinitely while evaluating full transitive closures).
+### Added
+*   **C# Scope-Narrowed Call Resolution:** Captures member-access expressions (such as `Helper.DoWork()`) and binds them to their unique, AST-proven type definition.
+*   **C# Inheritance Analysis:** Extracts C# type inheritance (`inherits`) and interface implementations (`implements`) from AST `base_list` structures.
+*   **Language-Family Resolver Isolation:** Constrains Graphenium's cross-file binder to candidates of the same language family, preventing name collisions across multi-language projects (e.g., separating C# methods from similarly named C++ headers).
 
-MCP deployment:
+### Fixed
+*   Rewrote Graphenium's cross-file reference resolver to filter out sub-symbol granularity overlaps (subsumption checks), preventing double-counting or ambiguous bindings.
+*   Fixed serve-layer routing to prevent background MCP endpoints from being intercepted by static file handling.
+*   Corrected target labels within `blast_radius` and `verification_plan` calculations.
 
-- `scripts/graphenium-mcp` launcher for Grok, Cursor, and Codex: prefers local `target/release/gm`, auto-builds only when `graph.json` is missing, starts `gm serve --watch`.
-- `GRAPHENIUM_AUTO_REBUILD=1` opt-in to rebuild on session start when source or binary is newer than the graph.
-- Graph freshness detection (`src/serve/freshness.rs`): staleness warnings in `graph_info`, `reload_graph`, and MCP serve startup.
-- `graph_info` now reports the graph file path.
+---
 
-## v0.18.0, 2026-07-03
+## v0.17.0 — 2026-07-03
 
-Theme: working cross-file resolution improvements, especially for C#.
+### Summary
+This release reorganizes documentation around external governance gating and introduces incremental AST index patching.
 
-Highlights:
+### Added
+*   **AST-Proven Cross-File Call Resolution:** Maps calls across file boundaries using deterministic AST parsing.
+*   **Incremental Index Patching (`replace_file_extraction`):** Re-extracts modified files, purges stale symbol data, and patches the cached index without executing a full project re-scan.
+*   **Datalog Query Interpreter:** Core engine implementation for evaluating logical codebase constraints.
+*   **Salsa-Backed Memoized Parsing:** Implements memoized incremental extraction to speed up file-watching recompilations.
 
-- Captures C# member-access calls such as `Helper.DoWork()`.
-- Adds C# inherits and implements edges from `base_list` structures.
-- Rewrites resolver uniqueness gating with same-language filtering, distinct-ID deduplication, and subsumption checks.
-- Fixes serve-layer routing so MCP endpoints are not intercepted by static file handling.
-- Fixes `blast_radius` and `verification_plan` label resolution.
-- Improves AST-only banners so they reflect actual resolution status.
+---
 
-Reported result on a real 98k-node C# graph:
+## v0.16.x — 2026-07-02
 
-| Metric | Before | After |
-|---|---:|---:|
-| Calls resolved | 0 percent | 42 percent |
-| Cross-file references resolved | 0 | 38,641 |
-| Implements edges | 0 | 1,713 |
-| Inherits edges | 0 | 2,219 |
-| Dangling edges | unknown | 0 |
-| Communities | 4,140 | 775 |
+### Summary
+Introduced local Stack Graphs, runtime telemetry overlays, and initial C# project reference boundaries.
 
-## v0.17.0, 2026-07-03
+### Added
+*   **Local Stack Graphs:** Deterministic cross-file symbol resolution based on AST bindings.
+*   **Runtime Telemetry Overlay (`src/telemetry.rs`):** Imports OpenTelemetry JSON traces to overlay live call counts and latency percentiles onto the static AST index.
+*   **C# Project Boundary Parser (`src/extract/csharp_project.rs`):** Parses Visual Studio `.sln` and `.csproj` structures to model assembly boundaries and project references.
 
-Theme: major enhancement set and documentation restructuring.
+---
 
-Added:
+## v0.15.x — 2026-07-01 to 2026-07-02
 
-- Cross-file call resolution
-- C# inherits and implements support
-- Scope-narrowed resolution
-- Datalog query engine
-- Runtime telemetry overlay
-- Salsa-backed extraction
-- Hybrid retrieval modes
+### Summary
+Introduced virtual planning workspaces and post-edit verification.
 
-Changed:
+### Added
+*   **Planning Workspaces:** Provides persistent virtual draft states where agents must declare their design intent.
+*   **`verification_plan` Generation:** Generates risk-sorted verification checklists (affected interfaces, dependent callers, covering tests) for changed symbols.
+*   **`what_changed` Audits:** Diff-based reporting comparing cached index snapshots to highlight additions, removals, and community moves.
 
-- README slimmed and modular docs moved into `docs/`.
-- Contributing guide expanded with new module definitions.
-- Skill instructions updated with Datalog, query modes, C# guidance, and cross-file resolution instructions.
-- AI setup expanded with Datalog, OpenTelemetry, Salsa, and hybrid retrieval sections.
-- Cargo install documentation moved to `--locked`.
+---
 
-Quality:
+## v0.14.0 — 2026-07-01
 
-- Binary build passed.
-- CI passed with zero clippy errors and clean formatting.
-- 363 tests passed.
+### Summary
+Initial C# integration and persistent design plans.
 
-## v0.16.x, 2026-07-02
+### Added
+*   C# syntax extraction.
+*   Initial draft workspaces with post-facto file-scope audits.
 
-Theme: Stack Graphs, OpenTelemetry, Salsa, Datalog, hybrid retrieval, C# support, and CI fixes.
+---
 
-Added:
+## v0.13.0 — 2026-06-30
 
-- Cross-file reference resolution
-- OpenTelemetry runtime overlay
-- Salsa incremental computation
-- Datalog query engine
-- Hybrid lexical and structural retrieval
-- C# inherits and implements edges
-- Scope-narrowed call resolution
-- `run_datalog` MCP tool
+### Summary
+Introduced telemetry data structures, transaction-safe caches, and traversal metrics.
 
-## v0.15.x, 2026-07-01 to 2026-07-02
+### Added
+*   Telemetry collector structures.
+*   Atomic cache manager to write index changes transactionally.
 
-Theme: planning workspaces, large-delta robustness, hub filtering, path disambiguation, and reviewer safety.
+---
 
-Added and fixed:
+## v0.12.0 — 2026-06-30
 
-- Planning workspace persistence
-- `references_to` MCP tool
-- `what_changed` budget controls
-- Large delta short-circuiting
-- Downstream impact gating
-- Degree-based disambiguation
-- Namespace aggregation hub filtering
-- Better handling of ambiguous symbols
-- Installer hardening with `cargo install --locked`
+### Summary
+Introduced incremental watch-mode file updates and content-hashed caching.
 
-## v0.14.0, 2026-07-01
+### Added
+*   File-content SHA256 hashing to manage the AST extraction cache.
+*   File-system watch-mode support.
 
-Theme: C# project support and planning workspaces.
+---
 
-Added:
+## v0.11.0 — 2026-06-30
 
-- C# solution and project parser
-- C# dependency graph boundaries
-- `gm graph build-map`
-- `gm diff --json`
-- Persistent planning workspaces
-- `gm explain`
-- AST-only blast-radius warnings
-- Clearer `next_files_to_read`
+### Summary
+Optimized Graphenium for larger repositories and added pre-scan planning.
 
-## v0.13.0, 2026-06-30
+### Added
+*   Progress bar and heartbeat logs for large-repository indexing.
+*   Dry-run planning flag (`gm run --plan`) to inspect project scope.
 
-Theme: telemetry data structures, traversal stats, and cache manager.
+---
 
-Added:
+## v0.10.0 — 2026-06-30
 
-- `TelemetryCollector`
-- traversal stats in query output
-- atomic cache manager
-- initial C# project parser
+### Summary
+Hardened deployment on Windows environments and added setup scripts.
 
-## v0.12.0, 2026-06-30
-
-Theme: AST caching.
-
-Added:
-
-- content-hash AST cache
-- cache directory support
-- incremental watch-mode speedups
-- verified C# namespace resolution behavior
-
-## v0.11.0, 2026-06-30
-
-Theme: large-repository robustness, pre-scan planning, and JSON output.
-
-Added:
-
-- extraction progress heartbeats
-- `gm run --plan`
-- `gm query --json`
-- trust banner in `graph_info`
-- `query_transitive --budget`
-- qualified labels in query output
-- stronger `.grapheniumignore` defaults
-- populated `quality.json`
-- robustness script
-
-## v0.10.0, 2026-06-30
-
-Theme: Windows onboarding, Claude Code setup, and graceful server startup.
-
-Added:
-
-- graceful `gm serve` startup with empty graph
-- `gm setup claude-code`
-- PowerShell installer
-- helpful empty-graph MCP guidance
-- Windows path normalization
-
-## v0.9.0, 2026-06-28
-
-Theme: modular documentation.
-
-Added:
-
-- command reference
-- MCP tools reference
-- architecture guide
-- comparison guide
-- benchmarking guide
-- benchmark script
-- streamlined README
-
-## Earlier releases
-
-Earlier releases introduced graph identity, relative paths, token optimization, composite tools, trust gating, transitive queries, incremental rebuild fixes, and improved traversal output.
-
-## Changelog principle
-
-Release notes should emphasize what changed for agent safety and reviewer confidence, not only implementation details.
+### Added
+*   PowerShell installer (`install.ps1`).
+*   Automatic path normalization to resolve differences in Windows backslash paths.
+*   Helpful warnings for workspace initialization.

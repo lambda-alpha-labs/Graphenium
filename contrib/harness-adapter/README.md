@@ -1,71 +1,86 @@
-# Graphenium Harness Adapter
+# Graphenium Embedded Harness Adapter
 
-This adapter shows how to embed Graphenium inside an AI coding harness.
+This adapter serves as a reference implementation for programmatically embedding Graphenium's structural containment engine inside an AI coding harness or custom developer platform.
 
-The harness keeps the graph current as the agent works, then exposes that graph to MCP clients or internal agent workflows.
+By compiling and embedding Graphenium as a dependency, your harness can maintain a **real-time, AST-proven index of the codebase** and enforce strict pre-flight policy gates as an agent opens, saves, and modifies files.
 
-## Install as a dependency
+---
+
+## 1. Installation
+
+To embed the structural engine as a dependency, declare it in your `Cargo.toml`. Enable the `harness` feature flag to keep the dependency tree lightweight (this excludes background MCP server and watch-mode process dependencies):
 
 ```toml
 [dependencies]
-graphenium = { git = "https://github.com/lambda-alpha-labs/Graphenium", default-features = false, features = ["harness"] }
+graphenium = { git = "https://github.com/lambda-alpha-labs/Graphenium", default-features = false, features = ["harness", "lang-rust", "lang-python"] }
 ```
 
-Enable language features as needed, such as `lang-rust`, `lang-python`, or `lang-csharp`.
+*Enable compilation support for only the target programming languages your platform needs to govern.*
 
-## Lifecycle
+---
+
+## 2. Integrated Lifecycle Loop
+
+The harness adapter allows your platform to synchronize Graphenium's structural index with IDE or runtime events:
 
 ```text
-Workspace open
-  -> initialize_graph(root)
-  -> snapshot_to_disk(graph)
+Workspace Opened
+  └── initialize_graph(root)         # Compile baseline AST/Stack Graphs index
+  └── snapshot_to_disk(index)        # Persist compiled index file
 
-File opened or saved
-  -> on_file_open(graph, path)
-  -> refresh_communities when needed
-  -> snapshot_to_disk(graph)
+File Opened or Saved
+  └── on_file_open(index, path)      # Incrementally patch changed files
+  └── refresh_communities()          # Re-cluster structural folder domains
+  └── snapshot_to_disk(index)        # Update persisted index state
 
-AI verifies a relationship
-  -> on_edge_discovered(graph, source, target, relation, file)
+Agent Proposes Design Spec
+  └── validate_plan_preflight()      # Run pre-flight Datalog layer analysis
 
-AI invalidates a relationship
-  -> on_edge_invalid(graph, source, target, relation)
-
-MCP sidecar serves current graph
-  -> gm serve --graph graphenium-out/graph.json
+Agent Implements Edits
+  └── on_file_open(index, path)      # Re-extract actual physical changes
+  └── verify_plan()                  # Audit compliance (flag scope creep)
 ```
 
-## Planning integration
+---
 
-Use planning workspaces for multi-file agent changes.
+## 3. Pre-Flight Design Integration
 
-1. Create a plan.
-2. Add planned symbols.
-3. Let the agent edit code.
-4. Rebuild or patch the graph.
-5. Verify planned symbols against extracted symbols.
-6. Report implemented, missing, and unplanned work.
+To prevent AI assistants from writing messy, unapproved code, integrate Graphenium's "Design-then-Verify" lifecycle directly into your agent's execution loop:
 
-## Confidence policy
+1.  **Initialize Planning Workspace:** When the agent begins a task, create a virtual workspace (`create_planning_workspace`).
+2.  **Declare Intent:** Instruct the agent to register its planned classes, methods, and module dependencies (`add_planned_symbol`).
+3.  **Pre-Flight Policy Check:** Evaluate the virtual plan against the repository's `.graphenium/policy.json` rules using `validate_plan_preflight`.
+4.  **Enforce Safe Coding:** If Graphenium identifies strict layering bypasses or unauthorized imports, block execution and feed the structural violations back to the agent for redesign.
+5.  **Post-Edit Compliance Audit:** Once the agent implements the code, re-index the modified files and execute `verify_plan` to verify that the agent did not commit scope creep (modifying files outside the declared plan) or leak unapproved dependencies.
 
-Only write edges that the AI verified through source inspection.
+---
 
-Do not write relationships based on naming conventions alone.
+## 4. Strict Confidence Policies
 
-| Evidence | Write? |
-|---|---|
-| Source was inspected and relationship is visible | Yes |
-| Relationship is only suspected | No |
-| Relationship comes from generated code that was excluded | Add only if verified and documented |
-| Relationship is uncertain | No |
+To maintain the integrity of the codebase index, your harness must enforce a strict contract when allowing agents to write manual relationship edits:
 
-## Test
+| Agent Evidence | Write to Index? | Target Confidence |
+|---|---|---|
+| Agent read source and confirmed dependency | Yes | `EXTRACTED` |
+| Agent verified relationship via local tests | Yes | `EXTRACTED` |
+| Agent assumes relationship based on file proximity | **No** | *Blocked* |
+| Agent is uncertain or guessing | **No** | *Blocked* |
+
+*Never let agents promote heuristic guesswork or semantic inferences to `EXTRACTED` confidence. This preserves Graphenium's role as a source-backed compile-time truth engine.*
+
+---
+
+## 5. Running the Adapter Tests
+
+Graphenium includes a suite of integration tests verifying index patching, edge discovery, and deletion:
 
 ```sh
 cd contrib/harness-adapter
 cargo test
 ```
 
-## Full guide
+---
 
-See `docs/HARNESS_ADAPTER.md` for the expanded integration guide.
+## 6. Comprehensive Integration Playbook
+
+For a detailed walkthrough on API parameters, memory structures, and performance bounds, refer to the full adapter guide at [`docs/HARNESS_ADAPTER.md`](../../docs/HARNESS_ADAPTER.md).

@@ -1,135 +1,183 @@
-# Harness Adapter
+# Programmatic Integration: Graphenium Harness Adapter
 
-The harness adapter shows how to embed Graphenium inside an AI coding harness.
+Graphenium can be embedded directly inside an AI coding platform, developer workspace, or custom agent runner. By consuming Graphenium as a programmatic library, your platform can maintain a real-time, AST-proven index of the workspace and run strict, mechanical pre-flight checks as files are opened, edited, or saved.
 
-Use this when you are building an agent runtime that should maintain a graph as the agent opens, saves, inspects, and modifies files.
+---
 
-## Dependency
+## 1. Dependency Configuration
+
+To keep compilation times fast and exclude the background MCP server and file-watching dependencies, build with Graphenium's lean `harness` feature flag. Declare the dependency in your `Cargo.toml` alongside your target language engines:
 
 ```toml
 [dependencies]
-graphenium = { git = "https://github.com/lambda-alpha-labs/Graphenium", default-features = false, features = ["harness"] }
+graphenium = { git = "https://github.com/lambda-alpha-labs/Graphenium", default-features = false, features = ["harness", "lang-rust", "lang-python", "lang-csharp"] }
 ```
 
-The `harness` feature keeps the dependency tree lean by excluding the MCP server and watch-mode dependencies. Enable specific language features for the languages you need.
+---
 
-## Lifecycle
+## 2. Core Library APIs
 
-```text
-Workspace open
-  -> initialize_graph(root)
-  -> full AST scan
-  -> Louvain clustering
-  -> snapshot to disk
+Graphenium exposes its indexing, patching, and verification engines through clean Rust structures. The key types reside in:
+*   `graphenium::model` — Core data structures (`Node`, `Edge`, `GrapheniumGraph`, `ExtractionResult`, `FileType`, `Confidence`).
+*   `graphenium::detect` — Workspace file detectors and file-type classifiers.
+*   `graphenium::extract` — AST parsers and syntax extraction configurations.
+*   `graphenium::build` — Assembly pipelines to merge AST metadata into GrapheniumGraph states.
+*   `graphenium::cluster` — Domain partitioners (Louvain clustering).
+*   `graphenium::policy` — Declarative policy modelers (`ArchRule`, `ArchPolicyConfig`).
+*   `graphenium::harness` — Pre-flight policy solvers and post-facto compliance verifiers.
 
-File opened or saved
-  -> on_file_open(graph, path)
-  -> re-extract one file
-  -> patch graph
+---
 
-AI verifies a relationship in source
-  -> on_edge_discovered(graph, source, target, relation, file)
-  -> add verified edge
+## 3. The Programmatic Event Loop
 
-AI finds a false positive
-  -> on_edge_invalid(graph, source, target, relation)
-  -> remove edge
-
-Periodic maintenance
-  -> refresh_communities(graph)
-  -> snapshot_to_disk(graph, path)
-
-MCP sidecar needs current graph
-  -> gm serve --graph /path/to/graph.json
-```
-
-## Planning workspace integration
-
-Harnesses should use planning workspaces for multi-file agent changes.
-
-1. Create a planning workspace.
-2. Register intended symbols and relationships.
-3. Run pre-flight architecture policy validation (`validate_plan_preflight` in `src/harness.rs`, or `validate_plan` via MCP).
-4. Let the agent implement the change only if pre-flight passes.
-5. Re-extract modified files.
-6. Compare the planned virtual graph with the physical graph (`verify_plan`).
-7. Report implemented, missing, and unplanned symbols.
-
-Architecture rules load from `.graphenium/policy.json` via `ArchPolicyConfig::load_for_project` in `src/policy.rs`.
-
-```mermaid
-graph LR
-    A[Agent intent] --> B[Virtual plan graph]
-    B --> P[Pre-flight policy gate]
-    P -->|pass| C[Implementation]
-    P -->|fail| R[Revise plan]
-    C --> D[Physical extracted graph]
-    D --> E[Compliance audit]
-```
-
-## Serving the graph
-
-The simplest architecture is a sidecar MCP server:
-
-```sh
-gm serve --graph /path/to/graphenium-out/graph.json
-```
-
-The harness writes snapshots to disk. MCP clients read the current graph through `gm serve`.
-
-## Minimal pseudocode
+An embedded harness adapter typically maps code editing events to Graphenium's structural engine as follows:
 
 ```rust
-use graphenium_harness_adapter::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use graphenium::{
+    detect::{detect, DetectOptions},
+    extract::{extract_all, extract_file, ExtractOptions},
+    build::{build_merged},
+    cluster::{cluster, ClusterOptions, CommunityStats},
+    model::{GrapheniumGraph, Edge, Node, FileType, Confidence},
+    export::json::to_json,
+};
 
-let (mut graph, communities) = initialize_graph(Path::new("/path/to/project"));
-snapshot_to_disk(&graph, Path::new("/path/to/project/graphenium-out/graph.json"))?;
+/// 1. Initialize Baseline Index (Run once when workspace opens)
+pub fn initialize_index(root: &Path) -> Result<(GrapheniumGraph, Vec<CommunityStats>), String> {
+    // Walk directory and classify file types (respecting ignores)
+    let (files, _warnings) = detect(root, &DetectOptions::default())
+        .map_err(|e| e.to_string())?;
 
-let stats = on_file_open(&mut graph, Path::new("src/auth/service.rs"));
-if stats.nodes_replaced > 0 {
-    refresh_communities(&mut graph, &ClusterOptions::default());
-    snapshot_to_disk(&graph, Path::new("/path/to/project/graphenium-out/graph.json"))?;
+    // Extract raw AST structure from all code files
+    let ast_result = extract_all(&files, &ExtractOptions::default());
+
+    // Compile physical AST symbols and boundaries
+    let (mut graph, _stats) = build_merged([ast_result]);
+    graph.set_ast_only(true);
+
+    // Partition code into cohesive structural domains
+    let domain_stats = cluster(&mut graph, &ClusterOptions::default());
+
+    Ok((graph, domain_stats))
 }
 
-on_edge_discovered(
-    &mut graph,
-    "auth_service",
-    "token_provider",
-    "delegates_to",
-    "src/auth/service.rs"
-);
+/// 2. Real-Time Incremental Patching (Run on file save/modify)
+pub fn patch_file(graph: &mut GrapheniumGraph, file_path: &Path) -> Result<(), String> {
+    let file = graphenium::detect::DetectedFile {
+        path: file_path.to_path_buf(),
+        file_type: FileType::Code,
+    };
 
-snapshot_to_disk(&graph, Path::new("/path/to/project/graphenium-out/graph.json"))?;
+    // Re-extract only the modified file
+    let result = extract_file(&file, &ExtractOptions::default());
+    if result.is_empty() {
+        return Ok(()); // Skip if empty or unsupported
+    }
 
-on_edge_invalid(&mut graph, "auth_service", "unrelated_fn", Some("imports"));
+    let source_file = file_path.to_string_lossy().to_string();
+
+    // Surgically replace stale AST contributions and re-resolve local boundaries
+    graph.replace_file_extraction(&source_file, &result);
+
+    Ok(())
+}
 ```
 
-## Confidence model for harnesses
+---
 
-The harness must not let agents write guessed edges into the graph.
+## 4. Programmatic Gating and Policy Enforcements
 
-| Agent evidence | Write edge? | Confidence |
-|---|---|---|
-| Agent read source and verified relationship | Yes | `EXTRACTED` |
-| Agent saw relationship in source and docs | Yes, with provenance | `EXTRACTED` |
-| Agent suspects relation from naming | No | none |
-| Agent is uncertain | No | none |
+Graphenium enables you to prevent architectural erosion by checking proposed agent designs pre-flight and verifying implemented code post-edit.
 
-AI-discovered edges should only be added when the agent inspected source directly.
+### Phase A: Pre-Flight Policy Gating
+Before an agent writes any physical edits, require it to submit its change design as a virtual plan. Load your `.graphenium/policy.json` rules and run Graphenium's pre-flight logic solver:
 
-## Testing
+```rust
+use graphenium::{
+    policy::{ArchPolicyConfig, ArchRule},
+    harness::{validate_plan_preflight, PreFlightReport},
+};
 
-```sh
-cd contrib/harness-adapter
-cargo test
+pub fn check_preflight_design(
+    graph: &GrapheniumGraph,
+    project_root: &Path,
+    plan_id: &str,
+) -> Result<PreFlightReport, String> {
+    // Load local policy constraints
+    let policy_config = ArchPolicyConfig::load_for_project(project_root)
+        .map_err(|e| e.to_string())?;
+
+    // Mathematically evaluate the virtual plan boundaries using the Datalog solver
+    let report = validate_plan_preflight(graph, plan_id, &policy_config.rules);
+
+    Ok(report)
+}
 ```
 
-## Best practices
+*If `report.passes` is false, block execution. Feed `report.violations` back to the agent so it can re-plan its design.*
 
-- Keep graph snapshots atomic.
-- Re-cluster after batches of meaningful edits.
-- Keep agent-added edges auditable.
-- Separate planned virtual nodes from extracted physical nodes.
-- Do not auto-promote semantic guesses to `EXTRACTED`.
-- Surface trust profile in the harness UI or agent transcript.
+---
+
+### Phase B: Post-Edit Compliance Auditing
+After the agent implements its changes, compile the updated physical code and verify that its edits conform to the approved design plan:
+
+```rust
+use graphenium::harness::{verify_plan, PlanVerificationReport};
+
+pub fn audit_post_edit_compliance(
+    graph: &GrapheniumGraph,
+    plan_id: &str,
+) -> PlanVerificationReport {
+    // Compares planned symbols to implemented code, detecting scope creep
+    verify_plan(graph, plan_id)
+}
+```
+
+If `report.passes_compliance` is false, Graphenium has detected scope creep (unplanned file modifications) or missing implementations. The build should be failed or blocked.
+
+---
+
+## 5. Serializing and Hot-Swapping the Index
+
+If your platform runs Graphenium's engine inside a background daemon or parallel process, save updated index states atomically to disk. This allows background MCP servers to hot-swap their state without restarts:
+
+```rust
+pub fn persist_index_atomic(graph: &GrapheniumGraph, output_path: &Path) -> Result<(), String> {
+    // Generate compact, un-spaced JSON
+    let json = to_json(graph).map_err(|e| e.to_string())?;
+
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    // Write to a temporary file, then execute atomic rename
+    let tmp = output_path.with_extension("json.tmp");
+    std::fs::write(&tmp, &json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, output_path).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+```
+
+---
+
+## 6. Manual Overrides and Corrections
+
+If Graphenium's static AST extraction cannot automatically detect a dynamic, framework-injected, or runtime dependency, allow your platform's operators or agentic systems to write manual, AST-proven overrides:
+
+```rust
+/// Inject a verified, AST-proven boundary override into Graphenium's index
+pub fn inject_manual_dependency(
+    graph: &mut GrapheniumGraph,
+    source_symbol: &str,
+    target_symbol: &str,
+    relation: &str,
+    source_file: &str,
+) -> bool {
+    let edge = Edge::extracted(source_symbol, target_symbol, relation, source_file);
+
+    // Returns false if source_symbol or target_symbol do not exist as physical nodes
+    graph.add_edge(edge)
+}
+```

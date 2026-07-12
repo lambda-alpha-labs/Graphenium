@@ -1,95 +1,41 @@
-# CI and Governance
+# Continuous Architectural Containment and Governance
 
-Graphenium turns architecture knowledge into reviewable, enforceable controls for AI-generated code changes.
+Traditional continuous integration (CI) environments verify syntax, type safety, and runtime behavior:
+*   *Did compilation succeed?*
+*   *Did tests pass?*
+*   *Did code formatters and style linters succeed?*
 
-## Why governance matters
+For AI-generated changes, these checks are necessary but fundamentally insufficient. Agents can write code that passes tests while quietly eroding your architecture—bypassing module boundaries, introducing transitive circular dependencies, or modifying unplanned files. 
 
-Traditional CI answers:
+Graphenium integrates into your CI/CD pipeline and git hooks as an **external structural gate**, mechanically verifying the architectural integrity of agent-authored PRs before they reach a human reviewer [1.1.6].
 
-- Did tests pass?
-- Did formatting pass?
-- Did linting pass?
+---
 
-For agent-authored changes, teams also need to know:
+## 1. The Automated Gating & Verification Loop
 
-- Did the agent understand what it changed?
-- What depends on the changed symbols?
-- Did the patch cross architecture boundaries?
-- Which relationships are inferred or ambiguous?
-- Did the implementation match the declared plan?
-
-Graphenium adds those checks.
-
-## Governance loop
-
-```mermaid
-graph LR
-    A[Plan] --> B[Declare intended symbols]
-    B --> C[Edit]
-    C --> D[Rebuild graph]
-    D --> E[Diff snapshots]
-    E --> F[Blast radius]
-    F --> G[Verification plan]
-    G --> H[Trust gate]
-    H --> I[Human review]
-```
-
-## Basic CI gate
-
-```sh
-gm run . --no-semantic --no-viz
-gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 10
-```
-
-## Diff-based review
-
-Create a snapshot before the agent works:
-
-```sh
-gm snapshot create before-agent-change
-```
-
-After the change:
-
-```sh
-gm run . --update --no-semantic --no-viz
-gm diff --before graphenium-snapshots/before-agent-change.json --after graphenium-out/graph.json --impact --review-plan
-```
-
-## Pull request comment template
+To prevent vibe-coding in active repositories, Graphenium enforces a structured, four-phase containment lifecycle:
 
 ```text
-Graphenium review summary
+1. DESIGN PHASE (Pre-Flight)
+   └── Agent declares virtual plan ──► Verified via Datalog policy solver
 
-Changed graph nodes:
-Removed symbols:
-Added symbols:
-Moved communities:
-Highest-risk downstream consumers:
-New inferred edges:
-New ambiguous edges:
-Must-read files:
-Recommended tests:
-Gate result:
-Reviewer notes:
+2. IMPLEMENTATION PHASE (Write)
+   └── Agent writes physical code ──► Bounded within declared file scope
+
+3. AUDIT PHASE (Post-Edit)
+   └── gm check --plan             ──► Verifies actual changes match virtual spec
+
+4. REVIEW PHASE (Merge)
+   └── Risk-sorted PR comment      ──► Summarizes transitive impact & test plan
 ```
 
-## Policy maturity model
+---
 
-| Stage | Policy | Goal |
-|---|---|---|
-| 1. Observe | Run graph builds and publish reports | Learn graph quality without blocking |
-| 2. Warn | Warn on high ambiguity or low resolution | Educate agents and reviewers |
-| 3. Gate high-risk changes | Gate public APIs, dependencies, and hubs | Protect critical paths |
-| 4. Gate all agent PRs | Require blast radius and verification plan | Standardize agent review |
-| 5. Enforce architecture boundaries | Use graph diff and policy rules | Prevent drift |
+## 2. Pre-Flight Architectural Policies
 
-## Architecture policy (pre-flight)
+Architectural constraints are declared in `.graphenium/policy.json` at the root of the repository. If present, Graphenium's pre-flight engine runs these rules against the agent's proposed plan *before* any physical files are modified.
 
-Graphenium can block agent plans that violate structural dependency boundaries **before** any source code is written. Rules are declared in `.graphenium/policy.json` at the repository root.
-
-### Policy file format
-
+### Policy Configuration Schema (`.graphenium/policy.json`):
 ```json
 {
   "rules": [
@@ -107,7 +53,7 @@ Graphenium can block agent plans that violate structural dependency boundaries *
         "src/extract/**",
         "src/model/**"
       ],
-      "reason": "Respect tiered architecture: serve → analyze → extract → model"
+      "reason": "Respect Graphenium's tiered architecture: serve -> analyze -> extract -> model"
     },
     {
       "type": "banned_symbol",
@@ -118,104 +64,124 @@ Graphenium can block agent plans that violate structural dependency boundaries *
 }
 ```
 
-| Rule type | What it checks |
-|---|---|
-| `forbidden_dependency` | Planned edges from `from_pattern` to `to_pattern` (glob paths) |
-| `strict_layering` | No planned node in layer *i* may depend on layer *j* where *j < i*; transitive violations use Datalog `depends_transitive` |
-| `banned_symbol` | Planned symbols or dependency targets matching a label |
+### Supported Rule Types:
+*   **`forbidden_dependency`:** Blocks any direct import or call from files matching `from_pattern` to files matching `to_pattern` (supports standard glob wildcards).
+*   **`strict_layering`:** Enforces a rigid top-down hierarchy. No code in `layer[i]` may depend on `layer[j]` where `j < i`. Graphenium runs its local Datalog solver to prove transitive, multi-hop bypasses (`bypasses_layer`) [1.1.2].
+*   **`banned_symbol`:** Rejects any design plan that attempts to introduce, modify, or reference a restricted identifier (e.g., deprecated utilities, legacy database connectors).
 
-Patterns use glob syntax (same as `.grapheniumignore`). An empty or missing policy file skips pre-flight checks.
+---
 
-### When pre-flight runs
+## 3. When Policy Gating Runs
 
-| Entry point | Behavior |
-|---|---|
-| `validate_plan` MCP tool | Explicit pre-flight check on a `plan_id` |
-| `add_planned_symbol` | Automatic check; rejects with `PRE_FLIGHT_VIOLATION` on failure |
-| `agent_change_gate` | Optional `plan_id` parameter adds a pre-flight section |
-| `gm check --plan <id>` | Pre-flight gate, then post-facto compliance |
+Graphenium enforces these policies at multiple checkpoints in the development lifecycle:
 
-### CI example with planning workspace
+| Gate Entry Point | Execution Context | Gating Behavior |
+|---|---|---|
+| **`validate_plan` (MCP)** | Pre-Flight (Agent Session) | Runs explicit pre-flight checks on a proposed planning workspace. |
+| **`add_planned_symbol`** | Pre-Flight (Agent Session) | Automatic pre-flight hook. If the proposed class/method violates policy, Graphenium returns `PRE_FLIGHT_VIOLATION` and blocks the plan. |
+| **`gm check --plan <id>`** | CI / Pre-Commit Hook | Double Gate: Evaluates pre-flight design compliance first, then performs a post-facto scope-creep audit. |
+| **`agent_change_gate`** | CI / PR Pipeline | Evaluates global trust quality metrics (import resolution ratio, maximum allowed ambiguity) [1.1.2]. |
 
-```sh
-gm run . --no-semantic --no-viz
-gm check --graph graphenium-out/graph.json --plan agent-refactor-auth --strict
-```
+---
 
-This fails if the declared plan violates architecture policy or if implementation does not match the plan.
+## 4. Baseline Index Verification Gate
 
-## Recommended initial thresholds
-
-For a new repository:
+To ensure your codebase index remains healthy and that your agent is not operating on incomplete static analysis data, run Graphenium's baseline quality gate in CI:
 
 ```sh
-gm check --min-resolution 50 --max-ambiguous 50
+gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 10
 ```
 
-For a mature graph:
+### Evaluation Parameters:
+*   `--min-resolution <pct>`: Fails the build if the AST import resolution ratio drops below the target percentage (default: 80%).
+*   `--max-ambiguous <count>`: Fails the build if Graphenium detects more than `<count>` unresolved name collisions (default: 10).
+*   `--strict`: Exits non-zero on any parser or configuration warnings.
+
+---
+
+## 5. Incremental Diff Audits
+
+To audit a completed PR, generate a baseline index snapshot before the agent starts its task:
 
 ```sh
-gm check --min-resolution 80 --max-ambiguous 10
+gm snapshot create before-change
 ```
 
-For critical repositories:
+After the agent completes its edits, compile the updated index and run an impact-aware structural diff:
 
 ```sh
-gm check --min-resolution 90 --max-ambiguous 0 --strict
+gm run . --update --no-semantic --no-viz
+gm diff --before graphenium-snapshots/before-change.json --after graphenium-out/graph.json --impact --review-plan
 ```
 
-Use strict gates only after the team understands extractor behavior and has tuned ignore rules.
+This generates a structured, risk-sorted review plan prioritizing removed public symbols, circular dependencies, and cross-boundary coupling.
 
-## Agent PR requirements
+---
 
-A Graphenium-aware PR should include:
+## 6. Pull Request Review Template
 
-- target symbol or feature area
-- graph query summary
-- trust profile
-- files read before editing
-- changed symbols
-- blast radius
-- verification plan
-- test plan
-- unresolved or ambiguous relationships
+Configure your agent or CI pipeline to append Graphenium's structural audit to every pull request description:
 
-## Example GitHub Actions job
+```text
+### Graphenium Structural Containment Audit
+
+- [ ] **Pre-Flight Policy Check:** PASSED / FAILED (policy.json rules)
+- [ ] **Scope-Creep Verification:** PASSED / FAILED (unplanned file modifications)
+
+#### Codebase Modifications
+*   **Added Symbols:** `[list of added classes/methods]`
+*   **Removed Symbols:** `[list of removed classes/methods]`
+*   **Transitive Downstream Impact:** `[count] affected callers`
+*   **High-Risk Callers:** `[list of high-degree dependent classes]`
+
+#### Automated Verification Plan
+1. **Must-Read Files:** `[list of modified or affected source files]`
+2. **Covering Test Targets:** `[list of associated test files to execute]`
+3. **Ambiguity Review:** `[list of unresolved identifier collisions to inspect]`
+```
+
+---
+
+## 7. GitHub Actions Workflow Integration
+
+Incorporate Graphenium into your standard pull request pipeline using the following workflow configuration:
 
 ```yaml
-name: Graphenium Trust Gate
+name: Graphenium Structural Gate
 
 on:
   pull_request:
+    branches: [main]
 
 jobs:
-  graphenium:
+  graphenium-gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Graphenium
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Graphenium CLI
         run: cargo install --locked --path .
-      - name: Build graph
+
+      - name: Initialize Workspace
+        run: gm init
+
+      - name: Compile Codebase Index
         run: gm run . --no-semantic --no-viz
-      - name: Run trust gate
-        run: gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 10
+
+      - name: Enforce Resolution and Policy Gates
+        run: |
+          gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 5 --strict
 ```
 
-## What Graphenium gates should not replace
+---
 
-Graphenium complements, but does not replace:
+## 8. What Graphenium Gating Does Not Replace
 
-- unit tests
-- integration tests
-- type checking
-- compiler checks
-- security scanning
-- human code review
-- runtime observability
-
-## Governance principle
-
-Use Graphenium to make agent assumptions explicit.
-
-A good agent change does not merely pass tests. It shows what it believed, what evidence supported those beliefs, what it changed, and how the change was verified.
+Graphenium is designed to enforce structural and architectural boundaries. It is a complementary containment layer and does not replace:
+*   **Unit & Integration Tests:** Graphenium verifies *decoupling and structure*; tests verify *behavior and state*.
+*   **Static Security Scanners (SAST):** Graphenium blocks *architectural drift*; SAST scanners block *vulnerabilities*.
+*   **Human Code Review:** Graphenium generates a *prioritized verification plan*; humans execute *contextual design review*.

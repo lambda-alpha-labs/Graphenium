@@ -1,33 +1,56 @@
 # Package Manifest
 
-- `AI_SETUP.md` (5286 bytes)
-- `CHANGELOG.md` (4518 bytes)
-- `CODE_OF_CONDUCT.md` (1693 bytes)
-- `CONTRIBUTING.md` (3468 bytes)
-- `LICENSE` (1069 bytes)
-- `README.md` (8051 bytes)
-- `SECURITY.md` (2874 bytes)
-- `contrib/harness-adapter/README.md` (1817 bytes)
-- `docs/AGENT_WORKFLOWS.md` (7491 bytes)
-- `docs/AI_SETUP.md` (5286 bytes)
-- `docs/ARCHITECTURE.md` (8229 bytes)
-- `docs/BENCHMARKING.md` (4538 bytes)
-- `docs/CHANGELOG.md` (4518 bytes)
-- `docs/CI_AND_GOVERNANCE.md` (3722 bytes)
-- `docs/CODE_OF_CONDUCT.md` (1693 bytes)
-- `docs/COMMAND_REFERENCE.md` (7412 bytes)
-- `docs/COMPARISON.md` (5752 bytes)
-- `docs/CONTRIBUTING.md` (3468 bytes)
-- `docs/DOCUMENTATION_MAP.md` (3575 bytes)
-- `docs/GETTING_STARTED.md` (5871 bytes)
-- `docs/GRAPH_REPORT.md` (2264 bytes)
-- `docs/HARNESS_ADAPTER.md` (3632 bytes)
-- `docs/LICENSE.md` (1080 bytes)
-- `docs/MCP_TOOLS.md` (8803 bytes)
-- `docs/POSITIONING.md` (5353 bytes)
-- `docs/SECURITY.md` (2874 bytes)
-- `docs/TRUST_MODEL.md` (4405 bytes)
-- `docs/WORKED_EXAMPLES.md` (2116 bytes)
-- `skills/graphenium/SKILL.md` (4424 bytes)
-- `worked/README.md` (1040 bytes)
-- `worked/TEMPLATE.md` (1275 bytes)
+This manifest indexes all core documentation and playbook assets maintained in Graphenium's repository. These files define our positioning as an external structural linter and containment gate, protecting codebases from AI-driven architectural drift.
+
+---
+
+## Root Directory
+*   `README.md` — Graphenium's primary positioning, capabilities overview, and fast pre-flight workflow guide.
+*   `AI_SETUP.md` — Environmental playbook for assistants installing and verifying local linter controls.
+*   `CHANGELOG.md` — Graphenium release and milestone history.
+*   `CODE_OF_CONDUCT.md` — Project code of conduct and community enforcement policies.
+*   `CONTRIBUTING.md` — Developer contribution guidelines, package module index, and extractor templates.
+*   `LICENSE` — Legal MIT license text.
+*   `SECURITY.md` — Security policy, local-first data guarantees, and secret file exclusion rules.
+
+---
+
+## Core Documentation Set (`docs/`)
+*   `docs/DOCUMENTATION_MAP.md` — Documentation directory restructure guide.
+*   `docs/GETTING_STARTED.md` — Workspace initialization, index generation, and baseline workspace setups.
+*   `docs/POSITIONING.md` — Analysis of competitive differentiation, target audiences, and messaging core.
+*   `docs/AGENT_WORKFLOWS.md` — Step-by-step operating playbooks for AI agents (pre-flight, in-edit planning, post-facto verification).
+*   `docs/CI_AND_GOVERNANCE.md` — CI pipeline gates, git hooks, PR comment templates, and declarative policy schemas.
+*   `docs/COMMAND_REFERENCE.md` — Syntax and flag definitions for Graphenium's CLI commands (`gm run`, `gm check`, `gm query`, etc.).
+*   `docs/MCP_TOOLS.md` — Tool descriptions and behavioral guidelines for agents connected via MCP.
+*   `docs/ARCHITECTURE.md` — Deep technical dive into Graphenium's AST parsing pipelines, C# project bounds, and Datalog solvers.
+*   `docs/TRUST_MODEL.md` — Technical reference defining AST-proven vs. semantic provenance.
+*   `docs/BENCHMARKING.md` — Performance testing methodologies: latencies, token budgets, and scaling limits.
+*   `docs/COMPARISON.md` — Context comparison matrix mapping Graphenium against standard developer tools (grep, ast-grep, RAG indexes).
+*   `docs/HARNESS_ADAPTER.md` — Reference guide for programmatically embedding Graphenium's containment engine as a library.
+*   `docs/GRAPH_REPORT.md` — Diagnostic guidelines for interpreting generated codebase report summaries.
+*   `docs/LICENSE.md` — Legal MIT license text *(.md copy)*.
+*   `docs/AI_SETUP.md` — Assistant setup playbook *(.md copy)*.
+*   `docs/CHANGELOG.md` — Release history *(.md copy)*.
+*   `docs/CODE_OF_CONDUCT.md` — Community guidelines *(.md copy)*.
+*   `docs/CONTRIBUTING.md` — Developer guidelines *(.md copy)*.
+*   `docs/SECURITY.md` — Security policies *(.md copy)*.
+
+---
+
+## Integration Adapters (`contrib/`)
+*   `contrib/harness-adapter/README.md` — Integration notes for embedding Graphenium's engine inside third-party agent harnesses.
+
+---
+
+## Agentic Interface Skills (`skills/`)
+*   `skills/graphenium/SKILL.md` — Standard instructions and rules injected into Graphenium-aware agent workspaces.
+
+---
+
+## Worked Base Case Studies (`worked/`)
+*   `worked/README.md` — Introduction to structural case studies.
+*   `worked/TEMPLATE.md` — Standard template for documenting new codebase verification studies.
+*   `worked/graphenium-self-analysis/README.md` — Self-analysis verification study applying Graphenium to its own Rust repository.
+*   `worked/graphenium-self-analysis/GRAPH_REPORT.md` — Automated codebase report output for Graphenium's repository.
+*   `worked/graphenium-self-analysis/sample-queries.md` — Practical query examples illustrating AST-proven cross-file resolution.

@@ -2,7 +2,7 @@
 name = "graphenium"
 version = "0.19.0"
 edition = "2021"
-description = "Graphenium (gm) — the elemental knowledge graph engine for your codebase"
+description = "Graphenium (gm) — structural containment and pre-flight gating for AI coding agents"
 license = "MIT"
 repository = "https://github.com/lambda-alpha-labs/Graphenium"
 documentation = "https://github.com/lambda-alpha-labs/Graphenium"

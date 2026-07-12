@@ -1,282 +1,178 @@
-# Getting Started
+# Getting Started: Establishing Workspace Containment
 
-This guide takes you from an empty workspace to a Graphenium-powered AI coding workflow.
+This guide walks you from a clean repository to an active, write-gated developer workspace governed by Graphenium.
 
-## Prerequisites
+---
 
-- Rust 1.81 or later
-- A repository written in one or more supported languages
-- Optional: an AI coding tool that supports MCP
+## 1. Prerequisites
 
-Supported languages:
+Before installing Graphenium, ensure your environment meets the following requirements:
+*   **Compilation Toolchain:** Rust 1.81 or later (`rustc` and `cargo` installed).
+*   **Repository Languages:** One or more supported languages:
+    *   *Rust, Python, Go, JavaScript, TypeScript, Java, C, C++, and C#.*
+*   **AI Agent Workspace:** An MCP-compatible coding agent (Claude Code, Cursor, Grok, or Codex).
 
-| Language family | Support |
-|---|---|
-| Rust | AST extraction and graph relationships |
-| Python | AST extraction and graph relationships |
-| Go | AST extraction and graph relationships |
-| JavaScript | AST extraction and graph relationships |
-| TypeScript | AST extraction and graph relationships |
-| Java | AST extraction and graph relationships |
-| C | AST extraction and graph relationships |
-| C++ | AST extraction and graph relationships |
-| C# | AST extraction plus `.sln` and `.csproj` boundary parsing |
+---
 
-## Install
+## 2. Installation
 
-From a local checkout:
+To compile Graphenium locally, clone outside your target repository and execute a locked build:
 
 ```sh
+# Clone Graphenium
+git clone https://github.com/lambda-alpha-labs/Graphenium "$HOME/.graphenium"
+cd "$HOME/.graphenium"
+
+# Build and install the CLI binary (gm)
 cargo install --locked --path .
 ```
 
-Minimal language build example:
+*For resource-constrained environments, refer to [`docs/AI_SETUP.md`](AI_SETUP.md) for custom language-compilation flags.*
+
+---
+
+## 3. Initialize Your Workspace
+
+Navigate to the root directory of the repository you want to govern, and initialize Graphenium's configuration:
 
 ```sh
-cargo install --locked --path . --no-default-features --features lang-python,lang-rust
-```
-
-## Initialize a workspace
-
-Run this at the repository root:
-
-```sh
+cd /path/to/your-project
 gm init
 ```
 
-This creates `.grapheniumignore` with sensible defaults for build artifacts, dependencies, generated files, and vendor directories.
+This generates a default `.grapheniumignore` file at your repository root to exclude compiled artifacts, dependencies, and generated code:
 
-## Build the graph
+```gitignore
+# Exclude build and package artifacts
+target/
+node_modules/
+bin/
+obj/
+graphenium-out/
+```
 
-Start with the fast AST-only path. It requires no API key.
+---
+
+## 4. Generate the Baseline Structural Index
+
+Compile your first codebase index. We recommend starting with a local AST-only run. This runs 100% offline, requires no API keys, and establishes your baseline compiler-proven truth:
 
 ```sh
 gm run . --no-semantic --no-viz
 ```
 
-Expected output includes file counts, node counts, edge counts, communities, and output paths.
+Expected output logs:
+```text
+Found N files
+AST: N nodes, N edges
+Graph: N nodes, N edges
+Communities: N
+Report written to graphenium-out
+```
 
-The main output is:
-
+The compiled structural index is written locally to:
 ```text
 graphenium-out/graph.json
 ```
 
-## Inspect graph health
+---
+
+## 5. Verify Index Integrity
+
+Execute Graphenium's diagnostic checks to ensure the AST and Stack Graphs extraction resolved your codebase's physical import boundaries:
 
 ```sh
+# Run general environment and index diagnostic
 gm doctor --graph graphenium-out/graph.json
-```
 
-For trust quality details:
-
-```sh
+# Audit import resolution ratios
 gm doctor --graph graphenium-out/graph.json --resolution
 ```
 
-Check:
+A healthy index should report:
+*   A non-zero count of compiled symbols (nodes).
+*   An import resolution ratio over 80%.
+*   Zero corpus warnings. If warnings are present, adjust your `.grapheniumignore` file.
 
-- node count is not zero
-- edge count is plausible
-- languages match the repository
-- ambiguous and unresolved counts are understandable
-- sensitive files and generated files are excluded as expected
+---
 
-## Run your first query
+## 6. Execute Your First Structural Queries
 
-```sh
-gm query "authentication flow" --budget 2000
-```
-
-Try these patterns:
+Verify that Graphenium can run local path traces and Datalog logic solving on your index:
 
 ```sh
-# Orient on the repository.
-gm query "architecture summary" --budget 2000
+# Trace direct and transitive calls for a target symbol
+gm query "validate_token" --safe --budget 1500
 
-# Explore a feature.
-gm query "billing service" --mode hybrid --budget 3000
+# Probe for circular module dependencies using Datalog
+gm query "cycles" --datalog "?- circular_dependency(X, Y)."
 
-# Follow a symbol neighborhood.
-gm query "validate_token" --depth 2 --safe --budget 1500
-
-# Declarative query.
-gm query --datalog "?- node(X, _, _, _, _)."
+# Prove if a component bypasses an intermediary layer
+gm query "layer-check" --datalog "?- bypasses_layer('auth_ctrl', 'auth_service', 'db_helper')."
 ```
 
-## Start MCP for an AI agent
+---
+
+## 7. Connect Graphenium to Your AI Agent (MCP)
+
+To intercept and govern agentic actions, start Graphenium's background MCP server. It listens on standard I/O and hot-reloads its index automatically:
 
 ```sh
 gm serve --graph graphenium-out/graph.json --watch
 ```
 
-Or use the launcher script (recommended for Grok): install `scripts/graphenium-mcp` to `~/.local/bin/` and point your MCP config at it. The launcher auto-builds only when `graph.json` is missing; stale graphs are served immediately with a warning in `graph_info`.
+*For Grok and other project-local tools, we recommend using Graphenium's pre-flight launcher script (`scripts/graphenium-mcp`). Refer to [`docs/AI_SETUP.md`](AI_SETUP.md) for tool-specific configuration blocks.*
 
-Then configure your AI tool to connect to the server. See `docs/AI_SETUP.md` for per-tool config, including Grok.
-
-### Claude Code
-
-```sh
-claude mcp add graphenium --scope user -- gm serve --graph /path/to/graphenium-out/graph.json --watch
+### The Verification Handshake:
+Once MCP is active, instruct your agent to run an initial hand-off check:
+```text
+Use Graphenium. Call graph_info first and tell me which codebase index is loaded.
 ```
 
-### Grok
+If Graphenium warns that the **"Graph may be stale"**, the compiled index is older than your physical files. Recompile the index (`gm run . --no-semantic --no-viz`) and instruct the agent to run `reload_graph`.
 
-```toml
-[mcp_servers.graphenium]
-command = "/Users/<you>/.local/bin/graphenium-mcp"
-args = []
-```
+---
 
-### Codex
+## 8. Establish Write-Time Policy Gating
 
-Add this to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.graphenium]
-command = "gm"
-args = ["serve", "--graph", "/path/to/graphenium-out/graph.json", "--watch"]
-```
-
-### Cursor
-
-Add this to `~/.cursor/mcp.json`:
+Protect your repository from architectural drift by defining structural boundaries. Write a `.graphenium/policy.json` at your repository root to forbid direct database imports from your API controllers:
 
 ```json
 {
-  "mcpServers": {
-    "graphenium": {
-      "command": "gm",
-      "args": ["serve", "--graph", "/path/to/graphenium-out/graph.json", "--watch"]
+  "rules": [
+    {
+      "type": "forbidden_dependency",
+      "from_pattern": "src/controllers/**",
+      "to_pattern": "src/db/**",
+      "reason": "Controllers must use services, not access DB directly"
     }
-  }
+  ]
 }
 ```
 
-After editing config, fully restart the AI tool so it reloads MCP servers.
+Now, instruct your agent to execute a **Design-then-Verify** loop:
+1.  **Initialize Planning Workspace:** The agent calls `create_planning_workspace` to establish a virtual design.
+2.  **Declare Intent:** The agent registers its planned class and import additions (`add_planned_symbol`). Graphenium's Datalog engine automatically evaluates these additions.
+3.  **Validate Pre-Flight:** If the agent tries to import a database module directly into a controller, Graphenium returns `PRE_FLIGHT_VIOLATION` and blocks the plan.
+4.  **Audit Scope Creep:** After implementing the code, run `gm check --plan <id> --strict` in CI. If the agent modified files outside the declared plan, the build fails.
 
-## First agent prompt
+---
 
-Use this prompt after MCP is connected:
+## 9. Troubleshooting and Gating Recovery
 
-```text
-Use Graphenium before editing. Call graph_info first to confirm which graph is loaded. Then summarize the relevant architecture, identify source-backed relationships, list ambiguous relationships, and recommend the first files to read before making changes.
-```
-
-Expected behavior:
-
-- The agent confirms the loaded graph.
-- The agent uses graph tools before reading many files.
-- The agent distinguishes `EXTRACTED`, `INFERRED`, and `AMBIGUOUS` relationships.
-- The agent reads source files before finalizing a patch.
-
-## Create a planning workspace
-
-Use this for multi-file changes.
-
-Optional: declare architecture boundaries in `.graphenium/policy.json` so Graphenium can reject invalid plans before coding. See [`docs/CI_AND_GOVERNANCE.md`](CI_AND_GOVERNANCE.md#architecture-policy-pre-flight).
-
-```sh
-gm plan create --name "refactor-auth"
-gm plan add-symbol --plan "refactor-auth" --symbol "new_auth_service" --kind function
-# Pre-flight is checked automatically when using MCP add_planned_symbol.
-# Write the code only after the plan passes.
-gm run . --update --no-semantic --no-viz
-gm check --graph graphenium-out/graph.json --plan refactor-auth --strict
-gm plan get --plan "refactor-auth"
-```
-
-Through MCP, use:
-
-- `create_planning_workspace`
-- `add_planned_symbol` (runs pre-flight automatically when policy rules exist)
-- `validate_plan` (explicit pre-flight check)
-- `get_plan_details`
-- `verification_plan`
-- `blast_radius`
-- `agent_change_gate` (optional `plan_id` for pre-flight + trust gates)
-
-## Live development
-
-Keep the graph fresh during edits with watch mode or MCP hot-reload.
-
-**CLI watch** (rebuilds on file changes):
-
-```sh
-gm watch . --impact
-```
-
-A typical two-terminal flow:
-
-```text
-Terminal 1: gm watch . --impact
-Terminal 2: edit code, run tests, ask the agent to inspect impact
-```
-
-**MCP hot-reload** (when using `gm serve --watch` or `graphenium-mcp`):
-
-1. Edit code.
-2. Rebuild: `gm run . --no-semantic --no-viz` (or `gm run . --update --no-semantic --no-viz` for incremental extraction).
-3. Ask the agent to call `reload_graph`, or let the file watcher pick up the new `graph.json` automatically.
-
-Call `graph_info` first. If it reports **Graph may be stale**, rebuild before trusting structural queries.
-
-## Keep the graph focused
-
-Use `.grapheniumignore` to reduce noise.
-
-```gitignore
-# Dependencies
-node_modules/
-vendor/
-
-# Build artifacts
-target/
-dist/
-build/
-obj/
-
-# Generated code
-*.generated.*
-*.Designer.cs
-*.g.cs
-*.gen.go
-*.pb.go
-```
-
-## Add semantic extraction later
-
-AST-only is the recommended first run. Semantic extraction can add richer inferred relationships.
-
-```sh
-# Anthropic style key
-gm run . --update --api-key sk-ant-...
-
-# OpenAI
-gm run . --update --provider openai --api-key sk-...
-
-# DeepSeek
-gm run . --update --provider deepseek --api-key sk-...
-```
-
-Semantic edges must be treated as inferred unless provenance says otherwise.
-
-## Troubleshooting
-
-| Symptom | Likely cause | Action |
+| Problem | Root Cause | Action |
 |---|---|---|
-| Graph has 0 nodes | Unsupported language, ignored files, or wrong directory | Check path and `.grapheniumignore` |
-| MCP tool cannot connect | AI tool did not reload config | Fully quit and relaunch the tool |
-| Query output is noisy | Vendored or generated files included | Tighten `.grapheniumignore` |
-| Too many ambiguous edges | Name collisions or dynamic code | Use `resolution_report` and inspect manually |
-| Query misses behavior | Relationship is runtime-only or convention-based | Use semantic extraction or verified manual edges |
+| **0 symbols compiled** | Unsupported files, wrong directory, or ignore-rule mismatch. | Run `pwd` to verify the root path. Check Graphenium's language support, and audit `.grapheniumignore`. |
+| **MCP server connection fails** | IDE or CLI tool did not reload config. | Fully quit and relaunch your IDE or terminal workspace to force MCP initialization. |
+| **High ambiguity counts** | Identically named classes across folders. | Use Graphenium's fully qualified labels (`qualified_label`) to target symbols uniquely during searches. |
+| **Index-build is slow** | Third-party packages or build folders are being scanned. | Exclude dependencies (e.g., `target/`, `node_modules/`, `.git/`) inside `.grapheniumignore`. |
 
-## Success criteria
+---
 
-You are ready to use Graphenium when:
+## 10. Success Criteria
 
-- `gm doctor` reports a valid graph
-- `gm query` returns relevant symbols and relationships
-- Your AI tool can call `graph_info`
-- The agent can explain which facts are source-backed
-- The agent can produce a pre-edit plan before changing files
+You have successfully established workspace containment when:
+1.  `gm doctor` reports a clean codebase index with high resolution ratios.
+2.  Your AI coding assistant calls `graph_info` successfully during handshake runs.
+3.  The assistant explicitly separates AST-proven dependencies (`EXTRACTED`) from hypotheses (`INFERRED`).
+4.  Any agent design plan violating your `.graphenium/policy.json` is successfully blocked pre-flight.

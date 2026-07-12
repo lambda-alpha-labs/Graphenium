@@ -1,78 +1,58 @@
-# Graph Report Guide
+# Structural Codebase Audit: GRAPH_REPORT.md
 
-`graphenium-out/GRAPH_REPORT.md` is a generated summary of a repository graph.
+Whenever Graphenium parses and indexes your repository, it automatically compiles a local structural diagnostic report:
+```text
+graphenium-out/GRAPH_REPORT.md
+```
 
-It is useful for humans and agents because it compresses architecture, confidence, hotspots, communities, surprising connections, and knowledge gaps into one reviewable artifact.
+This report acts as a **comprehensive architectural audit and compiler diagnostic summary** of your codebase [1.1.2]. It compresses Graphenium's structural analysis—module boundaries, coupled hotspots, dependency anomalies, and resolution gaps—into a single, reviewable document for human architects and AI assistants.
 
-## Typical report sections
+---
 
-| Section | Purpose |
-|---|---|
-| Corpus warnings | Shows detection or scan issues |
-| Summary | Shows nodes, edges, communities, hyperedges, and confidence distribution |
-| God nodes | Identifies high-degree hubs and likely risk points |
-| Surprising connections | Highlights unexpected or high-risk relationships |
-| Hyperedges | Shows n-ary relationships if present |
-| Communities | Summarizes architectural clusters |
-| Ambiguous edges | Lists relationships requiring inspection |
-| Knowledge gaps | Shows isolated or missing areas |
-| Suggested questions | Gives prompts for architecture review |
+## 1. Typical Report Sections and Diagnostics
 
-## Example summary fields
+The compiled `GRAPH_REPORT.md` consists of nine automated diagnostic sections:
 
-A Graphenium self-analysis report included:
+| Diagnostic Section | Purpose | System Insight |
+|---|---|---|
+| **1. Corpus Warnings** | Flags parser or walk anomalies. | Highlights unindexed, unreadable, or missing files. |
+| **2. Summary Table** | Structural scale metrics. | Lists total compiled symbols, dependencies, and our `EXTRACTED` vs. `INFERRED` trust ratios. |
+| **3. God Nodes** | Highly coupled hotspots. | Highlights structural bottlenecks and risk areas. |
+| **4. Surprising Connections** | Boundary anomalies. | Identifies unexpected dependencies crossing Top-Level directories or folder domains. |
+| **5. Hyperedges** | Multi-symbol groupings. | Shows N-ary relationships (3+ symbols participating in a shared design concept). |
+| **6. Communities** | Cohesive folder domains. | Lists Louvain-partitioned module clusters, members, and internal cohesion scores. |
+| **7. Ambiguous Edges** | Identifier collisions. | Highlights name collisions that require physical disambiguation or manual review. |
+| **8. Knowledge Gaps** | Isolated symbols. | Lists symbols with zero compiled connections (possible dead code or unindexed modules). |
+| **9. Suggested Questions** | Automated review prompts. | Generates structural review questions based on modular coupling and bottleneck analysis. |
 
-| Metric | Value |
-|---|---:|
-| Nodes | 1,061 |
-| Edges | 2,104 |
-| Communities | 22 |
-| Hyperedges | 0 |
-| EXTRACTED edges | 1,166 |
-| INFERRED edges | 938 |
-| AMBIGUOUS edges | 0 |
+---
 
-## How agents should use the report
+## 2. Hand-off Guidelines: How Agents and Humans Use the Report
 
-Agents should use the report to orient, not to replace source reading.
+### How AI Coding Agents Must Use the Report
+Agents must treat the report as a high-level architectural map for **orientation, not implementation truth**. 
+*   **Do:** Use the report to identify high-risk hub symbols before proposing edits.
+*   **Do:** Check for `AMBIGUOUS` symbol collisions to avoid writing incorrect class or method references.
+*   **Do:** Analyze the `Suggested Questions` block to generate safety checklists for their design plans.
+*   **Do Not:** Substitute reading Graphenium's report for direct, file-level source code inspection.
+*   **Do Not:** Assume `INFERRED` semantic connections are compiler-proven dependencies without reading the corresponding implementation files.
 
-Good uses:
+### How Human Architects and Reviewers Use the Report
+*   **Monitor Architectural Erosion:** Review the *Surprising Connections* section during PR reviews to instantly catch if an agent snuck in a dependency that couples unrelated folder domains.
+*   **Assess AI Code Bloat:** Use the *Knowledge Gaps* section to detect if an agent's modifications introduced completely isolated, unused classes or duplicate helper methods (dead code).
+*   **Audit Refactoring Risk:** Check the *God Nodes* table. If an agent-generated PR proposes edits to a highly coupled hotspot, require strict pre-flight planning and extra unit-test coverage.
 
-- Identify architectural hubs.
-- Find communities before editing.
-- Spot surprising cross-boundary links.
-- Notice isolated nodes.
-- Generate questions for review.
-- Decide which files deserve direct inspection.
+---
 
-Bad uses:
+## 3. Regenerating and Disabling the Audit
 
-- Treat a report as implementation truth.
-- Ignore confidence breakdowns.
-- Change hub nodes without blast-radius analysis.
-- Assume inferred relationships are source-backed.
-
-## Reviewer checklist
-
-When reading a graph report, check:
-
-1. Are corpus warnings present?
-2. Is the graph size plausible?
-3. Are confidence tiers healthy?
-4. Are god nodes expected or surprising?
-5. Do communities match the known architecture?
-6. Are there surprising cross-boundary edges?
-7. Are isolated nodes intentional?
-8. Which suggested questions should become review tasks?
-
-## Regenerating the report
-
+Graphenium regenerates the report automatically on every full codebase compilation:
 ```sh
 gm run . --no-semantic --no-viz
 ```
 
-Skip report generation only when you are building graphs for machine-only workflows:
-
+### Disabling Report Writes
+If you are running Graphenium's index compiler in a resource-constrained CI container or background daemon where only raw JSON is required, disable Markdown compilation to save disk operations:
 ```sh
-gm run . --no-report
+gm run . --no-semantic --no-viz --no-report
 ```

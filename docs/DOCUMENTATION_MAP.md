@@ -1,98 +1,74 @@
-# Documentation Map
+# Graphenium Documentation Ecosystem Map
 
-This pack restructures the Graphenium documentation around the strongest product lane: **the local trust and verification layer for AI coding agents**.
+This documentation set is structured entirely around Graphenium's core mission: **providing an external, pre-flight linter and mechanical containment gate for AI coding agents**. 
 
-It preserves the original documentation coverage while improving the message, flow, and user journey.
+The documents have been systematically rewritten to move away from passive "graph visualization" or "GraphRAG" concepts, focusing instead on write-safety, deterministic AST-level boundaries, and Datalog policy solving.
 
-## Coverage summary
+---
 
-| Original documentation area | Covered by |
-|---|---|
-| `README.md` | `README.md`, `docs/POSITIONING.md`, `docs/GETTING_STARTED.md` |
-| `docs/GETTING_STARTED.md` | `docs/GETTING_STARTED.md`, `docs/AI_SETUP.md` |
-| `docs/COMMAND_REFERENCE.md` | `docs/COMMAND_REFERENCE.md` |
-| `docs/MCP_TOOLS.md` | `docs/MCP_TOOLS.md`, `skills/graphenium/SKILL.md` |
-| `docs/AGENT_WORKFLOWS.md` | `docs/AGENT_WORKFLOWS.md`, `docs/TRUST_MODEL.md`, `docs/CI_AND_GOVERNANCE.md` |
-| `docs/ARCHITECTURE.md` | `docs/ARCHITECTURE.md`, `docs/TRUST_MODEL.md` |
-| `docs/COMPARISON.md` | `docs/COMPARISON.md`, `docs/POSITIONING.md` |
-| `docs/BENCHMARKING.md` | `docs/BENCHMARKING.md` |
-| `AI_SETUP.md` | `docs/AI_SETUP.md` |
-| `contrib/harness-adapter/README.md` | `docs/HARNESS_ADAPTER.md`, `contrib/harness-adapter/README.md` |
-| `skills/graphenium/SKILL.md` | `skills/graphenium/SKILL.md` |
-| `CONTRIBUTING.md` | `docs/CONTRIBUTING.md` |
-| `SECURITY.md` | `docs/SECURITY.md` |
-| `CODE_OF_CONDUCT.md` | `docs/CODE_OF_CONDUCT.md` |
-| `CHANGELOG.md` | `docs/CHANGELOG.md` |
-| `LICENSE` | `docs/LICENSE.md` |
-| `worked/README.md` | `worked/README.md`, `docs/WORKED_EXAMPLES.md` |
-| `worked/TEMPLATE.md` | `worked/TEMPLATE.md` |
-| `graphenium-out/GRAPH_REPORT.md` | `docs/GRAPH_REPORT.md` |
+## 1. Documentation Taxonomy and Placement
 
-## Recommended repository placement
-
-This documentation pack is designed to drop into the repository with minimal friction.
+The Graphenium documentation suite is distributed across the following key locations in the repository:
 
 ```text
-README.md
-AI_SETUP.md                       optional copy from docs/AI_SETUP.md
-CHANGELOG.md                      optional copy from docs/CHANGELOG.md
-CONTRIBUTING.md                   optional copy from docs/CONTRIBUTING.md
-SECURITY.md                       optional copy from docs/SECURITY.md
-CODE_OF_CONDUCT.md                optional copy from docs/CODE_OF_CONDUCT.md
+README.md                       # The main technical entry point & quick start
+AI_SETUP.md                     # Assistant setup playbook (compiled into workspace)
+CHANGELOG.md                    # Release history & structural milestones
+CONTRIBUTING.md                 # Contributor guide & compiler module reference
+SECURITY.md                     # Local-first security & sensitive file rules
+
 docs/
-  DOCUMENTATION_MAP.md
-  POSITIONING.md
-  GETTING_STARTED.md
-  AGENT_WORKFLOWS.md
-  COMMAND_REFERENCE.md
-  MCP_TOOLS.md
-  ARCHITECTURE.md
-  TRUST_MODEL.md
-  CI_AND_GOVERNANCE.md
-  BENCHMARKING.md
-  COMPARISON.md
-  AI_SETUP.md
-  HARNESS_ADAPTER.md
-  CONTRIBUTING.md
-  SECURITY.md
-  CHANGELOG.md
-  CODE_OF_CONDUCT.md
-  LICENSE.md
-  WORKED_EXAMPLES.md
-  GRAPH_REPORT.md
-worked/
-  README.md
-  TEMPLATE.md
+  ├── DOCUMENTATION_MAP.md      # This file: Guide to Graphenium's documentation
+  ├── GETTING_STARTED.md        # Initialization, AST indexing, & MCP handshake
+  ├── POSITIONING.md            # Market positioning & competitive differentiation
+  ├── AGENT_WORKFLOWS.md        # Step-by-step pre-flight and verify loops
+  ├── CI_AND_GOVERNANCE.md      # CI/CD gates, git hooks, & policy.json schemas
+  ├── COMMAND_REFERENCE.md      # Complete CLI flags, commands, & outputs
+  ├── MCP_TOOLS.md              # MCP tool schemas & behavioral protocols
+  ├── ARCHITECTURE.md           # Tree-sitter pipelines, C# bounds, & Datalog solving
+  ├── TRUST_MODEL.md            # AST-proven vs. semantic provenance
+  ├── BENCHMARKING.md           # Payload budgets, latency metrics, & TTVP
+  ├── COMPARISON.md             # Graphenium vs. grep, ast-grep, & vector indexes
+  ├── HARNESS_ADAPTER.md        # Programmatic Rust integration reference
+  └── GRAPH_REPORT.md           # Diagnostic guidelines for codebase reports
+
 skills/
-  graphenium/
-    SKILL.md
-contrib/
-  harness-adapter/
-    README.md
+  └── graphenium/
+        └── SKILL.md            # In-context agent rules & response pattern templates
+
+worked/
+  ├── README.md                 # Overview of structural containment case studies
+  ├── TEMPLATE.md               # Standard report template for new codebase studies
+  └── graphenium-self-analysis/  # Base study: Graphenium analyzed by its own engine
 ```
 
-## Message architecture
+---
 
-The original documentation already had many strong technical ideas. This pack makes the message more direct:
+## 2. Refactoring Graphenium's Message Architecture
 
-| Old center of gravity | New center of gravity |
-|---|---|
-| Persistent architecture graph | Trust and verification layer for AI-generated code changes |
-| Codebase memory | Source-backed architecture map |
-| Token reduction | Tokens-to-correct-plan |
-| MCP tool catalog | Agent operating system for safe code modification |
-| Search and traversal | Plan, read, edit, verify, gate |
+Our documentation refactoring enforces a strict paradigm shift in terminology and concepts to bypass "graph fatigue" and connect directly with enterprise developers:
 
-## Primary audience
+| Old Concept (Passive & Saturated) | New Concept (Active & High-Value) |
+| :--- | :--- |
+| **Durable Structural Memory** | **AST-Proven Codebase Index / Pre-Flight Gate** |
+| Helping agents search and navigate the codebase. | **Stopping agents from violating boundaries and creating code bloat [1.2.4].** |
+| Passive visualization diagrams (HTML outputs). | **Automated pre-commit hooks, Datalog proofs, and CI gates [1.1.2, 1.1.6].** |
+| Fictional "knowledge graph RAG" similarity guesses. | **Compiler-backed facts (`EXTRACTED`) vs. exploratory hypotheses (`INFERRED`).** |
+| AI prompts (`AGENTS.md`, `CLAUDE.md`) | **External, mechanical constraints (`policy.json` / `verify_plan`) [1.1.6].** |
 
-Graphenium is useful for individual developers, but the highest-value audience is:
+---
 
-- DevEx and platform teams rolling out coding agents
-- Engineering leads responsible for large, high-change-cost repositories
-- AI coding harness builders
-- Teams that want to review and gate agent-generated changes
-- Regulated or security-conscious teams that need local-first operation
+## 3. Primary Documentation Audiences
 
-## Core claim
+Graphenium's documentation set is written to address three distinct engineering profiles:
 
-**Graphenium lets teams use AI coding agents without surrendering architectural control.**
+1.  **Platform & DevEx Engineers:** Targeted by `docs/CI_AND_GOVERNANCE.md`, `docs/GETTING_STARTED.md`, and `AI_SETUP.md`. They need to know how to install `gm`, construct automated pre-commit gates, and standardize agent containment across development teams.
+2.  **Software Architects & Tech Leads:** Targeted by `docs/POSITIONING.md`, `docs/ARCHITECTURE.md`, `docs/TRUST_MODEL.md`, and `.graphenium/policy.json` schemas. They need to know how Graphenium uses Datalog to mathematically prove boundary safety and how to declare strict module layers [1.1.2].
+3.  **AI Assistant Engines:** Targeted by `skills/graphenium/SKILL.md` and `docs/MCP_TOOLS.md`. These files provide structured rules and handshake protocols that the agent parses to govern its own change planning.
+
+---
+
+## 4. Fundamental Architectural Assertion
+Every document in Graphenium's repository reinforces a single engineering assertion:
+
+> **AI coding agents cannot self-police. Enforcing codebase integrity at generative scale requires an external, mechanical structural compiler.**

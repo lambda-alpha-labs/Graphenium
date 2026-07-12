@@ -1,182 +1,125 @@
 ---
 name: graphenium
-description: Use when navigating a Graphenium architecture graph, querying code structure, tracing dependencies, identifying hubs, understanding communities, checking blast radius, or verifying AI-generated code changes.
+description: Use when analyzing codebase structure, verifying pre-flight policy compliance, tracing transitive dependency closures, or auditing post-edit scope creep.
 ---
 
-# Graphenium Skill
+# Graphenium Agentic Skill
 
-Graphenium is the local trust and verification layer for AI coding agents.
+Graphenium is a local, external architecture gate and pre-flight linter. It compiles your workspace into an AST-proven structural index and exposes boundary constraints over an MCP server interface.
 
-It builds a provenance-aware architecture graph of the current codebase and exposes it through MCP tools or the `gm query` CLI.
+---
 
-## When to use
+## 1. Handshake Rule
 
-Use Graphenium when the user asks about:
+**You must call `graph_info` as your first action during any session.**
 
-- what calls a symbol
-- what depends on a symbol
-- how two modules connect
-- which files to read before editing
-- architecture overview
-- community or hub nodes
-- graph stats
-- blast radius
-- verification plan
-- agent change gates
-- ambiguous relationships
-- structural questions about a codebase
+Verify the following index properties before planning edits:
+1.  **Project Root:** Confirm you are operating in the correct repository root.
+2.  **Schema Version:** Must be `0.2.0`.
+3.  **Source Languages:** Confirm Graphenium has compiled symbol configurations for your target languages.
+4.  **Freshness Status:** If Graphenium warns that the **"Graph may be stale"**, physical source files have been modified since the last index compilation. You must run `gm run . --no-semantic --no-viz` locally, then invoke `reload_graph` to hot-swap the server state before proceeding.
 
-## First action
+---
 
-Call `graph_info` first when MCP tools are available.
+## 2. MCP Boundary and Verification Tools
 
-Confirm:
-
-- project root
-- schema version
-- build timestamp
-- extraction mode
-- languages
-- node and edge counts
-
-If no graph is available, suggest:
-
-```sh
-gm run . --no-semantic --no-viz
-```
-
-If `graph_info` reports the graph may be stale (source or binary newer than graph.json), rebuild before trusting structural queries:
-
-```sh
-gm run . --no-semantic --no-viz
-```
-
-Then call `reload_graph` (no path needed) to hot-swap without restarting MCP.
-
-The MCP launcher only auto-builds when `graph.json` is missing. Stale graphs are served with a warning so large-repo session starts stay fast. Set `GRAPHENIUM_AUTO_REBUILD=1` to opt back into rebuild-on-stale at startup.
-
-## MCP tool selection
-
-| User asks | Use |
-|---|---|
-| What does this repo look like? | `graph_info` plus `architecture_summary` |
-| What calls X? | `get_neighbors` with relation filter |
-| What does X connect to? | `get_neighbors` |
-| Tell me about X | `analyse_symbol` or `get_node` |
-| What community is X in? | `get_node`, then `get_community` |
-| What are the hubs? | `god_nodes` |
-| How are A and B connected? | `shortest_path` plus `safest_path` |
-| What is in this file? | `summarize_file` |
-| Find code related to Y | `query_graph` |
-| What is the downstream impact? | `blast_radius` or `query_transitive` |
-| Is the graph trustworthy? | `resolution_report` |
-| What should I verify after editing? | `verification_plan` |
-| Should this change pass policy? | `agent_change_gate` |
-| Should this plan pass architecture policy before coding? | `validate_plan` |
-| What changed since a snapshot? | `what_changed` or `diff_graph` |
-| Need a custom constraint query | `run_datalog` |
-
-## Datalog Queries (Advanced Pathfinding)
-
-Graphenium features a pre-loaded Datalog Standard Library. **Do not write recursive rules manually**; instead, use the pre-loaded predicates:
-
-- **Check if a component bypasses the service layer:**
-  `?- bypasses_layer('auth_controller', 'auth_service', 'auth_repository').`
-- **Find circular dependencies in a module:**
-  `?- circular_dependency(X, Y), node(X, _, _, 'src/parser/mod.rs', _).`
-- **Find all transitively called dependencies of a target:**
-  `?- calls_transitive('auth_service', X).`
-
-Available stdlib predicates: `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`.
-
-Base EDB relations (always available): `node`, `calls`, `imports`, `contains`, `inherits`, `implements`, `degree`, `edge`.
-
-## Trust model
-
-Every edge carries confidence.
-
-| Confidence | Meaning | Behavior |
+| Engineering Goal | Target MCP Tool | Behavioral Expectation |
 |---|---|---|
-| `EXTRACTED` | Source-backed or manually verified through source inspection | Safe planning backbone |
-| `INFERRED` | Strong lead but not ground truth | Verify before acting |
-| `AMBIGUOUS` | Uncertain or multiple targets | Inspect source before acting |
+| **Handshake & Freshness** | `graph_info` | Verify index integrity and check for stale warning flags. |
+| **Codebase Orientation** | `architecture_summary` | Review top-level folder domains and cohesive module boundaries. |
+| **Verify Design Pre-Flight** | `validate_plan` | Mathematically prove design safety against `.graphenium/policy.json`. |
+| **Trace Transitive Paths** | `run_datalog` | Evaluate multi-hop dependency chains using compiled stdlib rules [1.1.2]. |
+| **Single Symbol Audit** | `analyse_symbol` | Retrieve AST-proven callers, dependencies, and identifier collisions. |
+| **Check Direct Callers** | `get_neighbors` | View incoming callers and outgoing targets (set `extracted_only = true`). |
+| **Identify Hotspots** | `god_nodes` | Identify highly coupled bottlenecks to target for refactoring risk. |
+| **Disambiguate Collisions** | `get_node` | Disambiguate identically named classes or methods. |
+| **Audit Post-Edit Compliance** | `agent_change_gate` | Run PR gates (optional `plan_id` executes pre-flight + resolution audits). |
+| **PR Verification Plan** | `verification_plan` | Generate a risk-sorted test and review checklist for changed files. |
+| **Index Hot-Swap** | `reload_graph` | Sync the server immediately after running a physical re-indexing pass. |
 
-Always disclose trust quality when it affects the answer.
+---
 
-## Agent behavior rules
+## 3. Datalog Queries (Transitive Path Proving)
 
-Do:
+Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`) [1.1.2]. **Never write manual recursive rules** to trace dependencies; instead, invoke Graphenium's pre-loaded standard library predicates via `run_datalog`:
 
-- query the graph before editing unfamiliar or high-impact code
-- prefer source-backed paths
-- identify ambiguous relationships
-- read implementation files before editing
-- compute blast radius after changes
-- produce a verification plan before review
+*   **Audit Layer Bypassing:**
+    `?- bypasses_layer('auth_controller', 'auth_service', 'db_helper').`
+*   **Identify Circular Import Cycles:**
+    `?- circular_dependency(X, Y).`
+*   **Trace Multi-Hop Call Closures:**
+    `?- calls_transitive('api_router', X).`
+*   **Trace Generic Transitive Dependencies:**
+    `?- depends_transitive('auth_helper', X).`
 
-Do not:
+### Available EDB Relations:
+*   `node(Id, Label, Type, File, Community)`
+*   `calls(Source, Target, Confidence)`
+*   `imports(Source, Target, Confidence)`
+*   `inherits(Source, Target, Confidence)`
+*   `implements(Source, Target, Confidence)`
+*   `degree(NodeId, Count)`
+*   `hub(NodeId)`
 
-- treat graph output as a substitute for source reading
-- hide ambiguous relationships
-- claim compiler-perfect precision unless the extractor supports it
-- write guessed relationships into the graph
-- act on inferred edges without verification for high-risk changes
+---
 
-## Write-back rules
+## 4. Trust-Aware Design Policies
 
-Only use write tools after inspection.
+You must explicitly separate AST-proven facts from semantic guesswork when planning edits:
 
-| Situation | Tool | Confidence |
-|---|---|---|
-| Confirmed relationship in source | `add_edge` | `EXTRACTED` |
-| Confirmed architectural concept | `add_node` | appropriate provenance |
-| Found false positive | `remove_edge` | not applicable |
-| Made meaningful manual edits | `recluster` | not applicable |
+*   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, class boundaries, method calls). Use as the **planning backbone** [1.1.7].
+*   `INFERRED` **(Heuristics):** Semantic similarity or naming guesses. Treat as a **hypothesis**—you are strictly blocked from editing these targets until you read their source files directly.
+*   `AMBIGUOUS` **(Collisions):** Symbol name collisions. **Risk gated**—stop and run `get_node` to resolve the collision before proceeding.
 
-Do not add an edge based on naming, file proximity, or assumption alone.
+---
 
-## CLI fallback
+## 5. Standard Operating Workflows
 
-When MCP tools are unavailable, use:
+### The "Design-then-Verify" Workspace Loop
+For all multi-file refactoring tasks, you must execute Graphenium's structural contract:
+1.  **Initialize Planning Workspace:** Call `create_planning_workspace` to establish a virtual design.
+2.  **Declare Design Intent:** Call `add_planned_symbol` for every class, method, or dependency you intend to write. This automatically evaluates your design against `.graphenium/policy.json`.
+3.  **Pre-Flight Solve:** Call `validate_plan` to mathematically verify design compliance before writing code.
+4.  **Write Code:** Implement edits inside your local editor.
+5.  **Audit Scope Creep:** Re-compile the index and run `agent_change_gate` (passing your `plan_id`). If Graphenium detects unplanned file modifications or unapproved dependencies, abort your PR and resolve the scope creep.
+
+### Write-Back Protocol (Manual Overrides)
+Only inject manual index overrides after direct, human-verified file-level code reviews:
+*   Use `add_node` to define verified architectural concepts or external system boundaries.
+*   Use `add_edge` with `EXTRACTED` confidence only when a dependency is proven by source code.
+*   Run `recluster` after manual edits to update folder domain boundaries.
+
+---
+
+## 6. CLI Fallback Syntax (Local Terminal)
+
+When background MCP tools are unavailable, run local CLI commands directly:
 
 ```sh
-gm query "<question>" --budget 2000
+# Execute combined structural search
+gm query "auth service" --mode hybrid --budget 2000
+
+# Trace AST-proven dependencies only
+gm query "validate_token" --safe --budget 1500
+
+# Execute Datalog rules
+gm query "hubs" --datalog "?- is_hub(X)."
 ```
 
-Useful flags:
+---
 
-| Flag | Purpose |
-|---|---|
-| `--mode hybrid` | Combine lexical and structural ranking |
-| `--safe` | Prefer confidence-aware traversal |
-| `--depth N` | Control traversal depth |
-| `--path-prefix P` | Scope to a module or directory |
-| `--exclude-path P` | Remove noisy paths |
-| `--include-tests` | Include test nodes |
-| `--graph path` | Use a non-default graph file |
-| `--datalog` | Run declarative graph queries |
+## 7. Standard Handshake Response Pattern
 
-Examples:
-
-```sh
-gm query "authentication flow" --mode hybrid --budget 3000
-gm query "process_batch" --path-prefix parser --safe --budget 3000
-gm query --datalog "?- calls(X, Y, _)."
-```
-
-## Standard response pattern
-
-When using Graphenium for a change, respond with:
+After analyzing Graphenium's pre-flight and diagnostic gates, format your planning response exactly as follows:
 
 ```text
-Graph loaded:
-Target resolved:
-Trust profile:
-Source-backed path:
-Inferred leads:
-Ambiguous relationships:
-First files to read:
-Blast radius:
-Verification plan:
-Recommended next step:
+Structural Index Loaded: [loaded index path]
+Handshake Status: [fresh / stale - compile needed]
+Target Symbol Resolved: [canonical symbol ID]
+AST-Proven Boundaries (Extracted): [count of compiler facts]
+Semantic Hypotheses (Inferred): [count of semantic guesses]
+Identifier Collisions (Ambiguous): [list of collisions needing manual check]
+Pre-Flight Policy Status: [PASS / FAILED - list violations]
+Must-Read Implementation Files: [list of source files to read before editing]
+Post-Edit Verification Plan: [list of covering tests to run after editing]
 ```

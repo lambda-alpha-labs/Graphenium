@@ -1,288 +1,235 @@
-# Command Reference
+# CLI Command Reference
 
-The `gm` binary is both a CLI and an MCP server. The CLI is useful for local setup, graph builds, diagnostics, CI gates, snapshots, and direct graph queries.
+The Graphenium command-line interface (`gm`) serves as both an interactive analysis tool and an automated gatekeeper. It compiles codebases into AST-proven structural indexes, runs Datalog policy solvers, and executes pre-flight containment checks.
 
-## Command map
+---
 
-| Command | Purpose |
+## Command Map
+
+| Command | Primary Purpose |
 |---|---|
-| `gm init` | Initialize a Graphenium workspace |
-| `gm run` | Build or update the graph |
-| `gm query` | Query the graph by keyword, traversal, or Datalog |
-| `gm serve` | Start the MCP server |
-| `gm watch` | Rebuild on file changes |
-| `gm doctor` | Diagnose environment and graph health |
-| `gm check` | Run trust quality gates |
-| `gm diff` | Compare graph snapshots |
-| `gm explain` | Explain a symbol before editing |
-| `gm setup` | Generate MCP setup snippets |
-| `gm graph` | Inspect or migrate graph metadata |
-| `gm snapshot` | Manage snapshots |
-| `gm gate` | Run gate workflows over diffs |
+| [`gm init`](#gm-init) | Initialize a workspace and configure `.grapheniumignore`. |
+| [`gm run`](#gm-run) | Compile the codebase's AST symbols, cross-file imports, and namespaces. |
+| [`gm query`](#gm-query) | Execute structural searches, path traces, or declarative Datalog constraints. |
+| [`gm check`](#gm-check) | Enforce pre-flight architectural policies and post-facto scope audits. |
+| [`gm serve`](#gm-serve) | Initialize the background MCP server on stdio. |
+| [`gm watch`](#gm-watch) | Re-compile the index in real-time as physical file modifications occur. |
+| [`gm doctor`](#gm-doctor) | Diagnose index integrity, schema compliance, and resolution health. |
+| [`gm diff`](#gm-diff) | Compare structural snapshots to identify additions, removals, and drift. |
+| [`gm explain`](#gm-explain) | Generate a pre-edit structural orientation summary for a target symbol. |
+| [`gm setup`](#gm-setup) | Generate workspace MCP configurations for IDEs and assistants. |
+| [`gm graph`](#gm-graph) | Subcommands to inspect compiled metadata, build targets, and test mappings. |
+| [`gm snapshot`](#gm-snapshot) | Create and list indexed codebase snapshots. |
+| [`gm gate`](#gm-gate) | Execute automated containment gates over index differences. |
+
+---
 
 ## `gm init`
-
-Initialize a workspace and create `.grapheniumignore`.
+Initializes Graphenium's configuration inside the target directory and generates a default `.grapheniumignore` file to filter out build artifacts and external vendor code.
 
 ```sh
 gm init [path]
 ```
 
-| Argument | Type | Default | Description |
-|---|---|---|---|
-| `path` | path | current directory | Project root |
+### Arguments:
+*   `path` (string, optional, default: `.`) — The path to the repository root directory.
 
-Use this before the first graph build.
+---
 
 ## `gm run`
-
-Run the analysis pipeline: detect files, parse ASTs, resolve imports and symbols, cluster communities, analyze topology, and export artifacts.
-
-```sh
-gm run <path> [flags]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `path` | path | required | Project root directory |
-| `--mode` | string | `ast` | Extraction mode, such as `ast` or `semantic` |
-| `--no-semantic` | bool | false | Skip semantic LLM pass |
-| `--no-viz` | bool | false | Skip HTML visualization |
-| `--no-report` | bool | false | Skip report generation |
-| `--exclude-dirs` | string | none | Comma-separated directory patterns to skip |
-| `--plan` | bool | false | Dry run: scan and report file stats only |
-| `--update` | bool | false | Incremental update |
-| `--provider` | string | provider default | Semantic provider, when semantic extraction is enabled |
-| `--api-key` | string | none | Provider API key for semantic extraction |
-
-Common use:
+Parses codebase source files, extracts declarations (classes, structs, functions, methods, interfaces, types), resolves cross-file import paths and calls, partitions cohesive domains (communities), and writes the structural index.
 
 ```sh
-gm run . --no-semantic --no-viz
+gm run [path] [flags]
 ```
+
+### Arguments:
+*   `path` (string, optional, default: `.`) — The repository directory to analyze.
+
+### Flags:
+*   `--mode <mode>` (string, default: `standard`) — Extraction depth: `standard` for fast AST + Stack Graphs or `deep` for aggressive inference.
+*   `--no-semantic` (bool) — Explicitly skips remote LLM passes, guaranteeing 100% offline, local execution.
+*   `--no-viz` (bool) — Disables the generation of the local `graph.html` visualization file.
+*   `--no-report` (bool) — Disables compilation of the local `GRAPH_REPORT.md` summary.
+*   `--exclude-dirs <dirs>` (string) — Comma-separated folder patterns to skip during analysis.
+*   `--plan` (bool) — Executes a dry-run analysis, reporting scanned file boundaries without writing the index.
+*   `--update` (bool) — Activates incremental patching, compiling only changed or affected source files.
+*   `--provider <provider>` (string, default: `anthropic`) — AI provider: `anthropic`, `openai`, `openrouter`, `deepseek`, or `openai-compatible`.
+*   `--api-key <key>` (string) — API key (overrides the provider-specific env var).
+*   `--api-base <url>` (string) — API base URL for `openai-compatible` provider.
+*   `--model <model>` (string) — Model to use (defaults to provider-specific default).
+
+---
 
 ## `gm query`
-
-Query the graph with keywords or Datalog.
-
-```sh
-gm query "<keywords>" [flags]
-gm query --datalog "<program>"
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `keywords` | string | required for keyword mode | Search query |
-| `--mode` | string | `lexical` | `lexical`, `structural`, or `hybrid` |
-| `--datalog` | string | none | Run a Datalog query |
-| `--budget` | integer | 2000 | Output token budget |
-| `--depth` | integer | 3 | Traversal depth, usually 1 to 6 |
-| `--dfs` | bool | false | Use DFS instead of BFS |
-| `--safe` | bool | false | Prefer confidence-aware traversal |
-| `--graph` | path | default output graph | Path to `graph.json` |
-| `--json` | bool | false | Output JSON array |
-| `--path-prefix` | string | none | Include only matching paths |
-| `--exclude-path` | string | none | Exclude matching paths |
-| `--generated-code` | string | default behavior | `include`, `exclude`, or `only` |
-| `--ast-only-tuning` | bool | auto | Tune output for AST-only graphs |
-| `--include-tests` | bool | false | Include test nodes |
-
-Datalog queries automatically merge the standard library (v0.19.0+). Pre-loaded predicates include `calls_transitive/2`, `imports_transitive/2`, `depends_transitive/2`, `same_community/2`, `is_hub/1`, `is_orphan/1`, `circular_dependency/2`, and `bypasses_layer/3`. Base EDB relations: `calls/3`, `imports/3`, `contains/3`, `inherits/3`, `implements/3`, `degree/2`, `hub/1`.
-
-Examples:
+Executes structural queries against Graphenium's local index. Supports lexical searches, topological path searches, and first-order Datalog queries.
 
 ```sh
-gm query "authentication flow" --mode hybrid --budget 3000
-gm query "Parser.parse_file" --safe --depth 2 --budget 1500
-gm query "hubs" --datalog "?- is_hub(X)."
-gm query "reach" --datalog "?- calls_transitive('main', X)."
+gm query "<query>" [flags]
 ```
 
-## `gm serve`
+### Arguments:
+*   `query` (string, required) — The keyword query or declarative Datalog program.
 
-Start the MCP server.
+### Flags:
+*   `--mode <mode>` (string, default: `lexical`) — Search strategy:
+    *   `lexical`: Relevance matching against symbol names, qualified paths, and source files.
+    *   `structural`: Topological distance sorting radiating outward from matched seed nodes.
+    *   `hybrid`: Combined score weighting lexical relevance (60%) and structural distance (40%).
+*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight [1.1.2].
+*   `--budget <tokens>` (integer, default: `2000`) — Limits Graphenium's printed output to remain within the specified context-token limit.
+*   `--dfs` (bool) — Uses Depth-First Search for structural tracing (default: BFS).
+*   `--safe` (bool) — Restricts query-tracing strictly to AST-proven (`EXTRACTED`) dependencies.
+*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Overrides the source index file location.
+*   `--json` (bool) — Outputs query results as a raw JSON array instead of a formatted Markdown report.
+*   `--path-prefix <path>` (string) — Restricts results to symbols located inside the specified directory path.
+*   `--exclude-path <path>` (string) — Filters out results located inside the specified directory path.
+*   `--generated-code-mode <mode>` (string, default: `include`) — How to handle files classified as generated: `include`, `exclude`, or `only`.
+*   `--ast-only-tuning <mode>` (string, default: `auto`) — AST-only tuning: `auto`, `on`, or `off`.
 
-```sh
-gm serve [--graph <path>] [--watch]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--graph` | path | default output graph | Path to `graph.json` |
-| `--watch` | bool | false | Auto-reload graph when it changes |
-
-Use this for Claude Desktop, Cursor, CodeWhale, Claude Code, or custom MCP clients.
-
-## `gm watch`
-
-Watch files and re-extract on changes.
-
-```sh
-gm watch <path> [flags]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `path` | path | required | Directory to watch |
-| `--graph` | path | output graph | Graph output path |
-| `--debounce` | float | 3.0 | Debounce in seconds |
-| `--incremental` | bool | true | Use incremental extraction |
-| `--impact` | bool | false | Show blast radius on changes |
-
-## `gm doctor`
-
-Run diagnostics for environment, graph metadata, schema, and quality.
-
-```sh
-gm doctor [flags]
-```
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--graph` | path | default output graph | Path to `graph.json` |
-| `--json` | bool | false | Structured JSON output |
-| `--schema` | bool | false | Show graph schema version |
-| `--resolution` | bool | false | Show resolution quality |
-| `--repository` | bool | false | Show repository metadata |
+---
 
 ## `gm check`
-
-Run trust quality gates for CI.
+Enforces global resolution thresholds and validates planning workspaces. This is Graphenium's primary CI/CD and pre-commit containment hook.
 
 ```sh
 gm check [flags]
 ```
 
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--graph` | path | default output graph | Path to `graph.json` |
-| `--min-resolution` | float | 80.0 | Minimum import or call resolution percentage |
-| `--max-ambiguous` | integer | 10 | Maximum allowed ambiguous edges |
-| `--strict` | bool | false | Fail on warnings |
-| `--plan` | string | none | Validate a planning workspace (pre-flight policy + post-facto compliance) |
+### Flags:
+*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Path to the codebase index file.
+*   `--min-resolution <pct>` (float, default: `80.0`) — Fails the check if Graphenium's AST import resolution ratio drops below the target percentage.
+*   `--max-ambiguous <count>` (integer, default: `10`) — Fails the check if Graphenium detects more than `<count>` unresolved name collisions.
+*   `--strict` (bool) — Fails the check on any index, parser, or configuration warnings.
+*   `--plan <id>` (string) — Executes a double-gate verification for a planning workspace: runs pre-flight policy validation, followed by a post-facto scope-creep audit.
 
-When `--plan` is set, `gm check` runs two gates in sequence:
+---
 
-1. **Pre-flight** — evaluates the virtual plan against rules in `.graphenium/policy.json`
-2. **Compliance** — compares planned symbols to the extracted physical graph (`verify_plan`)
-
-Use `--strict` to exit non-zero if either gate fails.
-
-Example:
+## `gm serve`
+Starts Graphenium's Model Context Protocol (MCP) server, allowing AI coding assistants to invoke codebase tools natively via JSON-RPC.
 
 ```sh
-gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 10
-gm check --graph graphenium-out/graph.json --plan refactor-auth --strict
+gm serve [flags]
 ```
 
-## `gm diff`
+### Flags:
+*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Path to Graphenium's compiled codebase index.
+*   `--watch` (bool) — Monitors the compiled index file and hot-reloads the server's state in-memory as modifications occur.
 
-Compare graph snapshots.
+---
+
+## `gm watch`
+Watches filesystem sources in real-time, executing incremental AST patching and boundary re-compilation as code edits occur.
+
+```sh
+gm watch <path> [flags]
+```
+
+### Arguments:
+*   `path` (string, required) — The directory path to monitor.
+
+### Flags:
+*   `--debounce <secs>` (float, default: `3.0`) — Wait time in seconds after the last file modification before compiling changes.
+*   `--incremental` (bool, default: `true`) — Restricts re-extraction to modified files and their direct importers, skipping full repository re-scans.
+*   `--impact` (bool) — Prints the structural blast radius (affected callers, dependent domains) immediately after compiling an update.
+
+---
+
+## `gm doctor`
+Diagnoses the health of Graphenium's environment, compilation boundaries, index schema compliance, and resolution ratios.
+
+```sh
+gm doctor [flags]
+```
+
+### Flags:
+*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Path of Graphenium's compiled codebase index.
+*   `--schema` (bool) — Displays graph.json schema version and compiler versions.
+*   `--resolution` (bool) — Outputs a detailed resolution report (imports, calls, methods, and evidence freshness status).
+*   `--repository` (bool) — Show repository info from graph metadata.
+
+---
+
+## `gm diff`
+Compares two index files to audit structural modifications (additions, removals, and domain drifts).
 
 ```sh
 gm diff --before <path> --after <path> [flags]
 ```
 
-| Flag | Type | Description |
-|---|---|---|
-| `--before` | path | Before graph snapshot |
-| `--after` | path | After graph snapshot |
-| `--impact` | bool | Show downstream impact |
-| `--review-plan` | bool | Generate verification plan |
-| `--json` | bool | Output JSON |
+### Flags:
+*   `--before <path>` (string, required) — Baseline index snapshot.
+*   `--after <path>` (string, required) — Post-change index snapshot.
+*   `--impact` (bool) — Evaluates the downstream transitive impact of all added and removed symbols.
+*   `--review-plan` (bool) — Generates a risk-sorted review plan for PR reviews.
+
+---
 
 ## `gm explain`
-
-Generate pre-edit architectural orientation for a symbol.
+Provides a structural orientation summary for a target symbol. Explains where the symbol lives, what is compiler-proven to call it, and what dependencies it imports.
 
 ```sh
-gm explain <symbol> [--graph <path>]
+gm explain <symbol> [flags]
 ```
 
-Use this when an agent needs context for a target symbol before making changes.
+### Arguments:
+*   `symbol` (string, required) — The class, method, or function name to explain.
+
+### Flags:
+*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Path of Graphenium's codebase index.
+
+---
 
 ## `gm setup`
-
-Generate MCP configuration for common tools.
+Generates MCP server configuration snippets for target developer tools.
 
 ```sh
-gm setup <target> [--gm-path <path>] [--graph <path>]
+gm setup <target> [flags]
 ```
 
-| Target | Description |
-|---|---|
-| `claude-desktop` | Claude Desktop config |
-| `claude-code` | Claude Code CLI setup |
-| `cursor` | Cursor MCP config |
-| `codewhale` | CodeWhale MCP config |
+### Arguments:
+*   `target` (string, required) — The environment to configure: `claude`, `cursor`, `codewhale`.
+
+### Flags:
+*   `--gm-path <path>` (string) — Explicitly overrides the absolute path to Graphenium's compiled CLI binary.
+*   `--graph <path>` (string) — Explicitly overrides the target index file path.
+
+---
 
 ## `gm graph`
-
-Graph metadata subcommands.
+Subcommand suite to inspect index metadata, compilation mappings, and build targets.
 
 ```sh
-gm graph <subcommand> [args]
+gm graph <subcommand>
 ```
 
-| Subcommand | Description |
-|---|---|
-| `migrate` | Migrate graph schema version |
-| `schema` | Show graph schema version |
-| `build-map` | Show build dependency map |
-| `test-map` | Show test-to-source map |
+### Subcommands:
+*   `schema` — Displays the index schema version.
+*   `migrate` — Migrates older index schemas to the current version.
+*   `build-map` — Prints the extracted build-to-source mapping.
+*   `test-map` — Prints the extracted test-to-source validation mapping.
+
+---
 
 ## `gm snapshot`
-
-Manage graph snapshots.
+Manages index snapshots, facilitating change gating and manual structural reviews.
 
 ```sh
-gm snapshot <subcommand> [args]
+gm snapshot <subcommand>
 ```
 
-| Subcommand | Description |
-|---|---|
-| `create <name>` | Create a named snapshot |
-| `list` | List snapshots and sizes |
+### Subcommands:
+*   `create <name>` — Generates a named snapshot of Graphenium's current index under `graphenium-snapshots/`.
+*   `list` — Lists all available snapshots, timestamps, and compiled sizes.
+
+---
 
 ## `gm gate`
-
-Run quality gate workflows over graph diffs.
+Executes automated PR containment gates over index differences.
 
 ```sh
 gm gate --diff <before> <after>
 ```
 
-Use this in CI when agent-generated changes require graph-aware review.
-
-## Common workflows
-
-### Build and query
-
-```sh
-gm init
-gm run . --no-semantic --no-viz
-gm doctor --graph graphenium-out/graph.json
-gm query "authentication flow" --mode hybrid --budget 3000
-```
-
-### CI gate
-
-```sh
-gm run . --no-semantic --no-viz
-gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 10
-```
-
-### Incremental development
-
-```sh
-gm watch src/ --impact --graph graphenium-out/graph.json
-```
-
-### Snapshot and review
-
-```sh
-gm snapshot create before-change
-# make changes
-gm run . --update --no-semantic --no-viz
-gm diff --before graphenium-snapshots/before-change.json --after graphenium-out/graph.json --impact --review-plan
-```
+### Flags:
+*   `--diff <before> <after>` (strings, required) — The baseline and post-change index files to gate.

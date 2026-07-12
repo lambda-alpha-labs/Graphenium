@@ -1,160 +1,93 @@
-# Trust Model
+# Epistemic Trust and Provenance in AI-Assisted Engineering
 
-Graphenium is built around a simple idea: AI coding agents must know the difference between facts, leads, and uncertainty.
+Graphenium is built on a fundamental principle of engineering safety: **AI coding agents must operate under a strict, mathematically verifiable distinction between compiler-proven facts, heuristic hypotheses, and identifier collisions.**
 
-## Trust levels
+Relying on "vibe-coding" or probabilistic vector search leads to structural decay because AI agents treat assumed dependencies as ground truth. Graphenium enforces **epistemic trust boundaries**, mapping your codebase's dependencies with strict, source-backed provenance.
 
-| Confidence | Meaning | Agent behavior |
+---
+
+## 1. The Provenance Confidence Tiers
+
+Every symbol declaration and dependency edge in Graphenium's structural index carries an explicit confidence classification:
+
+| Confidence | Technical Meaning | Agent Design Policy |
 |---|---|---|
-| `EXTRACTED` | Source-backed or manually verified through source inspection | Safe to plan against, then read source before editing |
-| `INFERRED` | Likely relationship from semantic extraction or heuristic evidence | Treat as a lead and verify |
-| `AMBIGUOUS` | Multiple possible targets or uncertain relationship | Do not act until inspected |
+| `EXTRACTED` **(Facts)** | AST-proven and compiler-backed. Discovered directly in code by Tree-sitter, Stack Graphs, or Visual Studio solution parsers. | **Planning Backbone:** Safe to plan and build against. (Agent must still read the targeted source files before writing edits). |
+| `INFERRED` **(Hypotheses)** | Generatively or heuristically inferred. Discovered via Graphenium's optional semantic pass, naming convention heuristics, or cross-file fuzzy resolution. | **Exploratory Leads:** Treat as a hypothesis. The agent is strictly blocked from editing until it inspects at least one source file to prove the dependency. |
+| `AMBIGUOUS` **(Collisions)** | Identifier or namespace collision (e.g., matching a symbol that exists in multiple directories). | **Risk Gated:** Rejects automated edits. The agent is forced to halt, flag the collision, and request human review or execute targeted file-level disambiguation. |
 
-## Resolution status
+---
 
-| Status | Meaning | Agent behavior |
+## 2. Symbol Resolution States
+
+Graphenium's resolver (`src/resolver.rs`) audits every import, call, and inheritance boundary in the index, assigning a resolution state:
+
+*   **`resolved`:** The target symbol exists as a physical node in the AST index. This is the highest-trust state.
+*   **`unresolved`:** The target symbol was referenced but not found in Graphenium's static scan. This indicates a dependency on an external system, standard library, or unindexed vendor package.
+*   **`heuristic`:** The connection was linked via heuristic matching rather than explicit AST resolution. It requires source validation before modification.
+
+---
+
+## 3. Structural Extractor Provenance
+
+The `extractor` metadata field discloses exactly which module compiled the relationship into Graphenium's index. This provides complete auditability for human reviewers:
+
+| Extractor | Source Mechanism | Default Trust Profile |
 |---|---|---|
-| `resolved` | Target exists in the graph | More trustworthy |
-| `unresolved` | Target was not found | Investigate missing files, dynamic code, generated code, or unsupported patterns |
-| `heuristic` | Linked by heuristic rather than direct resolution | Verify before acting |
+| `tree-sitter` | Local syntax parsing | High trust (`EXTRACTED`). Compiler-proven. |
+| `resolver` | Local import matching | High trust (`EXTRACTED`). Compiler-proven. |
+| `tree-sitter-stack-graphs` | Local cross-file call resolution | High trust (`EXTRACTED` / `INFERRED` unique bindings). |
+| `csproj-parser` | Visual Studio project boundaries | High trust (`EXTRACTED`). Solution-proven. |
+| `llm` | Remote semantic inference | Medium trust (`INFERRED`). Heuristic guess. |
+| `manual-mcp-write` | Programmatic agent injection | Auditable. Only accepted if the agent provides explicit proof of source inspection. |
 
-## Extractor provenance
+---
 
-The `extractor` field explains where an edge came from.
+## 4. Enforcing a Strict Trust-Aware Design Contract
 
-| Extractor | Typical trust profile |
-|---|---|
-| `tree-sitter` | Source-backed syntax extraction |
-| `resolver` | Source-backed cross-file resolution when resolved |
-| `tree-sitter-stack-graphs` | Resolver-derived cross-file relationship |
-| `csproj-parser` | C# build boundary extraction |
-| `llm` | Semantic inference, verify before high-risk edits |
-| manual write tools | Trust depends on whether the agent actually inspected source |
-
-## Practical trust policy
+Graphenium translates these trust tiers into a strict, programmatic contract for agent execution:
 
 ```text
-Use EXTRACTED + resolved edges as the planning backbone.
-Use INFERRED edges as hypotheses.
-Use AMBIGUOUS edges as review questions.
-Use unresolved edges as graph quality gaps.
+1. Compile virtual planning workspace (Virtual AST).
+2. If any planned connection depends on an AMBIGUOUS path:
+   └── Fail pre-flight. Force agent to disambiguate.
+3. If any planned connection depends on an INFERRED path:
+   └── Require agent to read target implementation files first.
+4. If plan relies exclusively on resolved, EXTRACTED boundaries:
+   └── Approve pre-flight and authorize file edits.
 ```
 
-## What agents should say
+---
 
-Good agent output:
+## 5. Trust Quality Policies vs. Structural Architecture Policies
 
-```text
-The direct call path is source-backed through EXTRACTED edges. One downstream consumer is INFERRED, so I will inspect that file before editing. There are two AMBIGUOUS edges involving validate_token, so I will not assume which target is used until I read the source.
-```
+Graphenium distinguishes between two independent policy layers in your governance stack:
 
-Bad agent output:
-
-```text
-Graphenium says validate_token is used by AccountController, so I will update it now.
-```
-
-Why bad: it hides confidence, avoids source inspection, and treats the graph as compiler truth.
-
-## Trust-first planning template
-
-```text
-Target:
-Resolved node:
-Source files:
-Trust profile:
-  EXTRACTED:
-  INFERRED:
-  AMBIGUOUS:
-Unresolved references:
-Safest path:
-Highest-risk consumers:
-First files to read:
-Assumptions to verify:
-Change plan:
-Post-edit verification:
-```
-
-## When to block an agent
-
-Block or slow down the agent when:
-
-- the target symbol is ambiguous
-- the safest path contains only inferred evidence
-- downstream impact includes high-degree public nodes
-- many new ambiguous edges appear after the change
-- graph health is too weak for the intended change
-- the agent has not read the recommended source files
-- the change modifies files outside the declared planning workspace
-
-## Architecture policy vs trust policy
-
-Graphenium distinguishes two policy layers:
-
-| Layer | Config | When it runs | What it gates |
+| Policy Layer | Primary Config | Enforcement Target | Metric Evaluated |
 |---|---|---|---|
-| Trust quality | `gm check` thresholds, `agent_change_gate` defaults | After graph build or before review | Resolution %, ambiguous edge counts |
-| Architecture | `.graphenium/policy.json` | Before coding (pre-flight) | Forbidden dependencies, layer hierarchy, banned symbols |
+| **Trust Quality** | `gm check` options | Index-Wide Health | Import resolution ratio, maximum allowed ambiguity, and evidence freshness. |
+| **Architecture** | `.graphenium/policy.json` | Agent Design Spec | Forbidden dependencies, strict layering domains, and banned symbols [1.1.2]. |
 
-Pre-flight architecture validation operates on the virtual planning subgraph (`plan_id` nodes and edges). Trust gates operate on the full extracted graph. Use both: architecture policy prevents invalid designs; trust policy ensures the graph is reliable enough to plan against.
+Use **Trust Quality** policies to ensure Graphenium's index is complete and healthy enough to plan against. Use **Architecture** policies to block agents from committing bad designs.
 
-See [`docs/CI_AND_GOVERNANCE.md`](CI_AND_GOVERNANCE.md#architecture-policy-pre-flight).
-
-## CI policy examples
-
-Start permissive:
-
+### Trust Quality Policy Examples:
 ```sh
+# Permissive (Initial repo setup)
 gm check --min-resolution 50 --max-ambiguous 50
+
+# Moderate (Standard team workflow)
+gm check --min-resolution 70 --max-ambiguous 20
+
+# Strict (High-safety enterprise repository)
+gm check --min-resolution 85 --max-ambiguous 5 --strict
 ```
 
-Move to moderate:
+---
 
-```sh
-gm check --min-resolution 70 --max-ambiguous 25
-```
+## 6. Security and Trust Anti-Patterns
 
-Stricter policy:
+To prevent generative software erosion, avoid the following operational anti-patterns:
 
-```sh
-gm check --min-resolution 80 --max-ambiguous 10 --strict
-```
-
-Do not over-tighten before the graph is mature. Good policy evolves with extractor coverage and repository conventions.
-
-## Manual edge policy
-
-AI-added edges should be rare and evidence-backed.
-
-| Situation | Write to graph? | Confidence |
-|---|---|---|
-| Agent read source and confirmed call | Yes | `EXTRACTED` |
-| Agent inferred based on naming | No | none |
-| Agent saw framework convention in docs and source | Yes, with provenance | `EXTRACTED` or documented manual confidence |
-| Agent is unsure | No | none |
-
-## Trust anti-patterns
-
-Avoid these behaviors:
-
-- treating all graph edges equally
-- letting agents write guessed relationships
-- using token reduction as the only metric
-- ignoring ambiguous symbols because they are inconvenient
-- claiming full correctness without compiler-backed extraction
-- using stale graphs after major edits
-
-When `graph_info` reports **Graph may be stale**, the loaded graph predates recent source changes or a newer `gm` binary. The server still answers queries, but structural results may be incomplete. Rebuild with `gm run . --no-semantic --no-viz`, then call `reload_graph` to hot-swap without restarting MCP. See `docs/MCP_TOOLS.md` for `graph_info` and `reload_graph` details.
-
-## Review checklist
-
-Before accepting an agent-generated change, ask:
-
-1. Did the agent call `graph_info`?
-2. Did it resolve the target symbol?
-3. Did it distinguish extracted, inferred, and ambiguous edges?
-4. Did it read the recommended files?
-5. Did it compute blast radius?
-6. Did it produce a verification plan?
-7. Did the gate pass or explain failures?
-8. Did it avoid unplanned files?
+*   **Treating All Dependencies as Equal:** Never let an agent treat a semantic, nearest-neighbor vector "similarity" connection (`INFERRED`) with the same safety profile as a compiler-proven import (`EXTRACTED`).
+*   **Allowing Generative Edge Injection:** Do not allow agents to write manual edges into Graphenium's index based on file proximity or naming assumptions alone. Manual writes must be reserved for documented, human-verified design decisions.
+*   **Operating on Stale Indexes:** If `graph_info` warns that **"Graph may be stale"**, the loaded index predates recent source edits. Operating on a stale index means the agent is planning against obsolete structural context. Always execute `gm run . --no-semantic --no-viz` and `reload_graph` to hot-swap the server state before planning.
