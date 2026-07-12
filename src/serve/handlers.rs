@@ -3672,19 +3672,21 @@ impl GrapheniumServer {
         #[schemars(description = "Optional maximum allowed modularity drop. Defaults to -0.02.")]
         modularity_tolerance: Option<f64>,
         #[tool(param)]
-        #[schemars(description = "Optional surprise threshold to flag structural violations. Defaults to 5.0.")]
+        #[schemars(
+            description = "Optional surprise threshold to flag structural violations. Defaults to 5.0."
+        )]
         surprise_threshold: Option<f64>,
     ) -> String {
         let graph = self.graph();
         let mod_tol = modularity_tolerance.unwrap_or(-0.02);
         let sur_thresh = surprise_threshold.unwrap_or(5.0);
 
-        let report = match crate::analyze::delta::evaluate_delta_gate(
-            &graph, &plan_id, mod_tol, sur_thresh,
-        ) {
-            Ok(report) => report,
-            Err(e) => return format!("Delta evaluation failed: {e}"),
-        };
+        let report =
+            match crate::analyze::delta::evaluate_delta_gate(&graph, &plan_id, mod_tol, sur_thresh)
+            {
+                Ok(report) => report,
+                Err(e) => return format!("Delta evaluation failed: {e}"),
+            };
 
         let mut response_md = format!(
             "### Topological Delta Report for Plan: `{}`\n\n\
