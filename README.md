@@ -143,6 +143,30 @@ gm check --delta --plan <id>
 
 ---
 
+## Technical Safeguards: Friction & Loop Mitigations
+
+Traditional static analysis tools and natural-language guardrails (like `CLAUDE.md` or system prompts) fail when context windows fill up, leading to agent "vibe-coding" and rapid token consumption. Graphenium implements three structural safeguards to prevent developer friction and agent deadlock:
+
+### 1. Mitigating the "Agent Deadlock" Loop (Pre-Flight Virtual ASTs)
+
+* **The Friction:** If an agent is blocked by a strict linter, it can fall into a token-wasting trial-and-error cycle (Propose → Blocked → Tweak → Blocked).
+* **Graphenium's Mechanism:** Graphenium prevents this loop by isolating change evaluations to a virtual planning workspace (`create_planning_workspace`). The agent registers its intent — classes, methods, and imports — before editing any physical files. Graphenium's pre-flight solver evaluates this virtual AST in milliseconds.
+* If a violation is found, the agent does not receive a vague natural-language rejection. It receives structured, compiler-proven topological path violations (e.g., demonstrating the exact transitively bypassed service layers). This allows the agent to correctly refactor its design plan in memory before wasting LLM tokens on physical file rewrites.
+
+### 2. Solving "Policy Rot" (Zero-Config Topological Delta Gating)
+
+* **The Friction:** Declaring and maintaining strict architectural rules in a static JSON file (`policy.json`) introduces manual configuration overhead that fast-moving teams often neglect.
+* **Graphenium's Mechanism:** If no `.graphenium/policy.json` file is present in the repository, Graphenium dynamically falls back to **Zero-Drift Delta Gating** (`gm check --delta`). Instead of relying on static directory regexes, Graphenium uses its native Louvain community-detection engine to evaluate your codebase's current structural cohesion.
+* When an agent proposes a virtual plan, Graphenium calculates the modularity delta (ΔQ) and surprise coupling score of the new edges. It gracefully accepts your existing legacy complexity as the baseline, but mechanically blocks the agent from introducing *new* topological decay. No configuration files are required to protect your system's modularity.
+
+### 3. Resolving Agent Integration Friction (Direct Skill-Folder Injection)
+
+* **The Friction:** Standard stateless MCP setups mean agents can easily bypass sequential "three-step" design loops (Declare → Solve → Post-audit), requiring manual developer mediation.
+* **Graphenium's Mechanism:** Graphenium circumvents this integration barrier by programmatically injecting its behavioral rules directly into the agentic runtime. During installation (`install.sh` or `install.ps1`), Graphenium copies its standard system skill instruction set (`skills/graphenium/SKILL.md`) directly into Claude Code's native skill directory (`~/.claude/skills/graphenium/SKILL.md`).
+* This ensures that the moment the assistant handshakes with Graphenium, it ingests explicit, structured operating parameters on how to manage virtual workspaces and resolve topological violations, without requiring the developer to configure system prompts manually.
+
+---
+
 ## Language Support
 
 Graphenium supports mixed repositories with Rust, Python, Go, JavaScript, TypeScript, Java, C, C++, and C#.

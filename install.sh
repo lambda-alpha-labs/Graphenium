@@ -52,6 +52,17 @@ fi
 
 echo "Graphenium ($BINARY) installed to $INSTALL_DIR/$BINARY"
 
+# Install Claude Code skill
+SKILL_DIR="$HOME/.claude/skills/graphenium"
+mkdir -p "$SKILL_DIR"
+if [ -f "./skills/graphenium/SKILL.md" ]; then
+    cp "./skills/graphenium/SKILL.md" "$SKILL_DIR/SKILL.md"
+    echo "Claude Code skill installed to $SKILL_DIR/SKILL.md"
+elif curl -fsSL "https://raw.githubusercontent.com/$REPO/main/skills/graphenium/SKILL.md" \
+    -o "$SKILL_DIR/SKILL.md" 2>/dev/null; then
+    echo "Claude Code skill installed to $SKILL_DIR/SKILL.md"
+fi
+
 # Check PATH
 case ":$PATH:" in
     *:"$INSTALL_DIR":*) ;;
