@@ -15,7 +15,7 @@ Handshake (graph_info) ──► Pathfinding (analyse_symbol / safest_path)
 Pre-Flight Spec        ──► Declare design (create_planning_workspace)
                              │
                              ▼
-Policy Verification    ──► Mathematically prove design safety (validate_plan)
+Policy Verification    ──► Prove design safety (validate_plan / evaluate_delta_gate)
                              │
                              ▼ (Passes)
 Implementation         ──► Edit files locally
@@ -31,7 +31,8 @@ Compliance Audit       ──► Verify no scope creep occurred (agent_change_ga
 These tools allow assistants to retrieve local structural metadata without executing remote API calls or bloating context windows with raw source files.
 
 ### `graph_info`
-*   **Purpose:** Handshakes and returns baseline index metadata (project root, schema version, build timestamp, compilation modes, source languages, symbol counts, and index file location).
+*   **Purpose:** Handshakes and returns baseline index metadata (project root, schema version, build timestamp, compilation modes, source languages, symbol counts, index file location, and active policy gates).
+*   **Policy Gates Banner:** Reports which containment layers are active — explicit `.graphenium/policy.json` rules (if any) plus **Dynamic Delta Gating** (zero-config modularity protection). When no policy file is configured, delta gating still runs as the default invariant gate.
 *   **Staleness Guard:** Automatically warns the agent if physical source files or Graphenium's binary are newer than the cached index. If a stale warning is returned, the agent is instructed to run `gm run` and trigger `reload_graph`.
 *   **When to Use:** At the start of every chat session or after any major branch checkout.
 
@@ -143,8 +144,17 @@ These tools support Graphenium's write-time containment loop, allowing agents to
 *   **When to Use:** To declare the architectural design the agent intends to write.
 
 ### `validate_plan`
-*   **Purpose:** Explicitly evaluates the virtual plan against the repository's `.graphenium/policy.json` rules before code is implemented. It identifies forbidden dependencies, strict layering bypasses, or banned symbols.
+*   **Purpose:** Evaluates the virtual plan before code is implemented. Runs explicit `.graphenium/policy.json` rules when configured (forbidden dependencies, strict layering bypasses, banned symbols), then applies **Dynamic Delta Gating** as a zero-config fallback — even when no policy file exists.
 *   **When to Use:** After the agent completes its virtual plan and before it edits any source files.
+
+### `evaluate_delta_gate`
+*   **Purpose:** Performs an in-memory **Topological Delta Gate** on a planning workspace. Clones the physical-only baseline subgraph, overlays the proposed plan, clusters both, and computes the Louvain modularity delta (ΔQ). Flags planned edges whose surprise score exceeds the threshold (e.g., `cross-community`, `peripheral→hub`).
+*   **Parameters:**
+    *   `plan_id` (required) — Planning workspace identifier.
+    *   `modularity_tolerance` (optional, default: `-0.02`) — Maximum allowed modularity decay.
+    *   `surprise_threshold` (optional, default: `5.0`) — Minimum surprise score to flag a planned edge.
+*   **Pass Criteria:** ΔQ ≥ `modularity_tolerance` and no planned edges exceed `surprise_threshold`.
+*   **When to Use:** To iteratively refine a design before implementation, or when `validate_plan` reports a topological entropy rejection.
 
 ### `get_plan_details`
 *   **Purpose:** Retrieves the virtual design spec, highlights currently implemented symbols, and flags missing declarations or scope creep.

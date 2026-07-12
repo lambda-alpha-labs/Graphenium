@@ -61,7 +61,7 @@ pub type Result<T> = std::result::Result<T, GrapheniumError>;
 
 // ── Re-exports for library consumers ─────────────────────────────────────
 
-pub use analyze::{analyze, AnalysisResult};
+pub use analyze::{analyze, evaluate_delta_gate, AnalysisResult, DeltaGateReport};
 pub use build::{build_from_extraction, build_merged, BuildStats};
 pub use cluster::{cluster, ClusterOptions, CommunityStats};
 pub use detect::DetectedFile;

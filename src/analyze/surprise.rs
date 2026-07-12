@@ -15,7 +15,7 @@ use crate::model::graph::GrapheniumGraph;
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SurprisingEdge {
     pub source: String,
     pub target: String,

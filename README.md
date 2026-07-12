@@ -20,7 +20,7 @@ CI checks only test passing             CI fails on architectural drift
 
 Binary: `gm`  
 Schema: `0.2.0`  
-Status: AST + Stack Graphs resolver stable, pre-flight policy engine stable, telemetry overlay experimental
+Status: AST + Stack Graphs resolver stable, pre-flight policy engine stable, zero-drift delta gating stable, telemetry overlay experimental
 
 ---
 
@@ -50,7 +50,8 @@ Graphenium enforces an explicit three-step compiler loop on the agent:
 
 1.  **Declare Intent (Pre-Flight Spec):** Before editing any code, the agent registers its planned changes (classes, methods, and dependencies) in a virtual planning workspace.
 2.  **Transitive Policy Solving:** Graphenium's engine runs a local Datalog solver to analyze the proposed virtual AST. If the design bypasses an intermediary architectural layer or uses banned symbols, Graphenium blocks the plan and provides structural feedback.
-3.  **Post-Facto Compliance Audit:** After the agent writes the code, Graphenium parses the physical modifications, ensuring that the agent did not touch files outside the declared scope, introduce unplanned dependencies, or fail to implement its declared spec.
+3.  **Zero-Drift Delta Gating:** Even without a `.graphenium/policy.json` file, Graphenium applies in-memory modularity analysis (ΔQ) and surprise edge profiling to reject plans that mathematically degrade community structure.
+4.  **Post-Facto Compliance Audit:** After the agent writes the code, Graphenium parses the physical modifications, ensuring that the agent did not touch files outside the declared scope, introduce unplanned dependencies, or fail to implement its declared spec.
 
 ---
 
@@ -102,7 +103,12 @@ Static linters can check direct imports, but they are blind to multi-hop archite
 
 It uses first-order logic and fixed-point iteration to mathematically prove boundary violations over an infinite number of dependency hops.
 
-### 3. Declarative Structural Governance
+### 3. Zero-Drift Delta Gating (Topological Entropy Guardrails)
+Even without explicit policy rules, Graphenium applies in-memory modularity analysis to every planning workspace. The delta engine compares physical-only and virtual (plan-overlay) subgraphs, computing Louvain modularity deltas (ΔQ) and profiling surprise edges. Plans that degrade community structure or introduce architectural shortcuts (`cross-community`, `peripheral→hub`) are rejected automatically.
+
+Available via `evaluate_delta_gate` (MCP), `validate_plan` (orchestrator), and `gm check --delta --plan <id>` (CLI).
+
+### 4. Declarative Structural Governance
 Enforce system design boundaries at commit-time or in CI. You declare rules in `.graphenium/policy.json` at the root of your repository:
 
 ```json
@@ -129,6 +135,11 @@ Enforce system design boundaries at commit-time or in CI. You declare rules in `
 ```
 
 Use `gm check --plan <id> --strict` to run pre-flight policy checks and post-facto compliance audits in CI.
+
+```sh
+# Topological delta gate (zero-config modularity protection)
+gm check --delta --plan <id>
+```
 
 ---
 

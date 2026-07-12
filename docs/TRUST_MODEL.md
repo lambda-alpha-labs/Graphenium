@@ -61,14 +61,15 @@ Graphenium translates these trust tiers into a strict, programmatic contract for
 
 ## 5. Trust Quality Policies vs. Structural Architecture Policies
 
-Graphenium distinguishes between two independent policy layers in your governance stack:
+Graphenium distinguishes between three complementary policy layers in your governance stack:
 
 | Policy Layer | Primary Config | Enforcement Target | Metric Evaluated |
 |---|---|---|---|
 | **Trust Quality** | `gm check` options | Index-Wide Health | Import resolution ratio, maximum allowed ambiguity, and evidence freshness. |
 | **Architecture** | `.graphenium/policy.json` | Agent Design Spec | Forbidden dependencies, strict layering domains, and banned symbols. |
+| **Topological Entropy (Zero-Drift)** | Zero-config (always on) | Agent Design Spec | Louvain modularity delta (ΔQ), surprise edge scores, community drift. |
 
-Use **Trust Quality** policies to ensure Graphenium's index is complete and healthy enough to plan against. Use **Architecture** policies to block agents from committing bad designs.
+Use **Trust Quality** policies to ensure Graphenium's index is complete and healthy enough to plan against. Use **Architecture** policies to block agents from committing designs that violate declared boundaries. **Topological Entropy** gating runs automatically as a zero-config fallback — even without `.graphenium/policy.json` — rejecting plans that mathematically degrade modularity or introduce structurally anomalous dependencies (`cross-community`, `peripheral→hub`).
 
 ### Trust Quality Policy Examples:
 ```sh

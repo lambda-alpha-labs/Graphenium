@@ -3617,7 +3617,7 @@ impl GrapheniumServer {
 
     #[tool(
         description = "Perform pre-flight architecture policy check on a planning workspace before writing code. \
-        Loads rules from .graphenium/policy.json and returns structural violations if any."
+        Loads rules from .graphenium/policy.json when present, then applies dynamic delta gating as a zero-config fallback."
     )]
     fn validate_plan(
         &self,
@@ -3625,18 +3625,29 @@ impl GrapheniumServer {
         #[schemars(description = "The workspace plan identifier to validate")]
         plan_id: String,
     ) -> String {
-        let policy = self.load_arch_policy();
-        if policy.rules.is_empty() {
-            return format!(
-                "Plan `{}`: ✅ PASS (no architecture policy rules configured in .graphenium/policy.json)",
-                plan_id
-            );
-        }
+        let graph = self.graph();
+        let project_root = graph
+            .metadata
+            .project_root
+            .as_deref()
+            .map(Path::new)
+            .unwrap_or_else(|| Path::new("."));
 
-        let report = self.validate_plan_preflight(&plan_id);
+        let report = match crate::harness::validate_plan(&graph, &plan_id, project_root) {
+            Ok(report) => report,
+            Err(e) => return format!("Plan `{plan_id}`: validation failed — {e}"),
+        };
+
         if report.passes {
+            let policy = self.load_arch_policy();
+            if policy.rules.is_empty() {
+                return format!(
+                    "Plan `{}`: ✅ PASS (dynamic delta gating — no explicit policy rules configured)",
+                    plan_id
+                );
+            }
             return format!(
-                "Plan `{}`: ✅ PASS ({} rules checked)",
+                "Plan `{}`: ✅ PASS ({} policy rules + dynamic delta gating)",
                 plan_id,
                 policy.rules.len()
             );
@@ -3647,6 +3658,70 @@ impl GrapheniumServer {
             output.push_str(&format!("- {v}\n"));
         }
         output
+    }
+
+    #[tool(
+        description = "Performs an in-memory modularity delta check and surprise analysis on a proposed plan before writing physical changes."
+    )]
+    fn evaluate_delta_gate(
+        &self,
+        #[tool(param)]
+        #[schemars(description = "The unique identifier of the target planning workspace")]
+        plan_id: String,
+        #[tool(param)]
+        #[schemars(description = "Optional maximum allowed modularity drop. Defaults to -0.02.")]
+        modularity_tolerance: Option<f64>,
+        #[tool(param)]
+        #[schemars(description = "Optional surprise threshold to flag structural violations. Defaults to 5.0.")]
+        surprise_threshold: Option<f64>,
+    ) -> String {
+        let graph = self.graph();
+        let mod_tol = modularity_tolerance.unwrap_or(-0.02);
+        let sur_thresh = surprise_threshold.unwrap_or(5.0);
+
+        let report = match crate::analyze::delta::evaluate_delta_gate(
+            &graph, &plan_id, mod_tol, sur_thresh,
+        ) {
+            Ok(report) => report,
+            Err(e) => return format!("Delta evaluation failed: {e}"),
+        };
+
+        let mut response_md = format!(
+            "### Topological Delta Report for Plan: `{}`\n\n\
+             - **Status:** {}\n\
+             - **Modularity Delta (ΔQ):** {:.4} (Baseline: {:.4} → Virtual: {:.4})\n",
+            report.plan_id,
+            if report.passes {
+                "✅ PASSED"
+            } else {
+                "❌ FAILED"
+            },
+            report.modularity_delta,
+            report.modularity_baseline,
+            report.modularity_virtual
+        );
+
+        if !report.plan_surprise_edges.is_empty() {
+            response_md.push_str("\n#### High-Surprise Edges Proposed:\n");
+            for e in &report.plan_surprise_edges {
+                response_md.push_str(&format!(
+                    "- `{}` ──► `{}` (Confidence: {:.1})\n  *Reason:* {}\n",
+                    e.source,
+                    e.target,
+                    e.score,
+                    e.reasons.join(", ")
+                ));
+            }
+        }
+
+        if !report.drift_events.is_empty() {
+            response_md.push_str("\n#### Structural Drift Warnings:\n");
+            for d in &report.drift_events {
+                response_md.push_str(&format!("- **{}**: {}\n", d.label, d.detail));
+            }
+        }
+
+        response_md
     }
 
     #[tool(description = "Creates a new virtual planning workspace to group intended changes.")]
@@ -3816,6 +3891,18 @@ impl GrapheniumServer {
         if let Some(warning) = self.staleness_warning() {
             out.push('\n');
             out.push_str(&warning);
+        }
+
+        let policy = self.load_arch_policy();
+        if policy.rules.is_empty() {
+            out.push_str(
+                "\n**Policy Gates Active:** Dynamic Delta Gating (Zero-Config Modularity Protection)\n",
+            );
+        } else {
+            out.push_str(&format!(
+                "\n**Policy Gates Active:** {} explicit policy rule(s) + Dynamic Delta Gating\n",
+                policy.rules.len()
+            ));
         }
 
         // Trust banner: mode and resolution status (reflect actual cross-file resolution).

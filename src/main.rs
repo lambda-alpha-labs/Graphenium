@@ -239,6 +239,18 @@ enum Commands {
         /// [k.4] Plan ID for plan compliance verification
         #[arg(long)]
         plan: Option<String>,
+
+        /// Activate relative topological delta analysis
+        #[arg(long)]
+        delta: bool,
+
+        /// Acceptable modularity decay (default: -0.02)
+        #[arg(long)]
+        mod_tolerance: Option<f64>,
+
+        /// Maximum allowable surprise score for planned edges (default: 5.0)
+        #[arg(long)]
+        surprise_threshold: Option<f64>,
     },
 
     /// Generate a pre-edit orientation overview for a symbol
@@ -456,7 +468,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_ambiguous,
             strict,
             plan,
-        } => cmd_check(&graph, min_resolution, max_ambiguous, strict, plan),
+            delta,
+            mod_tolerance,
+            surprise_threshold,
+        } => cmd_check(
+            &graph,
+            min_resolution,
+            max_ambiguous,
+            strict,
+            plan,
+            delta,
+            mod_tolerance,
+            surprise_threshold,
+        ),
 
         Commands::Explain { symbol, graph } => cmd_explain(&symbol, &graph),
 
@@ -1148,8 +1172,56 @@ fn cmd_check(
     max_ambiguous: usize,
     strict: bool,
     plan: Option<String>,
+    delta: bool,
+    mod_tolerance: Option<f64>,
+    surprise_threshold: Option<f64>,
 ) -> graphenium::Result<()> {
     let graph = export::json::load_graph(graph_path)?;
+
+    if delta {
+        let plan_id = plan.ok_or_else(|| {
+            graphenium::GrapheniumError::Validation(
+                "The --plan <id> argument is required when executing --delta checks.".to_string(),
+            )
+        })?;
+
+        let report = graphenium::analyze::delta::evaluate_delta_gate(
+            &graph,
+            &plan_id,
+            mod_tolerance.unwrap_or(-0.02),
+            surprise_threshold.unwrap_or(5.0),
+        )?;
+
+        println!("## Topological Delta Gate: {}", report.plan_id);
+        println!(
+            "Modularity Delta (ΔQ): {:.4} (Baseline: {:.4} → Virtual: {:.4})",
+            report.modularity_delta, report.modularity_baseline, report.modularity_virtual
+        );
+
+        if !report.plan_surprise_edges.is_empty() {
+            println!("\n[FAIL] High-Surprise Connections Proposed:");
+            for e in &report.plan_surprise_edges {
+                println!("  - {} ──► {} (Score: {:.1})", e.source, e.target, e.score);
+                println!("    Reason(s): {}", e.reasons.join(", "));
+            }
+        }
+
+        if !report.drift_events.is_empty() {
+            println!("\nStructural Drift Events Detected:");
+            for d in &report.drift_events {
+                println!("  - [{}]: {}", d.label, d.detail);
+            }
+        }
+
+        if !report.passes {
+            println!("\n[FAIL] Plan violates topological entropy boundaries.");
+            std::process::exit(1);
+        } else {
+            println!("\n[PASS] Plan respects current modularity patterns.");
+        }
+
+        return Ok(());
+    }
 
     // Handle plan workspace validation (pre-flight + post-facto compliance)
     if let Some(plan_id) = plan {

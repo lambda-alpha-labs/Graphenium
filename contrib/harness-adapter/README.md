@@ -34,7 +34,8 @@ File Opened or Saved
   └── snapshot_to_disk(index)        # Update persisted index state
 
 Agent Proposes Design Spec
-  └── validate_plan_preflight()      # Run pre-flight Datalog layer analysis
+  └── validate_plan()                # Policy rules + dynamic delta gating
+  └── evaluate_delta_gate()          # Optional: modularity delta check only
 
 Agent Implements Edits
   └── on_file_open(index, path)      # Re-extract actual physical changes
@@ -49,8 +50,8 @@ To prevent AI assistants from writing messy, unapproved code, integrate Grapheni
 
 1.  **Initialize Planning Workspace:** When the agent begins a task, create a virtual workspace (`create_planning_workspace`).
 2.  **Declare Intent:** Instruct the agent to register its planned classes, methods, and module dependencies (`add_planned_symbol`).
-3.  **Pre-Flight Policy Check:** Evaluate the virtual plan against the repository's `.graphenium/policy.json` rules using `validate_plan_preflight`.
-4.  **Enforce Safe Coding:** If Graphenium identifies strict layering bypasses or unauthorized imports, block execution and feed the structural violations back to the agent for redesign.
+3.  **Pre-Flight Policy Check:** Evaluate the virtual plan using `validate_plan` (explicit `.graphenium/policy.json` rules + Dynamic Delta Gating fallback).
+4.  **Enforce Safe Coding:** If Graphenium identifies strict layering bypasses, unauthorized imports, or topological entropy violations (modularity decay, high-surprise edges), block execution and feed the structural violations back to the agent for redesign.
 5.  **Post-Edit Compliance Audit:** Once the agent implements the code, re-index the modified files and execute `verify_plan` to verify that the agent did not commit scope creep (modifying files outside the declared plan) or leak unapproved dependencies.
 
 ---

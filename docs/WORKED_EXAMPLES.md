@@ -60,6 +60,15 @@ Re-compile the index and run Graphenium's post-edit gate.
 ```
 *Verify that Graphenium's post-facto compliance audit (`verify_plan`) flags the modification inside `src/main.rs` as unapproved scope creep.*
 
+### Scenario C: The Topological Shortcut Test
+Initialize a planning workspace and attempt to connect a peripheral module directly to a high-degree hub across community boundaries. Instruct the agent:
+```text
+Initialize a planning workspace and design a new view component that calls a database helper directly,
+bypassing the existing service layer.
+Run evaluate_delta_gate and report the modularity delta and any high-surprise edges.
+```
+*Verify that Dynamic Delta Gating flags the planned edge with `cross-community` or `peripheral→hub` surprise factors and rejects the design when ΔQ drops below tolerance.*
+
 ---
 
 ## 4. Active Case Studies

@@ -1,3 +1,4 @@
+pub mod delta;
 pub mod diff;
 pub mod god;
 pub mod impact;
@@ -10,6 +11,7 @@ pub mod verifier;
 use crate::cluster::CommunityStats;
 use crate::model::graph::GrapheniumGraph;
 
+pub use delta::{evaluate_delta_gate, extract_baseline_subgraph, DeltaGateReport};
 pub use diff::{diff, GraphDiff};
 pub use god::{god_nodes, god_nodes_in_scope, GodNode};
 pub use questions::{suggest_questions, SuggestedQuestion};

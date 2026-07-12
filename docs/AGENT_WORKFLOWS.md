@@ -82,12 +82,14 @@ Agents should not blindly edit files and hope they respect your architecture. Gr
 ### Step-by-Step Execution:
 1.  **Initialize Workspace:** Execute `create_planning_workspace` with a descriptive ID for the task (`refactor-session-handling`).
 2.  **Declare Design spec:** Execute `add_planned_symbol` for every new or modified class, struct, function, interface, or dependency edge the agent plans to introduce.
-3.  **Pre-Flight Policy Solver:** Execute `validate_plan`. Graphenium runs its embedded Datalog solver to check the virtual plan against:
-    *   `forbidden_dependency` rules (Direct banned import paths)
-    *   `strict_layering` rules (Transitive layer bypasses)
+3.  **Pre-Flight Policy Solver:** Execute `validate_plan`. Graphenium checks the virtual plan against:
+    *   `forbidden_dependency` rules (direct banned import paths)
+    *   `strict_layering` rules (transitive layer bypasses)
     *   `banned_symbol` rules (proposed accesses to disallowed modules)
-4.  **Block on Failure:** If Graphenium returns `PRE_FLIGHT_VIOLATION`, stop immediately and report to the user which rule was violated, the exact violating dependency path, and the recommended structural fix.
-5.  **Implement:** If pre-flight passes, authorize file edits.
+    *   **Dynamic Delta Gating** (zero-config fallback): modularity delta (ΔQ) and surprise edge profiling
+4.  **Iterative Delta Refinement (optional):** If the plan fails on topological entropy, call `evaluate_delta_gate` to inspect ΔQ, high-surprise edges, and drift events. Re-plan through intermediate services or interfaces, then re-evaluate.
+5.  **Block on Failure:** If Graphenium returns `PRE_FLIGHT_VIOLATION` or a delta gate rejection, stop immediately and report the violating dependency path and recommended structural fix.
+6.  **Implement:** If pre-flight passes, authorize file edits.
 
 ---
 
@@ -126,6 +128,12 @@ gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 1
 Fail the build if the agent's implemented code deviates from its approved planning workspace or violates `.graphenium/policy.json` boundaries:
 ```sh
 gm check --graph graphenium-out/graph.json --plan "refactor-session-handling" --strict
+```
+
+### Topological Delta Gate (Zero-Config Modularity Protection)
+Fail the build if a proposed plan degrades community modularity or introduces high-surprise architectural shortcuts:
+```sh
+gm check --graph graphenium-out/graph.json --delta --plan "refactor-session-handling"
 ```
 
 ---
@@ -170,7 +178,7 @@ You are operating in a Graphenium-contained workspace.
 Before editing any files:
 1. Call graph_info to verify index freshness. If stale, run 'gm run . --no-semantic --no-viz' first.
 2. Resolve your target symbol, identify direct callers, and trace downstream transitive dependencies.
-3. If this is a multi-file task, initialize a planning workspace via create_planning_workspace, declare your intended classes/files, and run validate_plan. Do not edit source files if pre-flight fails.
+3. If this is a multi-file task, initialize a planning workspace via create_planning_workspace, declare your intended classes/files, and run validate_plan. If rejected on topological entropy, call evaluate_delta_gate, re-plan through existing domain services, and re-evaluate. Do not edit source files if pre-flight fails.
 4. Read only the implementation files recommended by Graphenium. Do not sweep directories blindly.
 
 After editing files:

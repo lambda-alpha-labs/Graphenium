@@ -94,24 +94,40 @@ Graphenium enables you to prevent architectural erosion by checking proposed age
 Before an agent writes any physical edits, require it to submit its change design as a virtual plan. Load your `.graphenium/policy.json` rules and run Graphenium's pre-flight logic solver:
 
 ```rust
+use std::path::Path;
+
 use graphenium::{
-    policy::{ArchPolicyConfig, ArchRule},
-    harness::{validate_plan_preflight, PreFlightReport},
+    analyze::delta::{evaluate_delta_gate, DeltaGateReport},
+    harness::{validate_plan, validate_plan_preflight, PreFlightReport},
+    policy::ArchPolicyConfig,
 };
 
+/// Full pre-flight orchestration: explicit policy rules + dynamic delta gating.
 pub fn check_preflight_design(
     graph: &GrapheniumGraph,
     project_root: &Path,
     plan_id: &str,
 ) -> Result<PreFlightReport, String> {
-    // Load local policy constraints
+    validate_plan(graph, plan_id, project_root)
+}
+
+/// Policy-only check (no delta gating).
+pub fn check_policy_only(
+    graph: &GrapheniumGraph,
+    project_root: &Path,
+    plan_id: &str,
+) -> Result<PreFlightReport, String> {
     let policy_config = ArchPolicyConfig::load_for_project(project_root)
         .map_err(|e| e.to_string())?;
+    Ok(validate_plan_preflight(graph, plan_id, &policy_config.rules))
+}
 
-    // Mathematically evaluate the virtual plan boundaries using the Datalog solver
-    let report = validate_plan_preflight(graph, plan_id, &policy_config.rules);
-
-    Ok(report)
+/// Topological delta gate only.
+pub fn check_delta_gate(
+    graph: &GrapheniumGraph,
+    plan_id: &str,
+) -> Result<DeltaGateReport, graphenium::GrapheniumError> {
+    evaluate_delta_gate(graph, plan_id, -0.02, 5.0)
 }
 ```
 

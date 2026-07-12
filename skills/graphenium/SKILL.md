@@ -27,7 +27,8 @@ Verify the following index properties before planning edits:
 |---|---|---|
 | **Handshake & Freshness** | `graph_info` | Verify index integrity and check for stale warning flags. |
 | **Codebase Orientation** | `architecture_summary` | Review top-level folder domains and cohesive module boundaries. |
-| **Verify Design Pre-Flight** | `validate_plan` | Mathematically prove design safety against `.graphenium/policy.json`. |
+| **Verify Design Pre-Flight** | `validate_plan` | Mathematically prove design safety against `.graphenium/policy.json` and dynamic delta gating. |
+| **Topological Delta Gate** | `evaluate_delta_gate` | In-memory modularity delta check and surprise analysis on a proposed plan. |
 | **Trace Transitive Paths** | `run_datalog` | Evaluate multi-hop dependency chains using compiled stdlib rules. |
 | **Single Symbol Audit** | `analyse_symbol` | Retrieve AST-proven callers, dependencies, and identifier collisions. |
 | **Check Direct Callers** | `get_neighbors` | View incoming callers and outgoing targets (set `extracted_only = true`). |
@@ -123,3 +124,16 @@ Pre-Flight Policy Status: [PASS / FAILED - list violations]
 Must-Read Implementation Files: [list of source files to read before editing]
 Post-Edit Verification Plan: [list of covering tests to run after editing]
 ```
+
+---
+
+## 8. Resolving Topological Delta Failures
+
+If you run `evaluate_delta_gate` (or `validate_plan`) and receive an entropy rejection:
+
+1. **Understand the Warning:** Graphenium did not fail because of a regex; it failed because your proposed dependencies mathematically degrade the modularity of the system.
+2. **Review High-Surprise Edges:** Locate which planned symbols triggered `cross-community` or `peripheral_to_hub` spikes. These represent architectural shortcuts.
+3. **Re-Plan decoupling:**
+   - Instead of connecting a new view directly to a database, modify your planning workspace to route the request through the existing intermediate domain services.
+   - If the connection is functionally required, expose a generic Interface/Trait within the targets' community, rather than coupling the concrete classes directly.
+4. **Re-Evaluate:** Call `evaluate_delta_gate` again. Once modularity stabilizes (ΔQ ≥ -0.02) and surprise scores are below threshold, proceed with implementation.

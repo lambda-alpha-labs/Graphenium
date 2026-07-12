@@ -135,7 +135,12 @@ If Graphenium warns that the **"Graph may be stale"**, the compiled index is old
 
 ## 8. Establish Write-Time Policy Gating
 
-Protect your repository from architectural drift by defining structural boundaries. Write a `.graphenium/policy.json` at your repository root to forbid direct database imports from your API controllers:
+Protect your repository from architectural drift. Graphenium provides two complementary layers:
+
+1. **Explicit policies** — declare boundaries in `.graphenium/policy.json`.
+2. **Zero-config delta gating** — automatic modularity and surprise analysis on every plan, even without a policy file.
+
+Write a `.graphenium/policy.json` at your repository root to forbid direct database imports from your API controllers:
 
 ```json
 {
@@ -153,8 +158,9 @@ Protect your repository from architectural drift by defining structural boundari
 Now, instruct your agent to execute a **Design-then-Verify** loop:
 1.  **Initialize Planning Workspace:** The agent calls `create_planning_workspace` to establish a virtual design.
 2.  **Declare Intent:** The agent registers its planned class and import additions (`add_planned_symbol`). Graphenium's Datalog engine automatically evaluates these additions.
-3.  **Validate Pre-Flight:** If the agent tries to import a database module directly into a controller, Graphenium returns `PRE_FLIGHT_VIOLATION` and blocks the plan.
+3.  **Validate Pre-Flight:** Call `validate_plan`. If the agent tries to import a database module directly into a controller, Graphenium returns `PRE_FLIGHT_VIOLATION`. If the design degrades modularity, Dynamic Delta Gating rejects it — call `evaluate_delta_gate` to inspect ΔQ and surprise edges.
 4.  **Audit Scope Creep:** After implementing the code, run `gm check --plan <id> --strict` in CI. If the agent modified files outside the declared plan, the build fails.
+5.  **Topological Delta Gate (optional CI):** Run `gm check --delta --plan <id>` to enforce modularity invariants independently of explicit policy rules.
 
 ---
 
@@ -176,3 +182,4 @@ You have successfully established workspace containment when:
 2.  Your AI coding assistant calls `graph_info` successfully during handshake runs.
 3.  The assistant explicitly separates AST-proven dependencies (`EXTRACTED`) from hypotheses (`INFERRED`).
 4.  Any agent design plan violating your `.graphenium/policy.json` is successfully blocked pre-flight.
+5.  `graph_info` reports active policy gates (explicit rules + Dynamic Delta Gating).

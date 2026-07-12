@@ -10,7 +10,7 @@
 use crate::model::GrapheniumGraph;
 
 /// A detected drift event between two graph snapshots.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct DriftEvent {
     pub kind: DriftKind,
     pub node_id: String,
@@ -22,7 +22,7 @@ pub struct DriftEvent {
 }
 
 /// Types of architecture drift.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub enum DriftKind {
     CommunityChanged,
     NewCrossBoundaryEdge,
@@ -33,7 +33,7 @@ pub enum DriftKind {
 }
 
 /// How severe the drift is.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub enum DriftSeverity {
     Info,
     Warning,

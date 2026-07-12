@@ -17,7 +17,7 @@ To prevent vibe-coding in active repositories, Graphenium enforces a structured,
 
 ```text
 1. DESIGN PHASE (Pre-Flight)
-   └── Agent declares virtual plan ──► Verified via Datalog policy solver
+   └── Agent declares virtual plan ──► Verified via policy.json + Dynamic Delta Gating
 
 2. IMPLEMENTATION PHASE (Write)
    └── Agent writes physical code ──► Bounded within declared file scope
@@ -33,7 +33,9 @@ To prevent vibe-coding in active repositories, Graphenium enforces a structured,
 
 ## 2. Pre-Flight Architectural Policies
 
-Architectural constraints are declared in `.graphenium/policy.json` at the root of the repository. If present, Graphenium's pre-flight engine runs these rules against the agent's proposed plan *before* any physical files are modified.
+Architectural constraints can be declared in `.graphenium/policy.json` at the root of the repository. When present, Graphenium's pre-flight engine runs these rules against the agent's proposed plan *before* any physical files are modified.
+
+**Zero-config fallback:** Repositories without a policy file still receive protection. Graphenium automatically applies **Dynamic Delta Gating** (Topological Entropy Guardrails) — an in-memory modularity and surprise analysis that rejects plans which mathematically degrade community structure, even when no explicit rules are configured.
 
 ### Policy Configuration Schema (`.graphenium/policy.json`):
 ```json
@@ -71,20 +73,47 @@ Architectural constraints are declared in `.graphenium/policy.json` at the root 
 
 ---
 
-## 3. When Policy Gating Runs
+## 3. Zero-Drift Gating (Topological Entropy Guardrails)
+
+Dynamic Delta Gating (`src/analyze/delta.rs`) is Graphenium's configuration-free invariant gate. It temporarily applies a proposed plan in memory and mathematically proves whether the design degrades the existing repository structure.
+
+### How It Works
+1. **Baseline subgraph:** Extract physical-only nodes and edges (`plan_id` is `None`).
+2. **Virtual subgraph:** Overlay physical graph + the target planning workspace.
+3. **Louvain clustering:** Run community detection on both subgraphs.
+4. **Modularity delta (ΔQ):** Compare modularity scores; reject if decay exceeds tolerance (default: `-0.02`).
+5. **Surprise profiling:** Flag planned edges with high structural surprise (default threshold: `5.0`) — especially `cross-community` and `peripheral→hub` connections.
+
+### Entry Points
+| Entry Point | Context |
+|---|---|
+| `evaluate_delta_gate` (MCP) | Real-time design validation inside agent sessions |
+| `validate_plan` (MCP) | Runs after explicit policy rules; applies delta gating as fallback |
+| `gm check --delta --plan <id>` | CI / pre-commit topological gate |
+
+```sh
+gm check --graph graphenium-out/graph.json --delta --plan refactor-session-handling
+gm check --delta --plan my-plan --mod-tolerance -0.02 --surprise-threshold 5.0 --strict
+```
+
+---
+
+## 4. When Policy Gating Runs
 
 Graphenium enforces these policies at multiple checkpoints in the development lifecycle:
 
 | Gate Entry Point | Execution Context | Gating Behavior |
 |---|---|---|
-| **`validate_plan` (MCP)** | Pre-Flight (Agent Session) | Runs explicit pre-flight checks on a proposed planning workspace. |
+| **`validate_plan` (MCP)** | Pre-Flight (Agent Session) | Runs explicit policy rules when configured, then Dynamic Delta Gating as invariant fallback. |
+| **`evaluate_delta_gate` (MCP)** | Pre-Flight (Agent Session) | In-memory modularity delta check and surprise analysis on a proposed plan. |
 | **`add_planned_symbol`** | Pre-Flight (Agent Session) | Automatic pre-flight hook. If the proposed class/method violates policy, Graphenium returns `PRE_FLIGHT_VIOLATION` and blocks the plan. |
+| **`gm check --delta --plan <id>`** | CI / Pre-Commit Hook | Topological entropy gate: modularity delta + surprise edge profiling. |
 | **`gm check --plan <id>`** | CI / Pre-Commit Hook | Double Gate: Evaluates pre-flight design compliance first, then performs a post-facto scope-creep audit. |
 | **`agent_change_gate`** | CI / PR Pipeline | Evaluates global trust quality metrics (import resolution ratio, maximum allowed ambiguity). |
 
 ---
 
-## 4. Baseline Index Verification Gate
+## 5. Baseline Index Verification Gate
 
 To ensure your codebase index remains healthy and that your agent is not operating on incomplete static analysis data, run Graphenium's baseline quality gate in CI:
 
@@ -99,7 +128,7 @@ gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 1
 
 ---
 
-## 5. Incremental Diff Audits
+## 6. Incremental Diff Audits
 
 To audit a completed PR, generate a baseline index snapshot before the agent starts its task:
 
@@ -118,7 +147,7 @@ This generates a structured, risk-sorted review plan prioritizing removed public
 
 ---
 
-## 6. Pull Request Review Template
+## 7. Pull Request Review Template
 
 Configure your agent or CI pipeline to append Graphenium's structural audit to every pull request description:
 
@@ -126,6 +155,7 @@ Configure your agent or CI pipeline to append Graphenium's structural audit to e
 ### Graphenium Structural Containment Audit
 
 - [ ] **Pre-Flight Policy Check:** PASSED / FAILED (policy.json rules)
+- [ ] **Topological Delta Gate:** PASSED / FAILED (ΔQ ≥ -0.02, no high-surprise planned edges)
 - [ ] **Scope-Creep Verification:** PASSED / FAILED (unplanned file modifications)
 
 #### Codebase Modifications
@@ -142,7 +172,7 @@ Configure your agent or CI pipeline to append Graphenium's structural audit to e
 
 ---
 
-## 7. GitHub Actions Workflow Integration
+## 8. GitHub Actions Workflow Integration
 
 Incorporate Graphenium into your standard pull request pipeline using the following workflow configuration:
 
@@ -179,7 +209,7 @@ jobs:
 
 ---
 
-## 8. What Graphenium Gating Does Not Replace
+## 9. What Graphenium Gating Does Not Replace
 
 Graphenium is designed to enforce structural and architectural boundaries. It is a complementary containment layer and does not replace:
 *   **Unit & Integration Tests:** Graphenium verifies *decoupling and structure*; tests verify *behavior and state*.

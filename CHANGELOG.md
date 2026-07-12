@@ -4,6 +4,24 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.19.1 — 2026-07-12
+
+### Summary
+This release introduces **Zero-Drift Gating (Topological Entropy Guardrails)** — a configuration-free invariant gate that rejects agent plans which mathematically degrade repository modularity.
+
+### Added
+*   **Topological Delta Core (`src/analyze/delta.rs`):** Partitions physical and virtual subgraphs, computes Louvain modularity deltas (ΔQ), profiles surprise edges, and detects community drift for planning workspaces.
+*   **`evaluate_delta_gate` MCP Tool:** Exposes in-memory modularity delta checks and surprise analysis to AI agents for real-time design validation.
+*   **`gm check --delta`:** CLI topological entropy gate with `--plan`, `--mod-tolerance` (default: `-0.02`), and `--surprise-threshold` (default: `5.0`) flags.
+*   **Zero-Config Fallback in `validate_plan`:** Orchestrates explicit `.graphenium/policy.json` rules first, then applies Dynamic Delta Gating as an invariant fallback when no policy file is configured.
+*   **Policy Gates Banner in `graph_info`:** Reports active containment layers (explicit policy rules + Dynamic Delta Gating).
+
+### Changed
+*   `validate_plan` (MCP) now runs policy rules and dynamic delta gating in sequence.
+*   Agent skill (`skills/graphenium/SKILL.md`) updated with `evaluate_delta_gate` tool guidance and topological delta failure resolution steps.
+
+---
+
 ## v0.19.0 — 2026-07-11
 
 ### Summary

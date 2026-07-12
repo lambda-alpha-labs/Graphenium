@@ -103,7 +103,7 @@ To support Graphenium's "Design-then-Verify" loop, the index supports an optiona
 
 ```text
 Proposed Plan (Virtual AST)   ----->   Evaluated against .graphenium/policy.json
-         |
+         |                              + Dynamic Delta Gating (zero-config fallback)
          v (Approved)
 Physical Implementation      ----->   gm check --plan compares physical to virtual
 ```
@@ -115,7 +115,22 @@ By maintaining a virtual-to-physical mapping, Graphenium mechanically detects:
 
 ---
 
-## 7. Embedded Datalog Policy Solver
+## 7. Zero-Drift Gating Engine (`src/analyze/delta.rs`)
+
+Graphenium's **Topological Entropy Guardrails** provide configuration-free protection against architectural shortcuts. The delta engine (`evaluate_delta_gate`) operates entirely in memory on the loaded index:
+
+1. **`extract_baseline_subgraph`:** Clone the graph, retaining only physical nodes and edges (`plan_id` is `None`).
+2. **Virtual overlay:** Build a second subgraph containing physical nodes plus the target planning workspace.
+3. **Louvain clustering:** Run community detection on both subgraphs (`src/cluster/louvain.rs`).
+4. **Modularity delta (ΔQ):** Compute modularity for each subgraph; reject if `virtual_q - baseline_q < modularity_tolerance` (default: `-0.02`).
+5. **Surprise profiling:** Score planned edges via `src/analyze/surprise.rs`; flag edges exceeding `surprise_threshold` (default: `5.0`).
+6. **Drift detection:** Compare community boundaries between baseline and virtual graphs (`src/cluster/drift.rs`).
+
+Entry points: `evaluate_delta_gate` (MCP), `validate_plan` (orchestrator fallback), `gm check --delta --plan <id>` (CLI).
+
+---
+
+## 8. Embedded Datalog Policy Solver
 
 Before an agent edits code, Graphenium runs its proposed design plan through a local **Datalog inference engine** (`src/analyze/query.rs`). 
 
@@ -132,7 +147,7 @@ Graphenium parses your `.graphenium/policy.json` rules and translates them into 
 
 ---
 
-## 8. Structural Domain Analysis & Anomaly Detection
+## 9. Structural Domain Analysis & Anomaly Detection
 
 Graphenium implements advanced network analysis algorithms to identify architectural decay:
 *   **Betweenness Centrality:** Runs Brandes' algorithm to identify bottleneck symbols. These are critical "bridge" components; modifying them carries high risk because they connect otherwise isolated module domains.
@@ -141,7 +156,7 @@ Graphenium implements advanced network analysis algorithms to identify architect
 
 ---
 
-## 9. Current Technical Limitations
+## 10. Current Technical Limitations
 
 | Limitation | Structural Impact | Automated Mitigation |
 |---|---|---|

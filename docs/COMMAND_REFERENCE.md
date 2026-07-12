@@ -102,6 +102,22 @@ gm check [flags]
 *   `--max-ambiguous <count>` (integer, default: `10`) — Fails the check if Graphenium detects more than `<count>` unresolved name collisions.
 *   `--strict` (bool) — Fails the check on any index, parser, or configuration warnings.
 *   `--plan <id>` (string) — Executes a double-gate verification for a planning workspace: runs pre-flight policy validation, followed by a post-facto scope-creep audit.
+*   `--delta` (bool) — Activates **Topological Delta Gating**: in-memory modularity delta (ΔQ) and surprise edge analysis on a planning workspace. Requires `--plan`.
+*   `--mod-tolerance <val>` (float, default: `-0.02`) — Maximum acceptable modularity decay when `--delta` is set.
+*   `--surprise-threshold <val>` (float, default: `5.0`) — Surprise score above which a planned edge is flagged when `--delta` is set.
+
+### Modes:
+*   **Baseline quality gate** (default): `--min-resolution` / `--max-ambiguous` thresholds.
+*   **Plan compliance gate**: `--plan <id>` — policy validation + scope-creep audit.
+*   **Topological delta gate**: `--delta --plan <id>` — modularity delta + surprise profiling. Exits non-zero on failure.
+
+```sh
+# Topological entropy gate for a planning workspace
+gm check --delta --plan refactor-session-handling
+
+# Custom tolerance thresholds
+gm check --delta --plan my-plan --mod-tolerance -0.01 --surprise-threshold 4.0
+```
 
 ---
 

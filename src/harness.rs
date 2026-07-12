@@ -3,11 +3,14 @@
 //! Use this to gate CI pipelines on trust quality:
 //!   gm check --min-resolution 90 --max-stale 5
 
+use std::path::Path;
+
 use globset::{Glob, GlobMatcher};
 
+use crate::analyze::delta::evaluate_delta_gate;
 use crate::model::graph::GrapheniumGraph;
 use crate::model::{Edge, Node};
-use crate::policy::ArchRule;
+use crate::policy::{ArchPolicyConfig, ArchRule};
 use crate::trust::ResolutionReport;
 
 /// Result of a trust check, suitable for CI gate logic.
@@ -298,6 +301,46 @@ pub fn validate_plan_preflight(
         passes: violations.is_empty(),
         violations,
     }
+}
+
+/// Validate a planning workspace against explicit policy rules and dynamic delta gating.
+pub fn validate_plan(
+    graph: &GrapheniumGraph,
+    plan_id: &str,
+    project_root: &Path,
+) -> Result<PreFlightReport, String> {
+    let mut violations = Vec::new();
+    let mut passes = true;
+
+    // 1. Try to load hardcoded policy rules
+    if let Ok(policy_config) = ArchPolicyConfig::load_for_project(project_root) {
+        if !policy_config.rules.is_empty() {
+            let report = validate_plan_preflight(graph, plan_id, &policy_config.rules);
+            violations.extend(report.violations);
+            passes = report.passes;
+        }
+    }
+
+    // 2. If passes is still true, run the dynamic Topological Delta check as an invariant gate
+    if passes {
+        if let Ok(delta_report) = evaluate_delta_gate(graph, plan_id, -0.02, 5.0) {
+            if !delta_report.passes {
+                passes = false;
+                for edge in delta_report.plan_surprise_edges {
+                    violations.push(format!(
+                        "Topological Entropy Violation: Planned relationship {} -> {} exceeds surprise threshold ({:.1}). Reason: {}",
+                        edge.source, edge.target, edge.score, edge.reasons.join(", ")
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(PreFlightReport {
+        plan_id: plan_id.to_string(),
+        passes,
+        violations,
+    })
 }
 
 fn resolve_edge_source_file(graph: &GrapheniumGraph, edge: &Edge) -> String {
