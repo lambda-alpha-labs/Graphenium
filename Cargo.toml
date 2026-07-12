@@ -1,6 +1,6 @@
 [package]
 name = "graphenium"
-version = "0.19.1"
+version = "0.19.2"
 edition = "2021"
 description = "Graphenium (gm) — structural containment and pre-flight gating for AI coding agents"
 license = "MIT"

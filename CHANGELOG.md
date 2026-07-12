@@ -4,6 +4,17 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.19.2 — 2026-07-12
+
+### Summary
+Patch release fixing MCP tool schema compatibility with Google Gemini / Vertex AI function calling ([#37](https://github.com/lambda-alpha-labs/Graphenium/issues/37)).
+
+### Fixed
+*   **Gemini/Vertex MCP schema rejection:** Optional tool parameters (e.g. `add_edge.weight`) no longer emit nullable unions (`type: ["number", "null"]` or `anyOf` with sibling `description`/`format` keys) that Google's function-calling API rejects.
+*   **`list_tools` schema sanitization (`src/serve/tool_schema.rs`):** Flattens nullable unions to plain types and relies on the `required` array for optionality before schemas are returned to MCP clients.
+
+---
+
 ## v0.19.1 — 2026-07-12
 
 ### Summary

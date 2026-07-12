@@ -7,8 +7,13 @@ use petgraph::visit::EdgeRef;
 
 use arc_swap::ArcSwap;
 use rmcp::{
-    model::{ServerCapabilities, ServerInfo},
-    tool, ServerHandler,
+    handler::server::tool::ToolCallContext,
+    model::{
+        CallToolRequestParam, CallToolResult, ListToolsResult, PaginatedRequestParam,
+        ServerCapabilities, ServerInfo,
+    },
+    service::RequestContext,
+    tool, Error as McpError, ServerHandler,
 };
 
 use crate::model::GrapheniumGraph;
@@ -3941,8 +3946,37 @@ impl GrapheniumServer {
 
 // ── ServerHandler ─────────────────────────────────────────────────────────────
 
-#[tool(tool_box)]
 impl ServerHandler for GrapheniumServer {
+    async fn list_tools(
+        &self,
+        _: PaginatedRequestParam,
+        _: RequestContext<rmcp::RoleServer>,
+    ) -> Result<ListToolsResult, McpError> {
+        let tools = Self::tool_box()
+            .list()
+            .into_iter()
+            .map(|mut tool| {
+                let mut schema = tool.input_schema.as_ref().clone();
+                super::tool_schema::sanitize_tool_input_schema(&mut schema);
+                tool.input_schema = std::sync::Arc::new(schema);
+                tool
+            })
+            .collect();
+        Ok(ListToolsResult {
+            next_cursor: None,
+            tools,
+        })
+    }
+
+    async fn call_tool(
+        &self,
+        call_tool_request_param: CallToolRequestParam,
+        context: RequestContext<rmcp::RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let context = ToolCallContext::new(self, call_tool_request_param, context);
+        Self::tool_box().call(context).await
+    }
+
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
             instructions: Some(
@@ -4622,6 +4656,35 @@ mod tests {
         let info = s.get_info();
         assert!(info.instructions.is_some());
         assert!(info.capabilities.tools.is_some());
+    }
+
+    #[test]
+    fn list_tools_sanitizes_gemini_incompatible_nullable_schemas() {
+        let tools: Vec<_> = GrapheniumServer::tool_box()
+            .list()
+            .into_iter()
+            .map(|mut tool| {
+                let mut schema = tool.input_schema.as_ref().clone();
+                crate::serve::tool_schema::sanitize_tool_input_schema(&mut schema);
+                tool.input_schema = std::sync::Arc::new(schema);
+                tool
+            })
+            .collect();
+
+        let add_edge = tools
+            .iter()
+            .find(|tool| tool.name.as_ref() == "add_edge")
+            .expect("add_edge tool should be registered");
+
+        let weight = &add_edge.input_schema["properties"]["weight"];
+        assert_eq!(weight["type"], serde_json::json!("number"));
+        assert!(
+            weight.get("anyOf").is_none(),
+            "weight must not use anyOf for Gemini compatibility"
+        );
+
+        let source_location = &add_edge.input_schema["properties"]["source_location"];
+        assert_eq!(source_location["type"], serde_json::json!("string"));
     }
 
     #[test]

@@ -10,6 +10,7 @@
 /// - `shortest_path` — Path search between two nodes
 pub mod freshness;
 pub mod handlers;
+pub mod tool_schema;
 pub mod traversal;
 
 pub use handlers::GrapheniumServer;
