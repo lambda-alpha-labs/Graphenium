@@ -224,4 +224,3 @@ _No AMBIGUOUS edges._
 
 20. Community 11 has low internal connectivity (14%). Should its 18 members be reorganized?
    > _Cohesion 0.144 < 0.15 threshold._
-
