@@ -15,6 +15,7 @@ README.md                       # The main technical entry point & quick start
 AI_SETUP.md                     # Assistant setup playbook (compiled into workspace)
 CHANGELOG.md                    # Release history & structural milestones
 CONTRIBUTING.md                 # Contributor guide & compiler module reference
+MANIFEST.md                     # Package manifest indexing all documentation
 SECURITY.md                     # Local-first security & sensitive file rules
 
 docs/
@@ -30,7 +31,8 @@ docs/
   ├── BENCHMARKING.md           # Payload budgets, latency metrics, & TTVP
   ├── COMPARISON.md             # Graphenium vs. grep, ast-grep, & vector indexes
   ├── HARNESS_ADAPTER.md        # Programmatic Rust integration reference
-  └── GRAPH_REPORT.md           # Diagnostic guidelines for codebase reports
+  ├── GRAPH_REPORT.md           # Diagnostic guidelines for codebase reports
+  └── WORKED_EXAMPLES.md        # Case studies proving containment on real repos
 
 skills/
   └── graphenium/

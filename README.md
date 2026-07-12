@@ -191,7 +191,11 @@ Add to `~/.cursor/mcp.json`:
 | [`docs/TRUST_MODEL.md`](docs/TRUST_MODEL.md) | Under-the-hood details of AST-proven vs heuristic confidence. |
 | [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) | Performance metrics: latency, token budgets, and scaling limits. |
 | [`docs/COMPARISON.md`](docs/COMPARISON.md) | Why Graphenium is distinct from grep, AST tools, and GraphRAG. |
+| [`docs/POSITIONING.md`](docs/POSITIONING.md) | Market positioning, target personas, and competitive differentiation. |
 | [`docs/HARNESS_ADAPTER.md`](docs/HARNESS_ADAPTER.md) | Embedding Graphenium's structural engine as a library. |
+| [`docs/WORKED_EXAMPLES.md`](docs/WORKED_EXAMPLES.md) | Case studies proving containment on real repositories. |
+| [`docs/GRAPH_REPORT.md`](docs/GRAPH_REPORT.md) | Interpreting the generated codebase audit report. |
+| [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md) | Full documentation ecosystem overview. |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Local-first guarantees and secret exclusion rules. |
 
 ---
