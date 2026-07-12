@@ -97,9 +97,7 @@ fn flatten_nullable_union(obj: &mut serde_json::Map<String, Value>, union_key: &
 
 fn is_null_schema(value: &Value) -> bool {
     match value {
-        Value::Object(obj) => obj
-            .get("type")
-            .is_some_and(|ty| is_null_type(ty)),
+        Value::Object(obj) => obj.get("type").is_some_and(|ty| is_null_type(ty)),
         _ => false,
     }
 }
@@ -139,10 +137,7 @@ mod tests {
         let weight = &schema["properties"]["weight"];
         assert_eq!(weight["type"], "number");
         assert_eq!(weight["format"], "double");
-        assert_eq!(
-            weight["description"],
-            "Optional traversal weight override"
-        );
+        assert_eq!(weight["description"], "Optional traversal weight override");
         assert!(weight.get("anyOf").is_none());
     }
 
