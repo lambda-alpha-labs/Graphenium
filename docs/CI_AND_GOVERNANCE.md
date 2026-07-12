@@ -96,9 +96,65 @@ gm check --graph graphenium-out/graph.json --delta --plan refactor-session-handl
 gm check --delta --plan my-plan --mod-tolerance -0.02 --surprise-threshold 5.0 --strict
 ```
 
+Unlike static `policy.json` rules (which require manual glob patterns), the delta gate evaluates **relative modularity decay**. It accepts your codebase's existing legacy complexity as the baseline and blocks only *new* topological erosion introduced by the agent's plan.
+
 ---
 
-## 4. When Policy Gating Runs
+## 4. Zero-Configuration CI Gates
+
+You do not need a `.graphenium/policy.json` file to enforce commit-time gatekeeping. Graphenium's delta gate uses Louvain community structure and surprise scoring to reject agent plans that degrade modularity — without hardcoded folder regexes.
+
+### Pre-Commit Hook
+
+```sh
+#!/bin/sh
+# .git/hooks/pre-commit (or via pre-commit framework)
+PLAN_ID="${GRAPHENIUM_PLAN_ID:-}"
+if [ -n "$PLAN_ID" ]; then
+  gm check --delta --plan "$PLAN_ID" --graph graphenium-out/graph.json
+fi
+```
+
+Set `GRAPHENIUM_PLAN_ID` in your agent session to the active planning workspace before committing.
+
+### GitHub Actions (Delta Gate Only)
+
+```yaml
+      - name: Compile Codebase Index
+        run: gm run . --no-semantic --no-viz
+
+      - name: Enforce Topological Delta Gate
+        env:
+          PLAN_ID: ${{ vars.GRAPHENIUM_PLAN_ID }}
+        run: |
+          if [ -n "$PLAN_ID" ]; then
+            gm check --graph graphenium-out/graph.json --delta --plan "$PLAN_ID"
+          else
+            echo "No PLAN_ID set — skipping delta gate"
+          fi
+```
+
+### Combined Policy + Delta Gate
+
+For repositories with explicit rules, run both gates in sequence:
+
+```yaml
+      - name: Enforce Policy and Delta Gates
+        env:
+          PLAN_ID: ${{ vars.GRAPHENIUM_PLAN_ID }}
+        run: |
+          gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 5 --strict
+          if [ -n "$PLAN_ID" ]; then
+            gm check --graph graphenium-out/graph.json --plan "$PLAN_ID" --strict
+            gm check --graph graphenium-out/graph.json --delta --plan "$PLAN_ID"
+          fi
+```
+
+The delta gate fails the build on modularity decay (ΔQ < tolerance) or high-surprise planned edges, independent of whether `policy.json` rules are configured.
+
+---
+
+## 5. When Policy Gating Runs
 
 Graphenium enforces these policies at multiple checkpoints in the development lifecycle:
 
@@ -113,7 +169,7 @@ Graphenium enforces these policies at multiple checkpoints in the development li
 
 ---
 
-## 5. Baseline Index Verification Gate
+## 6. Baseline Index Verification Gate
 
 To ensure your codebase index remains healthy and that your agent is not operating on incomplete static analysis data, run Graphenium's baseline quality gate in CI:
 
@@ -128,7 +184,7 @@ gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 1
 
 ---
 
-## 6. Incremental Diff Audits
+## 7. Incremental Diff Audits
 
 To audit a completed PR, generate a baseline index snapshot before the agent starts its task:
 
@@ -147,7 +203,7 @@ This generates a structured, risk-sorted review plan prioritizing removed public
 
 ---
 
-## 7. Pull Request Review Template
+## 8. Pull Request Review Template
 
 Configure your agent or CI pipeline to append Graphenium's structural audit to every pull request description:
 
@@ -172,7 +228,7 @@ Configure your agent or CI pipeline to append Graphenium's structural audit to e
 
 ---
 
-## 8. GitHub Actions Workflow Integration
+## 9. GitHub Actions Workflow Integration
 
 Incorporate Graphenium into your standard pull request pipeline using the following workflow configuration:
 
@@ -209,7 +265,7 @@ jobs:
 
 ---
 
-## 9. What Graphenium Gating Does Not Replace
+## 10. What Graphenium Gating Does Not Replace
 
 Graphenium is designed to enforce structural and architectural boundaries. It is a complementary containment layer and does not replace:
 *   **Unit & Integration Tests:** Graphenium verifies *decoupling and structure*; tests verify *behavior and state*.

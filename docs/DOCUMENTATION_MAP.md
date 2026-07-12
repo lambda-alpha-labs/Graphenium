@@ -56,7 +56,8 @@ Our documentation refactoring enforces a strict paradigm shift in terminology an
 | Helping agents search and navigate the codebase. | **Stopping agents from violating boundaries and creating code bloat.** |
 | Passive visualization diagrams (HTML outputs). | **Automated pre-commit hooks, Datalog proofs, and CI gates.** |
 | Fictional "knowledge graph RAG" similarity guesses. | **Compiler-backed facts (`EXTRACTED`) vs. exploratory hypotheses (`INFERRED`).** |
-| AI prompts (`AGENTS.md`, `CLAUDE.md`) | **External, mechanical constraints (`policy.json` / `validate_plan` / `evaluate_delta_gate`).** |
+| AI prompts (`AGENTS.md`, `CLAUDE.md`) | **External, mechanical constraints (`policy.json` / `validate_plan` / `evaluate_delta_gate` / `gm check --delta`).** |
+| Static folder-regex linters | **Zero-Drift Delta Gating — relative Louvain modularity (ΔQ) and surprise edge profiling.** |
 
 ---
 

@@ -71,6 +71,35 @@ Graphenium distinguishes between three complementary policy layers in your gover
 
 Use **Trust Quality** policies to ensure Graphenium's index is complete and healthy enough to plan against. Use **Architecture** policies to block agents from committing designs that violate declared boundaries. **Topological Entropy** gating runs automatically as a zero-config fallback — even without `.graphenium/policy.json` — rejecting plans that mathematically degrade modularity or introduce structurally anomalous dependencies (`cross-community`, `peripheral→hub`).
 
+### Topological Entropy Boundaries
+
+Unlike human-declared glob patterns in `policy.json`, topological entropy boundaries are **compiler-proven mathematical invariants** derived from the index itself:
+
+| Signal | Source Module | Trust Property |
+|---|---|---|
+| **Louvain communities** | `src/cluster/louvain.rs` | Compiler-extracted graph structure; deterministic given the same index and seed. |
+| **Modularity score (Q)** | `src/cluster/louvain.rs` | Quantifies how well edges cluster within communities. Not a heuristic guess. |
+| **Modularity delta (ΔQ)** | `src/analyze/delta.rs` | Relative change between baseline and virtual plan. Evaluates *new* decay, not absolute shape. |
+| **Surprise edge score** | `src/analyze/surprise.rs` | Flags structurally anomalous connections (`cross-community`, `peripheral→hub`) with explicit factor breakdown. |
+
+These signals improve epistemic trust because they are computed from AST-proven edges and deterministic graph algorithms — not from natural-language prompts or naming assumptions.
+
+### The Existing Drift Paradox
+
+Legacy codebases often contain pre-existing architectural debt: tangled modules, cross-boundary shortcuts, and uneven community cohesion. A naive linter that enforces idealized shapes (e.g., strict MVC folder layouts) would reject every agent plan on contact with real-world complexity.
+
+Graphenium resolves this paradox through **relative evaluation**:
+
+```text
+G_baseline  = physical-only subgraph (current reality)
+G_virtual   = physical + proposed plan overlay
+ΔQ          = Q(G_virtual) - Q(G_baseline)
+
+Pass if:  ΔQ ≥ tolerance  AND  no high-surprise planned edges
+```
+
+The baseline accepts your existing legacy complexity as ground truth. The gate blocks only *new* topological decay introduced by the agent's proposed edges — preserving modularity without forcing a wholesale architectural rewrite.
+
 ### Trust Quality Policy Examples:
 ```sh
 # Permissive (Initial repo setup)

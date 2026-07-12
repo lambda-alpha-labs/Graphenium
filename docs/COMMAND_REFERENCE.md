@@ -119,6 +119,38 @@ gm check --delta --plan refactor-session-handling
 gm check --delta --plan my-plan --mod-tolerance -0.01 --surprise-threshold 4.0
 ```
 
+### Example Output (Pass)
+
+```text
+## Topological Delta Gate: refactor-session-handling
+Modularity Delta (ΔQ): 0.0012 (Baseline: 0.3841 → Virtual: 0.3853)
+
+[PASS] Plan respects current modularity patterns.
+```
+
+### Example Output (Failure)
+
+When the gate fails, `gm check --delta` exits with code `1`. Use the structured output to diagnose the rejection:
+
+```text
+## Topological Delta Gate: refactor-session-handling
+Modularity Delta (ΔQ): -0.0341 (Baseline: 0.3841 → Virtual: 0.3500)
+
+[FAIL] High-Surprise Connections Proposed:
+  - plan:UserView ──► src/db/helper (Score: 6.5)
+    Reason(s): cross-community, peripheral→hub
+
+Structural Drift Events Detected:
+  - [Cross-boundary edges]: cross-boundary edges increased: 42 → 45
+
+[FAIL] Plan violates topological entropy boundaries.
+```
+
+**Interpreting failures:**
+*   **Negative ΔQ** — the proposed plan degrades Louvain modularity beyond `--mod-tolerance`. Route dependencies through existing intermediate services.
+*   **High-surprise edges** — planned connections score above `--surprise-threshold` (e.g., `cross-community`, `peripheral→hub`). These indicate architectural shortcuts, not regex folder violations.
+*   **Drift events** — informational warnings about community boundary changes triggered by the plan.
+
 ---
 
 ## `gm serve`

@@ -115,18 +115,47 @@ By maintaining a virtual-to-physical mapping, Graphenium mechanically detects:
 
 ---
 
-## 7. Zero-Drift Gating Engine (`src/analyze/delta.rs`)
+## 7. Dual-Graph Delta Solver (`src/analyze/delta.rs`)
 
-Graphenium's **Topological Entropy Guardrails** provide configuration-free protection against architectural shortcuts. The delta engine (`evaluate_delta_gate`) operates entirely in memory on the loaded index:
+Graphenium's **Topological Entropy Guardrails** implement a dual-graph partition pipeline. The delta engine (`evaluate_delta_gate`) operates entirely in memory on the loaded index.
 
-1. **`extract_baseline_subgraph`:** Clone the graph, retaining only physical nodes and edges (`plan_id` is `None`).
-2. **Virtual overlay:** Build a second subgraph containing physical nodes plus the target planning workspace.
-3. **Louvain clustering:** Run community detection on both subgraphs (`src/cluster/louvain.rs`).
-4. **Modularity delta (ΔQ):** Compute modularity for each subgraph; reject if `virtual_q - baseline_q < modularity_tolerance` (default: `-0.02`).
-5. **Surprise profiling:** Score planned edges via `src/analyze/surprise.rs`; flag edges exceeding `surprise_threshold` (default: `5.0`).
-6. **Drift detection:** Compare community boundaries between baseline and virtual graphs (`src/cluster/drift.rs`).
+### Graph Partitioning
 
-Entry points: `evaluate_delta_gate` (MCP), `validate_plan` (orchestrator fallback), `gm check --delta --plan <id>` (CLI).
+```text
+G_full      = loaded index (physical + all planning workspaces)
+G_baseline  = extract_baseline_subgraph(G_full)
+              └── nodes/edges where plan_id is None (physical-only)
+G_virtual   = G_baseline ∪ planned subgraph for target plan_id
+              └── physical nodes + edges + plan_id-scoped virtual nodes/edges
+```
+
+Both subgraphs are independently re-clustered via Louvain (`src/cluster/louvain.rs`) with `ClusterOptions::default()` (seed 42). Community IDs are written back to each subgraph's nodes before modularity is computed.
+
+### Modularity Delta (ΔQ)
+
+For each subgraph, Graphenium builds an internal `LGraph` adjacency representation and computes modularity Q over the community assignment vector:
+
+```text
+ΔQ = Q(G_virtual) - Q(G_baseline)
+```
+
+The gate passes when `ΔQ ≥ modularity_tolerance` (default: `-0.02`). A negative ΔQ means the proposed plan weakens community cohesion relative to the current physical baseline.
+
+### Surprise Edge Filtering
+
+After clustering `G_virtual`, Graphenium scores all edges via `surprising_connections()` (`src/analyze/surprise.rs`) and filters to **plan-attributed edges only**:
+
+1. Score every edge in `G_virtual` (top 50 by surprise).
+2. For each candidate, check `edges_between(source, target)` for an edge with `plan_id == target_plan`.
+3. Retain edges where `score ≥ surprise_threshold` (default: `5.0`).
+
+Surprise factors include confidence tier, cross-file-type, cross-repo directory, `cross-community`, semantic similarity, and `peripheral→hub` coupling. Only edges introduced by the planning workspace are reported — existing physical shortcuts are accepted as baseline complexity.
+
+### Drift Detection
+
+`detect_drift(G_baseline, G_virtual)` (`src/cluster/drift.rs`) compares community assignments and cross-boundary edge counts. Events are filtered to plan-attributed nodes plus aggregate `cross-boundary` and `community-structure` markers.
+
+**Entry points:** `evaluate_delta_gate` (MCP), `validate_plan` (orchestrator fallback), `gm check --delta --plan <id>` (CLI).
 
 ---
 

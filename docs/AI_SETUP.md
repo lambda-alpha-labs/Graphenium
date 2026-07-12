@@ -219,6 +219,17 @@ The agent's handshake response must successfully report:
 *   Languages detected.
 *   Symbol and dependency counts.
 *   The path of the loaded `graph.json` index.
+*   **Policy gates active** — e.g., `Policy Gates Active: Dynamic Delta Gating (Zero-Config Modularity Protection)` when no `.graphenium/policy.json` is configured, or `N explicit policy rule(s) + Dynamic Delta Gating` when rules exist.
+
+**Expected handshake response shape:**
+
+```text
+Structural Index Loaded: graphenium-out/graph.json
+Handshake Status: fresh
+Schema: 0.2.0
+Nodes: 1287 | Edges: 3335 | Communities: 24
+Policy Gates Active: Dynamic Delta Gating (Zero-Config Modularity Protection)
+```
 
 ### Stale Index Warning Mitigation
 If `graph_info` warns that **"Graph may be stale"**, it means physical source files have changed since Graphenium last compiled its structural index. Rebuild and hot-swap the index locally without restarting the background MCP server process:
@@ -232,15 +243,22 @@ Then instruct the agent: `reload_graph` (this updates Graphenium's in-memory ind
 
 ## Advanced Playbook Capabilities
 
-### 1. Pre-Flight Architecture Gating (First-Order Logic)
-Graphenium allows you to block invalid code design pre-flight. Define structural boundaries in `.graphenium/policy.json` at the root of the repository (e.g., controllers can never call database entities directly).
+### 1. Zero-Config Topological Delta Gating
+Graphenium blocks agent plans that degrade modularity — no `policy.json` required. After declaring a virtual plan:
 
-To test if a proposed change violates policy before writing any code:
 1.  Call `create_planning_workspace` to initialize a draft workspace.
-2.  Call `add_planned_symbol` to register the proposed class, method, or dependency. This automatically runs Graphenium's embedded Datalog solver.
-3.  If Graphenium returns `PRE_FLIGHT_VIOLATION`, block the agent from editing the files, and inspect the violations.
+2.  Call `add_planned_symbol` for each intended class, method, or dependency.
+3.  Call `evaluate_delta_gate` with the `plan_id`. Inspect ΔQ, high-surprise edges, and drift warnings.
+4.  If status is `❌ FAILED`, re-plan through existing domain services and re-evaluate before editing files.
 
-### 2. Datalog Transitive Closure Queries
+### 2. Pre-Flight Architecture Gating (Explicit Policy Rules)
+For repositories with `.graphenium/policy.json`, Graphenium also enforces declarative boundaries (e.g., controllers can never call database entities directly).
+
+1.  Call `validate_plan` after completing the virtual design spec.
+2.  If Graphenium returns `PRE_FLIGHT_VIOLATION`, block the agent from editing files and inspect the violations.
+3.  `add_planned_symbol` automatically runs policy checks when rules are configured.
+
+### 3. Datalog Transitive Closure Queries
 Graphenium's Datalog engine automatically includes a standard library of structural predicates (`stdlib.dl`). Instruct the agent to run declarative transitive queries rather than writing recursive prompts:
 
 ```sh
@@ -277,6 +295,7 @@ Once the setup is complete, provide the user with a concise architectural summar
 Graphenium Pre-Flight Gate Active: <gm path>
 Base Codebase Index Generated: <index path>
 Current Index Scale: <nodes> symbols, <edges> boundaries
-Pre-Flight Policies Configured: <yes / no / skipped>
+Pre-Flight Policies Configured: <yes / no — zero-config delta gating active>
+Policy Gates Active: <Dynamic Delta Gating / N rules + Dynamic Delta Gating>
 Workspace Guardrails Active: Yes (agent must query codebase structure before editing)
 ```

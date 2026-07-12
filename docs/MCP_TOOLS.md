@@ -147,22 +147,80 @@ These tools support Graphenium's write-time containment loop, allowing agents to
 *   **Purpose:** Evaluates the virtual plan before code is implemented. Runs explicit `.graphenium/policy.json` rules when configured (forbidden dependencies, strict layering bypasses, banned symbols), then applies **Dynamic Delta Gating** as a zero-config fallback — even when no policy file exists.
 *   **When to Use:** After the agent completes its virtual plan and before it edits any source files.
 
-### `evaluate_delta_gate`
-*   **Purpose:** Performs an in-memory **Topological Delta Gate** on a planning workspace. Clones the physical-only baseline subgraph, overlays the proposed plan, clusters both, and computes the Louvain modularity delta (ΔQ). Flags planned edges whose surprise score exceeds the threshold (e.g., `cross-community`, `peripheral→hub`).
-*   **Parameters:**
-    *   `plan_id` (required) — Planning workspace identifier.
-    *   `modularity_tolerance` (optional, default: `-0.02`) — Maximum allowed modularity decay.
-    *   `surprise_threshold` (optional, default: `5.0`) — Minimum surprise score to flag a planned edge.
-*   **Pass Criteria:** ΔQ ≥ `modularity_tolerance` and no planned edges exceed `surprise_threshold`.
-*   **When to Use:** To iteratively refine a design before implementation, or when `validate_plan` reports a topological entropy rejection.
-
 ### `get_plan_details`
 *   **Purpose:** Retrieves the virtual design spec, highlights currently implemented symbols, and flags missing declarations or scope creep.
 *   **When to Use:** Prior to generating a PR or requesting human review.
 
 ---
 
-## 6. Write and Index Operations
+## 6. Topological Delta Tools
+
+These tools evaluate proposed plans against Graphenium's mathematical modularity invariants. They operate entirely in memory on the loaded index — no physical files are modified.
+
+### `evaluate_delta_gate`
+
+Performs an in-memory **Topological Delta Gate** on a planning workspace.
+
+**Input Schema:**
+
+```json
+{
+  "name": "evaluate_delta_gate",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "plan_id": {
+        "type": "string",
+        "description": "The unique identifier of the target planning workspace."
+      },
+      "modularity_tolerance": {
+        "type": "number",
+        "description": "Optional maximum allowed modularity drop. Defaults to -0.02."
+      },
+      "surprise_threshold": {
+        "type": "number",
+        "description": "Optional surprise threshold to flag structural violations. Defaults to 5.0."
+      }
+    },
+    "required": ["plan_id"]
+  }
+}
+```
+
+**Parameters:**
+*   `plan_id` (required) — Planning workspace identifier.
+*   `modularity_tolerance` (optional, default: `-0.02`) — Maximum allowed modularity decay (ΔQ floor).
+*   `surprise_threshold` (optional, default: `5.0`) — Minimum surprise score to flag a planned edge.
+
+**Pass Criteria:** ΔQ ≥ `modularity_tolerance` and no planned edges exceed `surprise_threshold`.
+
+**Response Format (Markdown):**
+
+```markdown
+### Topological Delta Report for Plan: `refactor-session-handling`
+
+- **Status:** ❌ FAILED
+- **Modularity Delta (ΔQ):** -0.0341 (Baseline: 0.3841 → Virtual: 0.3500)
+
+#### High-Surprise Edges Proposed:
+- `plan:UserView` ──► `src/db/helper` (Confidence: 6.5)
+  *Reason:* cross-community, peripheral→hub
+
+#### Structural Drift Warnings:
+- **Cross-boundary edges**: cross-boundary edges increased: 42 → 45
+```
+
+**How assistants should interpret responses:**
+*   **`✅ PASSED`** — The plan preserves modularity and introduces no high-surprise planned edges. Proceed to implementation.
+*   **`❌ FAILED` with negative ΔQ** — The plan degrades community cohesion. Re-route dependencies through existing domain services before editing files.
+*   **`❌ FAILED` with `High-Surprise Edges`** — Inspect the listed `plan_surprise_edges`. Each entry names the source, target, score, and contributing factors (`cross-community`, `peripheral→hub`, etc.). Refactor the virtual plan to decouple across community boundaries.
+*   **Drift warnings** — Informational; highlight community boundary shifts triggered by the plan. Review alongside surprise edges.
+
+**When to Use:** To iteratively refine a design before implementation, or when `validate_plan` reports a topological entropy rejection.
+
+---
+
+## 7. Write and Index Operations
 
 These tools should be used sparingly and only after direct, human-verified source inspection.
 
