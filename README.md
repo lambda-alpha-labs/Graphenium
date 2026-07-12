@@ -179,10 +179,19 @@ Add to `~/.cursor/mcp.json`:
 
 ## Detailed Documentation Map
 
+### Root
+| Document | Purpose |
+|---|---|
+| [`AI_SETUP.md`](AI_SETUP.md) | Step-by-step assistant setup playbook. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contributor guidelines and module reference. |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release history and milestone summary. |
+| [`SECURITY.md`](SECURITY.md) | Local-first security guarantees and vulnerability reporting. |
+| [`MANIFEST.md`](MANIFEST.md) | Complete package manifest indexing all documentation. |
+
+### Core Documentation (`docs/`)
 | Document | Purpose |
 |---|---|
 | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) | Installation, initial codebase indexing, and MCP setup. |
-| [`docs/AI_SETUP.md`](docs/AI_SETUP.md) | Step-by-step assistant setup playbook. |
 | [`docs/AGENT_WORKFLOWS.md`](docs/AGENT_WORKFLOWS.md) | Containment workflows: pre-flight, in-edit planning, and verification. |
 | [`docs/CI_AND_GOVERNANCE.md`](docs/CI_AND_GOVERNANCE.md) | Enforcing architecture policies in CI pipelines. |
 | [`docs/COMMAND_REFERENCE.md`](docs/COMMAND_REFERENCE.md) | Complete CLI syntax and configuration arguments. |
@@ -196,7 +205,20 @@ Add to `~/.cursor/mcp.json`:
 | [`docs/WORKED_EXAMPLES.md`](docs/WORKED_EXAMPLES.md) | Case studies proving containment on real repositories. |
 | [`docs/GRAPH_REPORT.md`](docs/GRAPH_REPORT.md) | Interpreting the generated codebase audit report. |
 | [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md) | Full documentation ecosystem overview. |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | Local-first guarantees and secret exclusion rules. |
+
+### Agent Integration
+| Document | Purpose |
+|---|---|
+| [`skills/graphenium/SKILL.md`](skills/graphenium/SKILL.md) | Agentic skill instructions and containment behavior rules. |
+| [`contrib/harness-adapter/README.md`](contrib/harness-adapter/README.md) | Embedding Graphenium's engine inside AI coding harnesses. |
+
+### Case Studies (`worked/`)
+| Document | Purpose |
+|---|---|
+| [`worked/README.md`](worked/README.md) | Overview of structural containment case studies. |
+| [`worked/TEMPLATE.md`](worked/TEMPLATE.md) | Template for documenting new codebase case studies. |
+| [`worked/graphenium-self-analysis/README.md`](worked/graphenium-self-analysis/README.md) | Graphenium self-analysis: applying the containment engine to itself. |
+| [`worked/graphenium-self-analysis/sample-queries.md`](worked/graphenium-self-analysis/sample-queries.md) | Sample query output on Graphenium's own codebase. |
 
 ---
 
