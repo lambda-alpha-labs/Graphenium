@@ -33,7 +33,7 @@ Our documented baseline heuristic is **4 characters per token** for Graphenium's
 Graphenium is evaluated against its own repository structure as a standard baseline:
 
 | Metric | Baseline Value |
-|---|---|
+| :--- | :--- |
 | **Files Indexed** | 41 source files |
 | **AST Symbols (Nodes)** | 1,211 |
 | **Structural Boundaries (Edges)** | 3,083 |
@@ -50,7 +50,7 @@ Graphenium is evaluated against its own repository structure as a standard basel
 The following table documents execution latencies and payload weights for common pre-flight and diagnostic queries executed on our baseline index:
 
 | Query Type | Command / Tool | Payload Weight (chars) | Approx. Tokens | Latency (ms) |
-|---|---:|---:|---:|
+| :--- | :--- | ---: | ---: | ---: |
 | **Transitive Impact Analysis** | `gm query "replace_file_extraction" --mode hybrid` | 8,674 | 2,170 | 27 ms |
 | **Structural Domain Context** | `get_community(id: 1)` | 6,690 | 1,670 | 18 ms |
 | **Module Dependency Mapping** | `module_dependencies("serve", "model")` | 8,395 | 2,100 | 22 ms |
@@ -88,7 +88,7 @@ chmod +x scripts/run_benchmarks.sh
 When evaluating Graphenium's gating pipelines on a new repository, aim for the following target bounds:
 
 | Metric | Healthy Bounds | Engineering Reason |
-|---|---|---|
+| :--- | :--- | :--- |
 | **Query Payload Size** | Under 10,000 characters | Ensures metadata fits comfortably within agent context windows without crowding out reasoning space. |
 | **Query Execution Latency** | Under 50 ms | Keeps MCP tool calls interactive, preventing background agent stalls. |
 | **Datalog Solver Execution** | Under 100 ms (Step budget: 1,000) | Ensures transitive layering proofs complete instantly during pre-flight policy evaluations. |
@@ -106,7 +106,7 @@ When evaluating Graphenium's gating pipelines on a new repository, aim for the f
 Graphenium uses a 5-point quality scale to measure how effectively it prevents architectural drift during agentic edits:
 
 | Score | Verification Quality | Meaning |
-|---|---|---|
+| :---: | :--- | :--- |
 | **0** | **None** | The index was ignored; the agent wrote code blindly using unverified filesystem context. |
 | **1** | **Keyword Match** | The agent queried name strings but did not verify dependencies or transitive paths. |
 | **2** | **Direct Call Validation** | The agent verified direct callers and read targeted files, but bypassed pre-flight planning. |
@@ -121,7 +121,7 @@ Graphenium uses a 5-point quality scale to measure how effectively it prevents a
 The following matrix illustrates how Graphenium compares to standard codebase search and indexing tools during an active agentic workflow:
 
 | Feature | Graphenium | `grep` / `ripgrep` | `ast-grep` | RAG Vector Indexes |
-|---|---|---|---|---|
+| :--- | :--- | :--- | :--- | :--- |
 | **Primary Workflow Focus** | **Write-Safety & Gating** | Text Retrieval | Pattern Matching | Semantic Search |
 | **Local-First Execution** | Yes (Tree-sitter) | Yes | Yes | Often Remote |
 | **Transitive Path Solving** | **Yes (Datalog solver)** | No | No | No |
