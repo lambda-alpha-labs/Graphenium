@@ -19,6 +19,8 @@ This release introduces **Zero-Drift Gating (Topological Entropy Guardrails)** â
 ### Changed
 *   `validate_plan` (MCP) now runs policy rules and dynamic delta gating in sequence.
 *   Agent skill (`skills/graphenium/SKILL.md`) updated with `evaluate_delta_gate` tool guidance and topological delta failure resolution steps.
+*   `install.sh` now installs the Claude Code skill to `~/.claude/skills/graphenium/SKILL.md` on Unix installs.
+*   Documentation ecosystem updated for zero-config CI gates, dual-graph delta solver, and topological entropy trust model.
 
 ---
 
