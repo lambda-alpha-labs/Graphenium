@@ -4,6 +4,16 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.19.3 — 2026-07-13
+
+### Summary
+Patch release restoring Datalog stdlib usability on real-size codebases.
+
+### Fixed
+*   **Datalog EDB fact-cap rejection (`src/analyze/query.rs`):** Raised the base-relation backstop in `run_datalog_query` from 100,000 to 10,000,000 facts. The previous cap fired at EDB load time — before goal-directed evaluation could narrow anything — and rejected every stdlib query on graphs with >100k edges (e.g. `?- is_hub(X).` on a ~225k-edge codebase). Evaluation remains bounded by `step_budget`; the backstop is a sanity limit on materialized EDB size only.
+
+---
+
 ## v0.19.2 — 2026-07-12
 
 ### Summary

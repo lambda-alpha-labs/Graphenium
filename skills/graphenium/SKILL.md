@@ -42,7 +42,7 @@ Verify the following index properties before planning edits:
 
 ## 3. Datalog Queries (Transitive Path Proving)
 
-Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`). **Never write manual recursive rules** to trace dependencies; instead, invoke Graphenium's pre-loaded standard library predicates via `run_datalog`:
+Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`). **Never write manual recursive rules** to trace dependencies; instead, invoke Graphenium's pre-loaded standard library predicates via `run_datalog`. Base EDB relations up to 10M facts are supported on real codebases; bind seed arguments on `*_transitive` predicates to stay within the solver step budget.
 
 *   **Audit Layer Bypassing:**
     `?- bypasses_layer('auth_controller', 'auth_service', 'db_helper').`

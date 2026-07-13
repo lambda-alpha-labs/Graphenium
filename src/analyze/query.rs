@@ -782,8 +782,13 @@ pub fn run_datalog_query(
         return Err("Query too long (max 10,000 characters)".to_string());
     }
 
-    // Guard: max relation size (prevent OOM)
-    let max_relation_size: usize = 100_000;
+    // Guard: max BASE (EDB) relation size — a sanity backstop only. The EDB is already
+    // materialized (see load_from_graph below), so this does not prevent the EDB's own
+    // memory; the real OOM risk is derived-relation blow-up during evaluation, which is
+    // bounded by `step_budget` in `Interpreter::solve`. The previous 100k value rejected
+    // every query on any real codebase (RobotStudio has ~225k edges), which defeated the
+    // goal-directed lazy evaluation. Raised to a realistic backstop.
+    let max_relation_size: usize = 10_000_000;
 
     // Step 1: Tokenize
     let tokens = tokenize(query)?;

@@ -259,7 +259,7 @@ For repositories with `.graphenium/policy.json`, Graphenium also enforces declar
 3.  `add_planned_symbol` automatically runs policy checks when rules are configured.
 
 ### 3. Datalog Transitive Closure Queries
-Graphenium's Datalog engine automatically includes a standard library of structural predicates (`stdlib.dl`). Instruct the agent to run declarative transitive queries rather than writing recursive prompts:
+Graphenium's Datalog engine automatically includes a standard library of structural predicates (`stdlib.dl`). Instruct the agent to run declarative transitive queries rather than writing recursive prompts. Base EDB relations (up to 10 million facts) load on real-size codebases; inference is bounded by a 1,000-step solver budget — bind seed arguments on transitive predicates to keep queries goal-directed.
 
 ```sh
 # Detect transitive dependency paths
@@ -282,7 +282,7 @@ gm query "bypass" --datalog "?- bypasses_layer('auth_controller', 'auth_service'
 | `gm run` reports 0 files | Unsupported language or directory mismatch | Verify Graphenium is run from the target project root, and check Graphenium's supported extensions. |
 | MCP tool initialization fails | Target tool needs restart | Fully quit and relaunch the agent's parent IDE or terminal session. |
 | `graph_info` reports stale index | Code modifications occurred post-build | Execute `gm run . --no-semantic --no-viz` and instruct the agent to run `reload_graph`. |
-| Datalog queries return no results | Old server binary is running | Verify that `GM_BIN` points to the updated compilation of `gm` and restart the agent workspace. |
+| Datalog queries return no results | Old server binary is running, or step budget exhausted on transitive closure | Verify that `GM_BIN` points to the updated compilation of `gm` and restart the agent workspace. For `*_transitive` predicates, bind the seed (`?- calls_transitive('seed', X).`) so goal-directed evaluation reaches the target closure within the 1,000-step budget. |
 | Too much architectural noise | Build artifacts or library vendors included | Restructure `.grapheniumignore` to exclude build, target, or third-party folders. |
 
 ---

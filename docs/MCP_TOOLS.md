@@ -91,6 +91,7 @@ These tools link structural pathfinding with first-order logic proofs, enabling 
 ### `run_datalog`
 *   **Purpose:** Executes a declarative, first-order logic program over Graphenium's compiled EDB.
 *   **Standard Library:** Automatically includes `stdlib.dl` predicates (`calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, etc.) without requiring manual rule definitions.
+*   **Evaluation Bounds:** Derived-relation blow-up during inference is capped by the `budget` parameter (default: 1,000 solver steps). Base EDB relations (e.g. `edge`, `calls`) are accepted up to 10 million facts — large enough for real codebases; narrow bound queries (`calls(seed, X)`) rather than unbounded scans (`is_hub(X)`) on dense graphs.
 *   **When to Use:** To mathematically prove transitive boundary violations, circular dependencies, or identify orphaned nodes.
 
 ---

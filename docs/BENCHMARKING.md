@@ -91,11 +91,13 @@ When evaluating Graphenium's gating pipelines on a new repository, aim for the f
 | :--- | :--- | :--- |
 | **Query Payload Size** | Under 10,000 characters | Ensures metadata fits comfortably within agent context windows without crowding out reasoning space. |
 | **Query Execution Latency** | Under 50 ms | Keeps MCP tool calls interactive, preventing background agent stalls. |
-| **Datalog Solver Execution** | Under 100 ms (Step budget: 1,000) | Ensures transitive layering proofs complete instantly during pre-flight policy evaluations. |
+| **Datalog Solver Execution** | Under 100 ms (Step budget: 1,000) | Ensures transitive layering proofs complete instantly during pre-flight policy evaluations. Base EDB relations up to 10M facts are supported; evaluation blow-up is bounded by the step budget, not EDB size. |
 | **AST Import Resolution Ratio** | Over 80% (`gm doctor --resolution`) | Indicates that Graphenium has successfully mapped the project's physical import boundaries. |
 
 ### Concerning Signals to Monitor:
 *   **Payloads Exceeding 20,000 Characters:** Indicates the query keyword is too broad or the target module's dependency fan-out is too dense. Refine queries using path scoping (`--path-prefix`) or relation filters.
+*   **Datalog Step Budget Exhausted:** Transitive predicates (`calls_transitive`, `depends_transitive`) on large graphs may return empty when the 1,000-step solver budget is hit before the closure is reached. Bind the seed argument (`?- calls_transitive('seed', X).`) to keep inference goal-directed.
+*   **Unbounded Datalog Result Sets:** Coarse predicates like `?- is_hub(X).` can return thousands of rows on dense graphs. Intersect with a seed or use `--budget` to cap printed output.
 *   **Execution Latency Exceeding 500 ms:** Usually indicates Graphenium is parsing non-source directories (such as third-party packages or build folders). Ensure `.grapheniumignore` is properly configured.
 *   **High Ambiguity Counts:** Indicates extensive identifier collisions (many identically named methods across different folders). Resolve by instructing the agent to target scoped qualified labels (`qualified_label`) instead of short names.
 
