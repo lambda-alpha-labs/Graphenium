@@ -55,3 +55,32 @@ bypasses_layer(X, Y, Z) :-
     depends_transitive(X, Z),
     node(Y, _, _, _, _),
     not depends_transitive(X, Y).
+
+# ── Structural Containment & Formal Verification Auditing ────────────────────
+
+# Transitive containment: X transitively contains child/field/method Y
+contains_transitive(X, Y) :- contains(X, Y, _).
+contains_transitive(X, Y) :- contains(X, Z, _), contains_transitive(Z, Y).
+
+# Container-member aliasing hazard at a call site:
+# Caller invokes Target while depending on both Container and its internal Member.
+aliased_container_call(Caller, Target, Container, Member) :-
+    calls(Caller, Target, _),
+    contains_transitive(Container, Member),
+    depends_on(Caller, Container),
+    depends_on(Caller, Member),
+    not identical(Container, Member).
+
+# Unreachable symbol from a designated entry point (e.g. "main"):
+# Node exists in the graph but is not transitively reachable from Entry.
+unreachable_from(Entry, Node) :-
+    node(Entry, _, _, _, _),
+    node(Node, _, _, _, _),
+    not identical(Entry, Node),
+    not depends_transitive(Entry, Node).
+
+# Proof-gap taint propagation:
+# Symbol X directly contains or transitively depends on an unverified_sorry gap.
+has_proof_gap(X) :- edge(X, X, "unverified_sorry", _).
+tainted_by_proof_gap(X) :- has_proof_gap(X).
+tainted_by_proof_gap(X) :- depends_transitive(X, Y), has_proof_gap(Y).

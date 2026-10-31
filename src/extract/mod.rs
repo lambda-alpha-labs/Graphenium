@@ -4,6 +4,7 @@ pub mod cross_file;
 pub mod csharp_project;
 pub mod go;
 pub mod import_handlers;
+pub mod lean;
 pub mod rust_lang;
 pub mod walker;
 
@@ -58,7 +59,7 @@ pub fn extract_all(files: &[DetectedFile], opts: &ExtractOptions) -> ExtractionR
         .map(|f| {
             let res = extract_file(f, opts);
             let count = progress.fetch_add(1, Ordering::SeqCst) + 1;
-            if count % 500 == 0 || count == total {
+            if count.is_multiple_of(500) || count == total {
                 eprintln!("[graphenium] Extracting AST: {count} / {total} files completed...");
             }
             res
@@ -123,9 +124,10 @@ pub fn extract_file(file: &DetectedFile, opts: &ExtractOptions) -> ExtractionRes
 /// Extension-dispatch: choose the right extractor for the given extension.
 pub fn dispatch(source: &[u8], ext: &str, file_path: &str) -> ExtractionResult {
     match ext {
-        // Rust and Go have custom extractors that understand their unique constructs.
+        // Rust, Go, and Lean 4 have dedicated extractors.
         "rs" => rust_lang::extract(source, file_path),
         "go" => go::extract(source, file_path),
+        "lean" => lean::extract(source, file_path),
 
         // All other supported languages use the generic walker.
         _ => {

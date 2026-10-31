@@ -37,6 +37,7 @@ pub fn classify_extension(path: &Path) -> Option<FileType> {
         | "hs"
         | "clj" | "cljs"
         | "erl" | "hrl"
+        | "lean"
         | "sql"
         | "tf" | "hcl"
         | "yaml" | "yml"

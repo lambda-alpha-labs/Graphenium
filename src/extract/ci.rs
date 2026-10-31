@@ -78,7 +78,7 @@ pub fn ci_targets_to_extraction(targets: &[CiTarget], source_file: &str) -> Extr
 
         // Link build/test targets to CI jobs via runs_in
         for built in &target.built_files {
-            let built_id = format!("build_{}", built.replace('/', "_").replace('.', "_"));
+            let built_id = format!("build_{}", built.replace(['/', '.'], "_"));
             result
                 .nodes
                 .push(Node::new(&built_id, built, FileType::Code, source_file));
@@ -87,7 +87,7 @@ pub fn ci_targets_to_extraction(targets: &[CiTarget], source_file: &str) -> Extr
                 .push(Edge::extracted(&built_id, &node_id, "runs_in", source_file));
         }
         for tested in &target.tested_files {
-            let tested_id = format!("tested_{}", tested.replace('/', "_").replace('.', "_"));
+            let tested_id = format!("tested_{}", tested.replace(['/', '.'], "_"));
             result
                 .nodes
                 .push(Node::new(&tested_id, tested, FileType::Code, source_file));
@@ -101,7 +101,7 @@ pub fn ci_targets_to_extraction(targets: &[CiTarget], source_file: &str) -> Extr
 
         // Link to tested files as "tests" edges
         for tested in &target.tested_files {
-            let tested_id = format!("tested_{}", tested.replace('/', "_").replace('.', "_"));
+            let tested_id = format!("tested_{}", tested.replace(['/', '.'], "_"));
             result
                 .nodes
                 .push(Node::new(&tested_id, tested, FileType::Code, source_file));
@@ -318,7 +318,7 @@ pub fn csproj_to_extraction(
 ) -> ExtractionResult {
     let mut result = ExtractionResult::new();
 
-    for (_path, project) in &workspace.projects {
+    for project in workspace.projects.values() {
         let proj_id = format!("csproj_{}", project.name);
         let node = Node {
             id: proj_id.clone(),

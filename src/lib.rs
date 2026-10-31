@@ -30,6 +30,11 @@
 //! - Language features (`lang-python`, `lang-rust`, etc.) — enable specific
 //!   tree-sitter grammars. All enabled by default.
 
+// Design-level lints that are intentional across the public API surface.
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::should_implement_trait)]
+
 pub mod analyze;
 pub mod build;
 pub mod cache;

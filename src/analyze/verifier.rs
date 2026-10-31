@@ -126,22 +126,22 @@ pub fn plan_verification(
                 }
 
                 // 4. Covering tests
-                if edge.relation == "tests" || edge.source.contains("test") {
-                    if edge.source == *changed_id || edge.target == *changed_id {
-                        let test_node = if edge.source == *changed_id {
-                            &edge.target
-                        } else {
-                            &edge.source
-                        };
-                        tests_to_run.push(VerificationStep {
-                            kind: StepKind::RunTest,
-                            target: test_node.clone(),
-                            file: edge.source_file.clone(),
-                            reason: format!("test covers changed symbol {}", changed_id),
-                            confidence: "Extracted".to_string(),
-                            priority: 4,
-                        });
-                    }
+                if (edge.relation == "tests" || edge.source.contains("test"))
+                    && (edge.source == *changed_id || edge.target == *changed_id)
+                {
+                    let test_node = if edge.source == *changed_id {
+                        &edge.target
+                    } else {
+                        &edge.source
+                    };
+                    tests_to_run.push(VerificationStep {
+                        kind: StepKind::RunTest,
+                        target: test_node.clone(),
+                        file: edge.source_file.clone(),
+                        reason: format!("test covers changed symbol {}", changed_id),
+                        confidence: "Extracted".to_string(),
+                        priority: 4,
+                    });
                 }
             }
         }

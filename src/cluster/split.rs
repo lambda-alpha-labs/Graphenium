@@ -14,7 +14,7 @@ use super::louvain::{run, LouvainConfig};
 /// - `split_fraction` — fractional threshold (e.g. 0.25 = 25 %)
 /// - `min_size` — minimum community size before splitting is attempted
 pub fn split_large(
-    assignments: &mut Vec<usize>,
+    assignments: &mut [usize],
     n: usize,
     edges: &[(usize, usize, f64)],
     split_fraction: f64,
@@ -92,7 +92,7 @@ pub fn split_large(
     renumber_by_size(n, assignments);
 }
 
-fn renumber_by_size(_n: usize, assignments: &mut Vec<usize>) {
+fn renumber_by_size(_n: usize, assignments: &mut [usize]) {
     let max_id = assignments.iter().copied().max().unwrap_or(0);
     let mut sizes = vec![0usize; max_id + 1];
     for &c in assignments.iter() {

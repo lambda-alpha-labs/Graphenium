@@ -92,11 +92,7 @@ pub async fn serve_with_watch(graph_path: &Path, watch: bool) -> crate::Result<(
                 return;
             };
 
-            let mode = if w_path.exists() {
-                RecursiveMode::NonRecursive
-            } else {
-                RecursiveMode::NonRecursive
-            };
+            let mode = RecursiveMode::NonRecursive;
 
             if let Err(e) = watcher.watch(&watch_target, mode) {
                 eprintln!("[graphenium] File watch failed: {e}");

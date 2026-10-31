@@ -147,6 +147,7 @@ pub fn python_import(
 /// - `import "module"`                  (side-effect import)
 /// - `export { X } from "module"`       (named re-export)
 /// - `export * from "module"`           (star re-export)
+///
 /// Only processes `import_statement` and `export_statement` nodes that have
 /// a `source` child field (the module specifier string).
 pub fn es_import_handler(
@@ -439,7 +440,7 @@ fn handle_csharp_base_list(
     if !has_owner {
         let node = crate::model::Node::new(
             owner_id.clone(),
-            parent_name.clone(),
+            parent_name,
             crate::model::FileType::Code,
             file_path,
         );
@@ -456,7 +457,7 @@ fn handle_csharp_base_list(
             if let Some(base_type) = text(child, source) {
                 let edge = crate::model::Edge::new(
                     owner_id.clone(),
-                    base_type.clone(),
+                    base_type,
                     relation,
                     crate::model::Confidence::Extracted,
                     file_path,

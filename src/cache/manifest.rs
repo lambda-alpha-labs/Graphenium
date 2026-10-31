@@ -72,12 +72,12 @@ impl Manifest {
     pub fn is_changed(&self, path: &Path) -> bool {
         let key = normalize(path);
         match self.file_meta.get(&key) {
-            Some(meta) => mtime_secs(path).map_or(true, |t| t != meta.mtime),
+            Some(meta) => mtime_secs(path) != Some(meta.mtime),
             None => {
                 // backward compat: check legacy entries
-                self.entries.get(&key).map_or(true, |&recorded| {
-                    mtime_secs(path).map_or(true, |t| t != recorded)
-                })
+                self.entries
+                    .get(&key)
+                    .is_none_or(|&recorded| mtime_secs(path) != Some(recorded))
             }
         }
     }

@@ -1038,10 +1038,7 @@ pub fn safest_path_with_filters(
             .min_by(|(_, ca), (_, cb)| ca.partial_cmp(cb).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(id, _)| id.clone());
 
-        let current = match current {
-            Some(id) => id,
-            None => return None,
-        };
+        let current = current?;
 
         if current == to_id {
             let mut path = vec![to_id.to_string()];

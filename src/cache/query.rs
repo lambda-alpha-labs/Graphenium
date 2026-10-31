@@ -71,7 +71,7 @@ thread_local! {
     /// Per-thread Salsa database for persistent memoization across event batches.
     /// Created lazily on first access by `salsa_extract_file`.
     static SALSA_DB: std::cell::RefCell<Option<salsa::DatabaseImpl>> =
-        std::cell::RefCell::new(None);
+        const { std::cell::RefCell::new(None) };
 
     /// Per-thread map of known source file inputs, indexed by path.
     static SALSA_INPUTS: std::cell::RefCell<std::collections::HashMap<PathBuf, SourceFile>> =
@@ -95,7 +95,7 @@ pub fn salsa_extract_file(path: &std::path::Path, file_type: FileType) -> Extrac
     // Phase 1: Get or create the Salsa database (separate RefCell from inputs)
     SALSA_DB.with(|db_cell| {
         let mut db_borrow = db_cell.borrow_mut();
-        let db = db_borrow.get_or_insert_with(|| salsa::DatabaseImpl::new());
+        let db = db_borrow.get_or_insert_with(salsa::DatabaseImpl::new);
 
         // Phase 2: Check if the file is already known and if it changed
         let (is_new, is_changed) = SALSA_INPUTS.with(|inputs_cell| {
@@ -160,7 +160,7 @@ mod tests {
     /// Verify that salsa_extract_file returns a valid result for a Rust source file.
     #[test]
     fn test_salsa_extract_rust_file() {
-        let mut tmp = tempfile::TempDir::new().unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
         let file_path = tmp.path().join("hello.rs");
         let mut f = std::fs::File::create(&file_path).unwrap();
         f.write_all(b"fn greet() -> &'static str { \"hello\" }")
@@ -179,7 +179,7 @@ mod tests {
     /// return identical results (cache hit — same node count).
     #[test]
     fn test_salsa_cache_hit_returns_same_result() {
-        let mut tmp = tempfile::TempDir::new().unwrap();
+        let tmp = tempfile::TempDir::new().unwrap();
         let file_path = tmp.path().join("module.rs");
         let mut f = std::fs::File::create(&file_path).unwrap();
         f.write_all(b"pub struct Cache { pub field: u32 }").unwrap();
@@ -249,7 +249,7 @@ pub fn materialize_full_graph(
     inputs: &HashMap<PathBuf, SourceFile>,
 ) -> crate::model::GrapheniumGraph {
     let mut graph = crate::model::GrapheniumGraph::new();
-    for (_path, &source_file) in inputs {
+    for &source_file in inputs.values() {
         let local = compute_local_subgraph(db, source_file);
         let path_str = source_file.path(db).to_string_lossy().to_string();
         graph.replace_file_extraction(&path_str, &local);

@@ -1,4 +1,4 @@
-use graphenium::harness::{validate_plan_preflight, verify_plan};
+use graphenium::harness::{validate_plan_preflight, verify_plan, verify_plan_with_modified_files};
 use graphenium::model::graph::GrapheniumGraph;
 use graphenium::model::{Confidence, Edge, FileType, Node};
 use graphenium::policy::ArchRule;
@@ -60,6 +60,58 @@ fn test_planning_workspace_lifecycle() {
         "Expected PASS after implementation"
     );
     assert!(report.missing_nodes.is_empty());
+}
+
+#[test]
+fn test_verify_plan_ignores_untouched_baseline_files() {
+    let mut graph = GrapheniumGraph::new();
+    for i in 0..5 {
+        graph.upsert_node(Node::new(
+            &format!("untouched_{i}"),
+            &format!("Untouched{i}"),
+            FileType::Code,
+            &format!("src/module_{i}.rs"),
+        ));
+    }
+
+    let mut p_node = Node::new("plan_feat", "NewFeature", FileType::Code, "src/feature.rs");
+    p_node.plan_id = Some("plan-clean".to_string());
+    graph.upsert_node(p_node);
+    graph.upsert_node(Node::new(
+        "real_feat",
+        "NewFeature",
+        FileType::Code,
+        "src/feature.rs",
+    ));
+
+    let report = verify_plan(&graph, "plan-clean");
+    assert!(report.unplanned_modified_files.is_empty());
+    assert!(report.passes_compliance);
+}
+
+#[test]
+fn test_verify_plan_with_modified_files_detects_scope_creep() {
+    let mut graph = GrapheniumGraph::new();
+    let mut p_node = Node::new("plan_feat", "NewFeature", FileType::Code, "src/feature.rs");
+    p_node.plan_id = Some("plan-creep".to_string());
+    graph.upsert_node(p_node);
+    graph.upsert_node(Node::new(
+        "real_feat",
+        "NewFeature",
+        FileType::Code,
+        "src/feature.rs",
+    ));
+
+    let modified = std::collections::HashSet::from([
+        "src/feature.rs".to_string(),
+        "src/unrelated_sneaky_edit.rs".to_string(),
+    ]);
+    let report = verify_plan_with_modified_files(&graph, "plan-creep", Some(&modified));
+    assert!(!report.passes_compliance);
+    assert_eq!(
+        report.unplanned_modified_files,
+        vec!["src/unrelated_sneaky_edit.rs".to_string()]
+    );
 }
 
 #[test]

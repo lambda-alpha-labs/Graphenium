@@ -85,7 +85,7 @@ fn bridge_node_questions(graph: &GrapheniumGraph, out: &mut Vec<SuggestedQuestio
 fn god_node_inferred_questions(graph: &GrapheniumGraph, out: &mut Vec<SuggestedQuestion>) {
     let mut by_degree: Vec<(&str, usize)> =
         graph.node_ids().map(|id| (id, graph.degree(id))).collect();
-    by_degree.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+    by_degree.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.1));
 
     let mut count = 0;
     for &(id, _deg) in by_degree.iter().take(20) {

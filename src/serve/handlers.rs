@@ -579,8 +579,8 @@ fn relative_path(path: &str, root: Option<&str>) -> String {
             let normalized = path.replace('\\', "/");
             let root_norm = root.replace('\\', "/");
             let root_norm = root_norm.trim_end_matches('/');
-            if normalized.starts_with(root_norm) {
-                let rel = normalized[root_norm.len()..].trim_start_matches('/');
+            if let Some(rel) = normalized.strip_prefix(root_norm) {
+                let rel = rel.trim_start_matches('/');
                 if rel.is_empty() { "." } else { rel }.to_string()
             } else {
                 path.to_string()
@@ -799,7 +799,7 @@ impl GrapheniumServer {
         let use_dfs = dfs.unwrap_or(false);
         // Budget-enforced traversal cap: limits nodes visited during BFS/DFS,
         // preventing unbounded memory use before output formatting.
-        let max_nodes = (budget / 40).max(5).min(200);
+        let max_nodes = (budget / 40).clamp(5, 200);
         let ast_only_tuning = self.ast_only_tuning_enabled(ast_only_tuning);
         let generated_code_mode = match self
             .resolve_generated_code_mode(generated_code_mode.as_deref(), ast_only_tuning)
@@ -830,7 +830,7 @@ impl GrapheniumServer {
             ranked
                 .into_iter()
                 .filter(|node| {
-                    graph.node_data(&node.id).map_or(true, |n| {
+                    graph.node_data(&node.id).is_none_or(|n| {
                         let p = n.source_file.to_lowercase();
                         let l = n.label.to_lowercase();
                         !p.contains("/test/")
@@ -849,7 +849,7 @@ impl GrapheniumServer {
             ranked
                 .into_iter()
                 .filter(|node| {
-                    graph.node_data(&node.id).map_or(true, |_| {
+                    graph.node_data(&node.id).is_none_or(|_| {
                         graph
                             .edges_iter()
                             .filter(|e| e.source == node.id || e.target == node.id)
@@ -2026,7 +2026,7 @@ impl GrapheniumServer {
                         Some(node) => node,
                         None => continue,
                     };
-                    let tgt_node = match graph.node_data(&edge.target) {
+                    let _tgt_node = match graph.node_data(&edge.target) {
                         Some(node) => node,
                         None => continue,
                     };
@@ -2353,7 +2353,7 @@ impl GrapheniumServer {
             Some(id) => id,
             None => return format!("Node '{seed}' not found."),
         };
-        let max_depth = depth.unwrap_or(3).max(1).min(6) as usize;
+        let max_depth = depth.unwrap_or(3).clamp(1, 6) as usize;
         let dir = direction.as_deref().unwrap_or("forward");
         let budget_chars = (budget.unwrap_or(2000) as usize).max(200);
 
@@ -2464,7 +2464,7 @@ impl GrapheniumServer {
         #[tool(param)] step_budget: Option<usize>,
     ) -> String {
         let graph = self.graph();
-        let budget = step_budget.unwrap_or(1000).max(100).min(10_000);
+        let budget = step_budget.unwrap_or(1000).clamp(100, 10_000);
         match crate::analyze::query::run_datalog_query(&graph, &query, budget) {
             Ok(r) => r,
             Err(e) => format!("Datalog error: {}", e),
@@ -3185,7 +3185,7 @@ impl GrapheniumServer {
             );
         }
 
-        output.push_str(&format!("## Blast Radius\n\n"));
+        output.push_str("## Blast Radius\n\n");
         if affected_files.is_empty() && graph.is_ast_only() && !calls_resolved {
             output.push_str(
                 "Result: 0 affected symbols found.\n\
@@ -3496,7 +3496,6 @@ impl GrapheniumServer {
         }
 
         // 4. Post-process: deduplicate by file and filter namespace hubs
-        let plan = plan;
         let mut seen_files: std::collections::HashSet<String> = std::collections::HashSet::new();
         let filtered: Vec<&crate::analyze::verifier::VerificationStep> = plan
             .must_read
@@ -3924,7 +3923,10 @@ impl GrapheniumServer {
             }
         }
         let calls_pct = if calls_total > 0 {
-            calls_res * 100 / calls_total
+            calls_res
+                .checked_mul(100)
+                .and_then(|n| n.checked_div(calls_total))
+                .unwrap_or(0)
         } else {
             0
         };

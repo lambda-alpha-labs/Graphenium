@@ -207,7 +207,7 @@ fn filter_by_file(result: &ExtractionResult, path: &Path) -> ExtractionResult {
             || sf.ends_with(&target)
             || sf
                 .split('/')
-                .last()
+                .next_back()
                 .map(|n| n.to_lowercase() == target_name)
                 .unwrap_or(false)
     };

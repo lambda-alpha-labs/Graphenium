@@ -73,7 +73,7 @@ pub fn cosine_similarity(a: &TfVector, b: &TfVector) -> f64 {
             dot += weight_a * weight_b;
         }
     }
-    for (_, weight_b) in &b.terms {
+    for weight_b in b.terms.values() {
         mag_b += weight_b * weight_b;
     }
 
@@ -225,11 +225,11 @@ pub fn train_node2vec(
     for walk in &walks {
         for (i, node) in walk.iter().enumerate() {
             let window = 3;
-            for j in (i.saturating_sub(window))..=(i + window).min(walk.len() - 1) {
+            let start = i.saturating_sub(window);
+            let end = (i + window).min(walk.len() - 1);
+            for (j, other) in walk.iter().enumerate().take(end + 1).skip(start) {
                 if i != j {
-                    *cooccur
-                        .entry((node.clone(), walk[j].clone()))
-                        .or_insert(0.0) += 1.0;
+                    *cooccur.entry((node.clone(), other.clone())).or_insert(0.0) += 1.0;
                 }
             }
         }
@@ -280,7 +280,7 @@ pub fn train_node2vec(
     }
 
     // Normalize vectors
-    for (_id, vec) in vectors.iter_mut() {
+    for vec in vectors.values_mut() {
         let mag: f64 = vec.iter().map(|v| v * v).sum::<f64>().sqrt();
         if mag > 0.0 {
             for v in vec.iter_mut() {

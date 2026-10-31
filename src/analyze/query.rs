@@ -15,8 +15,6 @@ use std::time::Instant;
 /// Embedded Datalog standard library — compiled into the binary.
 const STDLIB_SOURCE: &str = include_str!("query/stdlib.dl");
 
-/// Empty relation singleton for unknown relation names.
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Phase 1: EDB Relational Loader — data types and extensional database
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -409,7 +407,7 @@ impl<'a> Parser<'a> {
         let mut terms = Vec::new();
         loop {
             match self.next() {
-                Some(Token::Ident(s)) if s.chars().next().map_or(false, |c| c.is_uppercase()) => {
+                Some(Token::Ident(s)) if s.chars().next().is_some_and(|c| c.is_uppercase()) => {
                     terms.push(Term::Var(s.clone()));
                 }
                 Some(Token::Ident(s)) => {
@@ -496,6 +494,9 @@ fn select_active_rules<'a>(program: &'a DatalogProgram, needed: &HashSet<String>
         .collect()
 }
 
+/// First-column hash index over relation tuples, used to accelerate bound joins.
+type FirstColumnIndex<'a> = HashMap<&'a Val, Vec<&'a Vec<Val>>>;
+
 /// The Datalog interpreter: loads EDB, evaluates rules, returns results.
 pub struct Interpreter {
     edb: Edb,
@@ -521,6 +522,180 @@ impl Interpreter {
         } else {
             &self.empty
         }
+    }
+
+    /// True when every goal atom is fully ground and already present in the IDB/EDB.
+    /// Used to stop monotone evaluation early for existence queries.
+    fn goals_satisfied(&self, goals: &[Atom]) -> bool {
+        if goals.is_empty() {
+            return false;
+        }
+        goals.iter().all(|atom| {
+            if atom.negated {
+                return false;
+            }
+            let mut tuple = Vec::with_capacity(atom.terms.len());
+            for term in &atom.terms {
+                match term {
+                    Term::Const(v) => tuple.push(v.clone()),
+                    Term::Var(_) => return false,
+                }
+            }
+            self.get_relation(&atom.name).contains(&tuple)
+        })
+    }
+
+    /// Evaluate a single rule body, optionally replacing one positive body atom's
+    /// relation with the semi-naive delta relation. Returns the derived head tuples.
+    fn evaluate_rule(
+        &self,
+        rule: &Rule,
+        delta_pos: Option<usize>,
+        delta: &HashMap<String, HashSet<Vec<Val>>>,
+    ) -> Vec<Vec<Val>> {
+        let mut substitutions = vec![HashMap::<String, Val>::new()];
+
+        // Evaluate positive body atoms with first-column hash-index acceleration
+        for (atom_idx, atom) in rule.body.iter().enumerate() {
+            if atom.negated {
+                continue;
+            }
+            let relation: Vec<&Vec<Val>> = if delta_pos == Some(atom_idx) {
+                match delta.get(&atom.name) {
+                    Some(d) if !d.is_empty() => d.iter().collect(),
+                    _ => return Vec::new(),
+                }
+            } else {
+                self.get_relation(&atom.name).iter().collect()
+            };
+            if relation.is_empty() {
+                return Vec::new();
+            }
+
+            // Build a first-column index if the relation has >= 32 tuples
+            let use_first_col_index = relation.len() >= 32 && !atom.terms.is_empty();
+            let mut col0_index: FirstColumnIndex<'_> = HashMap::new();
+            if use_first_col_index {
+                for &tuple in &relation {
+                    if let Some(first_val) = tuple.first() {
+                        col0_index.entry(first_val).or_default().push(tuple);
+                    }
+                }
+            }
+
+            let mut next_subs = Vec::new();
+            for sub in &substitutions {
+                // Check if term[0] resolves to a known Val (either Const or bound Var)
+                let bound_first: Option<&Val> = match atom.terms.first() {
+                    Some(Term::Const(v)) => Some(v),
+                    Some(Term::Var(var_name)) => sub.get(var_name),
+                    None => None,
+                };
+
+                if use_first_col_index {
+                    if let Some(key_val) = bound_first {
+                        if let Some(bucket) = col0_index.get(key_val) {
+                            for &tuple in bucket {
+                                if let Some(new_sub) = unify(sub, &atom.terms, tuple) {
+                                    next_subs.push(new_sub);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                }
+
+                for &tuple in &relation {
+                    if let Some(new_sub) = unify(sub, &atom.terms, tuple) {
+                        next_subs.push(new_sub);
+                    }
+                }
+            }
+            if next_subs.is_empty() {
+                return Vec::new();
+            }
+            substitutions = next_subs;
+        }
+
+        if substitutions.is_empty() {
+            return Vec::new();
+        }
+
+        // Apply negation filters (with first-column index when relation >= 32 tuples)
+        for atom in &rule.body {
+            if !atom.negated {
+                continue;
+            }
+            let relation: Vec<&Vec<Val>> = self.get_relation(&atom.name).iter().collect();
+            if relation.is_empty() {
+                continue;
+            }
+            let use_first_col_index = relation.len() >= 32 && !atom.terms.is_empty();
+            let mut col0_index: FirstColumnIndex<'_> = HashMap::new();
+            if use_first_col_index {
+                for &tuple in &relation {
+                    if let Some(first_val) = tuple.first() {
+                        col0_index.entry(first_val).or_default().push(tuple);
+                    }
+                }
+            }
+
+            let before = substitutions.len();
+            substitutions.retain(|sub| {
+                let bound_first: Option<&Val> = match atom.terms.first() {
+                    Some(Term::Const(v)) => Some(v),
+                    Some(Term::Var(var_name)) => sub.get(var_name),
+                    None => None,
+                };
+                let matched = if use_first_col_index {
+                    if let Some(key_val) = bound_first {
+                        col0_index.get(key_val).is_some_and(|bucket| {
+                            bucket
+                                .iter()
+                                .any(|tuple| unify(sub, &atom.terms, tuple).is_some())
+                        })
+                    } else {
+                        relation
+                            .iter()
+                            .any(|tuple| unify(sub, &atom.terms, tuple).is_some())
+                    }
+                } else {
+                    relation
+                        .iter()
+                        .any(|tuple| unify(sub, &atom.terms, tuple).is_some())
+                };
+                if cfg!(test) && matched {
+                    eprintln!("    sub {:?} matched edge tuple, filtered out", sub);
+                }
+                !matched
+            });
+            if cfg!(test) {
+                eprintln!(
+                    "  negation '{}' filtered {} -> {} subs",
+                    atom.name,
+                    before,
+                    substitutions.len()
+                );
+            }
+        }
+
+        // Generate derived tuples
+        let mut head_tuples = Vec::new();
+        for sub in &substitutions {
+            let mut head_tuple = Vec::new();
+            for term in &rule.head.terms {
+                match term {
+                    Term::Const(v) => head_tuple.push(v.clone()),
+                    Term::Var(var) => {
+                        if let Some(v) = sub.get(var) {
+                            head_tuple.push(v.clone());
+                        }
+                    }
+                }
+            }
+            head_tuples.push(head_tuple);
+        }
+        head_tuples
     }
 
     /// Run the semi-naive evaluation loop. Returns derived tuples for each goal atom.
@@ -555,7 +730,14 @@ impl Interpreter {
             );
         }
 
-        // Fixed-point iteration — only over goal-reachable rules
+        // Semi-naive fixed-point iteration — only over goal-reachable rules.
+        // `delta` holds tuples derived in the previous iteration; recursive body
+        // atoms are joined against the delta instead of the full relation.
+        let idb_predicates: HashSet<String> =
+            active_rules.iter().map(|r| r.head.name.clone()).collect();
+        // Seed the delta with explicit program facts so rules that consume them fire.
+        let mut delta: HashMap<String, HashSet<Vec<Val>>> = self.idb.clone();
+        let mut first_iteration = true;
         let mut reached_fixpoint = active_rules.is_empty();
         for _step in 0..step_budget {
             if reached_fixpoint {
@@ -565,88 +747,70 @@ impl Interpreter {
                 return Err("Datalog evaluation timed out (>30s)".to_string());
             }
 
-            let mut changed = false;
-            let mut next_idb = self.idb.clone();
+            let mut derived: HashMap<String, HashSet<Vec<Val>>> = HashMap::new();
 
             for rule in &active_rules {
-                let mut substitutions = vec![HashMap::<String, Val>::new()];
+                let positive_idb_positions: Vec<usize> = rule
+                    .body
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, atom)| !atom.negated && idb_predicates.contains(&atom.name))
+                    .map(|(idx, _)| idx)
+                    .collect();
+                let has_idb_body = rule
+                    .body
+                    .iter()
+                    .any(|atom| idb_predicates.contains(&atom.name));
 
-                // Evaluate positive body atoms
-                for atom in &rule.body {
-                    if atom.negated {
+                if positive_idb_positions.is_empty() {
+                    // Base rule (EDB-only) evaluates once; rules with only negated IDB
+                    // atoms are re-evaluated as the IDB grows.
+                    if !first_iteration && !has_idb_body {
                         continue;
                     }
-                    let relation = self.get_relation(&atom.name).clone();
-                    let mut next_subs = Vec::new();
-                    for sub in &substitutions {
-                        for tuple in &relation {
-                            if let Some(new_sub) = unify(sub, &atom.terms, tuple) {
-                                next_subs.push(new_sub);
-                            }
-                        }
+                    for tuple in self.evaluate_rule(rule, None, &delta) {
+                        derived
+                            .entry(rule.head.name.clone())
+                            .or_default()
+                            .insert(tuple);
                     }
-                    if next_subs.is_empty() {
-                        substitutions.clear();
-                        break;
-                    }
-                    substitutions = next_subs;
-                }
-
-                if substitutions.is_empty() {
                     continue;
                 }
 
-                // Apply negation filters
-                for atom in &rule.body {
-                    if !atom.negated {
-                        continue;
-                    }
-                    let relation = self.get_relation(&atom.name);
-                    let before = substitutions.len();
-                    substitutions.retain(|sub| {
-                        let matched = relation
-                            .iter()
-                            .any(|tuple| unify(sub, &atom.terms, tuple).is_some());
-                        if cfg!(test) && matched {
-                            eprintln!("    sub {:?} matched edge tuple, filtered out", sub);
-                        }
-                        !matched
-                    });
-                    if cfg!(test) {
-                        eprintln!(
-                            "  negation '{}' filtered {} -> {} subs",
-                            atom.name,
-                            before,
-                            substitutions.len()
-                        );
+                for pos in positive_idb_positions {
+                    for tuple in self.evaluate_rule(rule, Some(pos), &delta) {
+                        derived
+                            .entry(rule.head.name.clone())
+                            .or_default()
+                            .insert(tuple);
                     }
                 }
+            }
 
-                // Generate derived tuples
-                for sub in &substitutions {
-                    let mut head_tuple = Vec::new();
-                    for term in &rule.head.terms {
-                        match term {
-                            Term::Const(v) => head_tuple.push(v.clone()),
-                            Term::Var(var) => {
-                                if let Some(v) = sub.get(var) {
-                                    head_tuple.push(v.clone());
-                                }
-                            }
-                        }
-                    }
-                    if next_idb
-                        .entry(rule.head.name.clone())
-                        .or_default()
-                        .insert(head_tuple)
-                    {
+            // Merge newly derived tuples into the IDB and build the next delta.
+            let mut next_delta: HashMap<String, HashSet<Vec<Val>>> = HashMap::new();
+            let mut changed = false;
+            for (pred, tuples) in derived {
+                let entry = self.idb.entry(pred.clone()).or_default();
+                for tuple in tuples {
+                    if entry.insert(tuple.clone()) {
+                        next_delta.entry(pred.clone()).or_default().insert(tuple);
                         changed = true;
                     }
                 }
             }
 
-            self.idb = next_idb;
+            delta = next_delta;
+            first_iteration = false;
             if !changed {
+                reached_fixpoint = true;
+                break;
+            }
+
+            // For fully-ground goals, existence is monotone: once every goal atom is
+            // satisfied, no later derivation can invalidate it. Stop early instead of
+            // materializing the entire closure (a large win on long chains).
+            if self.goals_satisfied(&program.goal) {
                 reached_fixpoint = true;
                 break;
             }
@@ -697,7 +861,7 @@ impl Interpreter {
                     }
                     let projected: Vec<Val> = var_positions
                         .iter()
-                        .filter_map(|&pos| pos.map(|p| tuple.get(p).cloned()).flatten())
+                        .filter_map(|&pos| pos.and_then(|p| tuple.get(p).cloned()))
                         .collect();
                     if !projected.is_empty() {
                         goal_results.push(projected);
@@ -1192,5 +1356,45 @@ mod tests {
         assert!(edb.relations.contains_key("edge"));
         assert_eq!(edb.relations["node"].len(), 3);
         assert_eq!(edb.relations["edge"].len(), 2);
+    }
+
+    #[test]
+    fn test_indexed_join_handles_large_fanout_graph_quickly() {
+        let mut graph = crate::model::GrapheniumGraph::new();
+        for i in 0..500 {
+            graph.upsert_node(Node::new(
+                &format!("node_{i}"),
+                &format!("Node{i}"),
+                FileType::Code,
+                "src/large.rs",
+            ));
+        }
+        // Create a 10-step chain from node_0 -> node_10 plus 480 unrelated edges
+        for i in 0..10 {
+            graph.add_edge(Edge::extracted(
+                &format!("node_{i}"),
+                &format!("node_{}", i + 1),
+                "calls",
+                "src/large.rs",
+            ));
+        }
+        for i in 20..490 {
+            graph.add_edge(Edge::extracted(
+                &format!("node_{i}"),
+                &format!("node_{}", i + 1),
+                "calls",
+                "src/large.rs",
+            ));
+        }
+
+        let start = Instant::now();
+        let result =
+            run_datalog_query(&graph, r#"?- calls_transitive("node_0", "node_10")."#, 500).unwrap();
+        assert!(
+            start.elapsed().as_millis() < 500,
+            "Indexed transitive query should complete in <500ms, took {:?}",
+            start.elapsed()
+        );
+        assert!(!result.contains("no results"));
     }
 }

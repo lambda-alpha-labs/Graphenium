@@ -3,6 +3,7 @@
 /// - `impl TypeName { fn ... }` — methods grouped by impl block
 /// - `impl TraitName for TypeName { fn ... }` — trait implementations
 /// - `struct`, `enum`, `trait` items at module scope
+///
 /// This extractor handles all of these correctly, building nodes and
 /// `contains` / `method` edges.
 use std::collections::{HashMap, HashSet};
@@ -311,12 +312,12 @@ fn handle_fn<'tree>(
     result: &mut ExtractionResult,
     label_to_nid: &mut HashMap<String, String>,
     fn_bodies: &mut Vec<(String, Node<'tree>)>,
-    scope: &mut Vec<String>,
+    scope: &[String],
 ) {
     let Some(name) = named_child_text(node, "name", source) else {
         return;
     };
-    let relation = if parent_id.contains(file_stem) && parent_id != &make_id(&[file_stem]) {
+    let relation = if parent_id.contains(file_stem) && parent_id != make_id(&[file_stem]) {
         "method"
     } else {
         "contains"

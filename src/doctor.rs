@@ -191,6 +191,9 @@ fn check_language_extraction_integrity(graph: &GrapheniumGraph) {
                     "cs" => {
                         detected.insert("csharp".to_string());
                     }
+                    "lean" => {
+                        detected.insert("lean".to_string());
+                    }
                     _ => {}
                 }
             }
@@ -213,6 +216,7 @@ fn check_language_extraction_integrity(graph: &GrapheniumGraph) {
             "cpp" => &["cpp", "cc", "cxx", "hh", "hpp", "hxx"],
             "java" => &["java"],
             "csharp" => &["cs"],
+            "lean" => &["lean"],
             _ => &[],
         };
 

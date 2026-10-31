@@ -1,7 +1,7 @@
-/// AI provider abstraction.
-/// Maps provider names to API endpoints, authentication schemes, and request/
-/// response formats so the semantic extraction pipeline works with multiple
-/// LLM backends without changing the prompt or extraction logic.
+//! AI provider abstraction.
+//! Maps provider names to API endpoints, authentication schemes, and request/
+//! response formats so the semantic extraction pipeline works with multiple
+//! LLM backends without changing the prompt or extraction logic.
 
 // ── Provider enum ─────────────────────────────────────────────────────────
 

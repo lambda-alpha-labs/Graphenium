@@ -139,3 +139,82 @@ fn test_merge_stdlib_prepends_rules() {
     assert_ne!(program.rules[0].head.name, "user_rule");
     assert_eq!(program.rules[stdlib_len].head.name, "user_rule");
 }
+
+#[test]
+fn test_stdlib_aliased_container_call_detects_struct_field_overlap() {
+    let mut graph = GrapheniumGraph::new();
+    graph.upsert_node(Node::new(
+        "caller",
+        "init_caller",
+        FileType::Code,
+        "malloc.c",
+    ));
+    graph.upsert_node(Node::new(
+        "callee",
+        "tcache_free_init",
+        FileType::Code,
+        "malloc.c",
+    ));
+    graph.upsert_node(Node::new(
+        "mp_struct",
+        "malloc_par",
+        FileType::Code,
+        "malloc.c",
+    ));
+    graph.upsert_node(Node::new(
+        "tmn_field",
+        "tcache_bins",
+        FileType::Code,
+        "malloc.c",
+    ));
+
+    // mp_struct contains tmn_field
+    graph.add_edge(Edge::extracted(
+        "mp_struct",
+        "tmn_field",
+        "contains",
+        "malloc.c",
+    ));
+    // caller calls callee and touches both mp_struct and tmn_field
+    graph.add_edge(Edge::extracted("caller", "callee", "calls", "malloc.c"));
+    graph.add_edge(Edge::extracted("caller", "mp_struct", "calls", "malloc.c"));
+    graph.add_edge(Edge::extracted("caller", "tmn_field", "calls", "malloc.c"));
+
+    let result = run_datalog_query(
+        &graph,
+        r#"?- aliased_container_call("caller", "callee", Container, Member)."#,
+        1000,
+    )
+    .unwrap();
+    assert!(
+        result.contains("mp_struct"),
+        "Should detect container: {result}"
+    );
+    assert!(
+        result.contains("tmn_field"),
+        "Should detect member: {result}"
+    );
+}
+
+#[test]
+fn test_stdlib_tainted_by_proof_gap_propagates_sorry() {
+    let src = br#"
+theorem helper_unfinished : 1 = 1 := by
+  sorry
+
+theorem main_theorem : 1 = 1 := by
+  exact helper_unfinished
+"#;
+    let ext = graphenium::extract::lean::extract(src, "Proof.lean");
+    let (graph, _) = graphenium::build::build_merged([ext]);
+
+    let result = run_datalog_query(&graph, r#"?- tainted_by_proof_gap(X)."#, 1000).unwrap();
+    assert!(
+        result.contains("proof_helper_unfinished"),
+        "Direct sorry theorem should be flagged: {result}"
+    );
+    assert!(
+        result.contains("proof_main_theorem"),
+        "Theorem depending on sorry lemma should be tainted: {result}"
+    );
+}

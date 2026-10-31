@@ -52,6 +52,7 @@ impl Default for GraphMetadata {
 /// Wraps a `petgraph::Graph` (undirected) and adds:
 /// - O(1) node lookup by string ID via `id_index`.
 /// - A side-car `Vec<HyperEdge>` for N-ary relationships.
+///
 /// Edge direction is preserved logically through `Edge::src_original` and
 /// `Edge::tgt_original` even though the underlying graph is undirected.
 #[derive(Clone)]

@@ -70,14 +70,13 @@ jobs:
         run: |
           echo "## Graphenium $(echo $GITHUB_REF | sed 's|refs/tags/v||')" > notes.md
           echo "" >> notes.md
-          echo "- AST extraction for 9 languages" >> notes.md
-          echo "- MCP server with 13 graph tools" >> notes.md
-          echo "- Query CLI with keyword-scored traversal" >> notes.md
-          echo "- Louvain community detection" >> notes.md
-          echo "- AST-only and semantic extraction modes" >> notes.md
-          echo "- Watch and incremental update support" >> notes.md
-          echo "- \`gm doctor\` diagnostic command" >> notes.md
-          echo "- \`gm setup\` for Claude/Cursor/CodeWhale" >> notes.md
+          echo "- AST + Stack Graphs extraction for 9 languages with import-scoped call disambiguation" >> notes.md
+          echo "- MCP server with 24 structural containment, Datalog, and planning tools" >> notes.md
+          echo "- Embedded goal-directed Datalog engine with first-column hash indexing" >> notes.md
+          echo "- Zero-Drift Topological Delta Gating (Louvain ΔQ + surprise edge profiling)" >> notes.md
+          echo "- Pre-flight planning workspaces and post-edit scope-creep verification" >> notes.md
+          echo "- Recursive C# (.sln / .csproj) assembly boundary discovery" >> notes.md
+          echo "- \`gm check\`, \`gm gate\`, and \`gm doctor\` CI governance commands" >> notes.md
           echo "" >> notes.md
           echo "### Install" >> notes.md
           echo '```sh' >> notes.md

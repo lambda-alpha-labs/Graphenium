@@ -5,6 +5,7 @@
 /// - **OpenAI Chat Completions** (OpenAI, OpenRouter, DeepSeek, compatible):
 ///   `POST /v1/chat/completions`, `Authorization: Bearer` auth, system prompt
 ///   as a `role: system` message, image blocks as `{type: image_url, image_url: ...}`.
+///
 /// Retry logic (429 rate-limit, 5xx server errors, JSON parse failures) is
 /// shared across all providers.
 use serde::{Deserialize, Serialize};

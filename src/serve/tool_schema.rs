@@ -97,7 +97,7 @@ fn flatten_nullable_union(obj: &mut serde_json::Map<String, Value>, union_key: &
 
 fn is_null_schema(value: &Value) -> bool {
     match value {
-        Value::Object(obj) => obj.get("type").is_some_and(|ty| is_null_type(ty)),
+        Value::Object(obj) => obj.get("type").is_some_and(is_null_type),
         _ => false,
     }
 }

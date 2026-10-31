@@ -54,21 +54,11 @@ pub fn detect_drift(old: &GrapheniumGraph, new: &GrapheniumGraph) -> DriftReport
     let mut events = Vec::new();
 
     // Build community maps
-    let old_comms: std::collections::HashMap<String, Option<usize>> = old
-        .nodes()
-        .filter_map(|n| {
-            let id = n.id.clone();
-            Some((id, n.community))
-        })
-        .collect();
+    let old_comms: std::collections::HashMap<String, Option<usize>> =
+        old.nodes().map(|n| (n.id.clone(), n.community)).collect();
 
-    let new_comms: std::collections::HashMap<String, Option<usize>> = new
-        .nodes()
-        .filter_map(|n| {
-            let id = n.id.clone();
-            Some((id, n.community))
-        })
-        .collect();
+    let new_comms: std::collections::HashMap<String, Option<usize>> =
+        new.nodes().map(|n| (n.id.clone(), n.community)).collect();
 
     // 1. Detect community changes for nodes that exist in both graphs
     for (id, old_comm) in &old_comms {

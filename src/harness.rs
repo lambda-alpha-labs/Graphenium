@@ -130,19 +130,105 @@ pub fn check_resolution_quality(
 
 // ── Plan Verification Engine (k) ─────────────────────────────────────────────
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct PlanVerificationReport {
     pub plan_id: String,
     pub implemented_nodes: Vec<String>,
     pub missing_nodes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub implemented_edges: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing_edges: Vec<String>,
     pub unplanned_modified_files: Vec<String>,
     pub passes_compliance: bool,
 }
 
+/// Normalize a file path for cross-platform set comparison.
+fn normalize_plan_path(path: &str, project_root: Option<&str>) -> String {
+    let clean = path
+        .strip_prefix(r"\\?\")
+        .unwrap_or(path)
+        .replace('\\', "/");
+    let stripped = if let Some(root) = project_root {
+        let root_clean = root
+            .strip_prefix(r"\\?\")
+            .unwrap_or(root)
+            .replace('\\', "/");
+        let root_trimmed = root_clean.trim_end_matches('/');
+        clean
+            .strip_prefix(root_trimmed)
+            .map(|s| s.trim_start_matches('/').to_string())
+            .unwrap_or(clean)
+    } else {
+        clean
+    };
+    stripped.trim_start_matches("./").to_string()
+}
+
+/// Query git for files modified in the working tree/index relative to HEAD, if available.
+/// Returns `None` if git is unavailable, not a git repo, or no project_root is set.
+fn detect_git_modified_files(
+    project_root: Option<&str>,
+) -> Option<std::collections::HashSet<String>> {
+    let root = project_root?;
+    let root_path = std::path::Path::new(root);
+    if !root_path.join(".git").exists() {
+        return None;
+    }
+
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["status", "--porcelain", "--untracked-files=normal"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut modified = std::collections::HashSet::new();
+    for line in stdout.lines() {
+        if line.len() < 4 {
+            continue;
+        }
+        let raw_path = line[3..].trim();
+        // Handle rename syntax `old -> new`
+        let effective_path = raw_path
+            .rsplit(" -> ")
+            .next()
+            .unwrap_or(raw_path)
+            .trim_matches('"');
+        let norm = normalize_plan_path(effective_path, Some(root));
+        if !norm.is_empty()
+            && !norm.starts_with("graphenium-out/")
+            && !norm.starts_with("graphenium-snapshots/")
+            && !norm.starts_with(".graphenium/")
+        {
+            modified.insert(norm);
+        }
+    }
+    Some(modified)
+}
+
 /// Verify that a planning workspace's declared changes match the real graph.
 pub fn verify_plan(graph: &GrapheniumGraph, plan_id: &str) -> PlanVerificationReport {
+    verify_plan_with_modified_files(graph, plan_id, None)
+}
+
+/// Verify a planning workspace against the real graph, optionally supplying an
+/// explicit set of modified file paths (e.g. from a snapshot diff or git status).
+pub fn verify_plan_with_modified_files(
+    graph: &GrapheniumGraph,
+    plan_id: &str,
+    modified_files_override: Option<&std::collections::HashSet<String>>,
+) -> PlanVerificationReport {
+    let project_root = graph.metadata.project_root.as_deref();
     let mut implemented_nodes = Vec::new();
     let mut missing_nodes = Vec::new();
+    let mut implemented_edges = Vec::new();
+    let mut missing_edges = Vec::new();
     let mut planned_files = std::collections::HashSet::new();
 
     let planned_nodes: Vec<&Node> = graph
@@ -151,11 +237,11 @@ pub fn verify_plan(graph: &GrapheniumGraph, plan_id: &str) -> PlanVerificationRe
         .collect();
 
     for p_node in &planned_nodes {
-        planned_files.insert(p_node.source_file.clone());
+        planned_files.insert(normalize_plan_path(&p_node.source_file, project_root));
 
-        let has_real_impl = graph
-            .nodes()
-            .any(|n| n.label == p_node.label && n.id != p_node.id && n.plan_id.is_none());
+        let has_real_impl = graph.nodes().any(|n| {
+            n.plan_id.is_none() && n.id != p_node.id && n.label.eq_ignore_ascii_case(&p_node.label)
+        });
 
         if has_real_impl {
             implemented_nodes.push(p_node.label.clone());
@@ -164,17 +250,81 @@ pub fn verify_plan(graph: &GrapheniumGraph, plan_id: &str) -> PlanVerificationRe
         }
     }
 
-    let actual_files: std::collections::HashSet<String> = graph
-        .nodes()
-        .filter(|n| n.plan_id.is_none())
-        .map(|n| n.source_file.clone())
+    // Verify planned edges against physical edges in the graph.
+    let planned_edges: Vec<&Edge> = graph
+        .edges_iter()
+        .filter(|e| e.plan_id.as_deref() == Some(plan_id))
         .collect();
 
-    let mut unplanned_modified_files: Vec<String> = actual_files
-        .difference(&planned_files)
-        .filter(|f| !crate::serve::traversal::is_test_like_path(f))
-        .cloned()
-        .collect();
+    for p_edge in &planned_edges {
+        if !p_edge.source_file.is_empty() {
+            planned_files.insert(normalize_plan_path(&p_edge.source_file, project_root));
+        }
+
+        let src_label = graph
+            .node_data(&p_edge.source)
+            .map(|n| n.label.as_str())
+            .unwrap_or(p_edge.src_original.as_str());
+        let tgt_label = graph
+            .node_data(&p_edge.target)
+            .map(|n| n.label.as_str())
+            .unwrap_or(p_edge.tgt_original.as_str());
+
+        let edge_desc = format!("{src_label} -[{}]-> {tgt_label}", p_edge.relation);
+
+        // Only require physical edge realization if both endpoints have physical nodes
+        let src_real_ids: Vec<&str> = graph
+            .nodes()
+            .filter(|n| n.plan_id.is_none() && n.label.eq_ignore_ascii_case(src_label))
+            .map(|n| n.id.as_str())
+            .collect();
+        let tgt_real_ids: Vec<&str> = graph
+            .nodes()
+            .filter(|n| n.plan_id.is_none() && n.label.eq_ignore_ascii_case(tgt_label))
+            .map(|n| n.id.as_str())
+            .collect();
+
+        if !src_real_ids.is_empty() && !tgt_real_ids.is_empty() {
+            let has_real_edge = graph.edges_iter().any(|e| {
+                e.plan_id.is_none()
+                    && e.relation.eq_ignore_ascii_case(&p_edge.relation)
+                    && ((src_real_ids.contains(&e.source.as_str())
+                        && tgt_real_ids.contains(&e.target.as_str()))
+                        || (src_real_ids.contains(&e.target.as_str())
+                            && tgt_real_ids.contains(&e.source.as_str())))
+            });
+            if has_real_edge {
+                implemented_edges.push(edge_desc);
+            } else {
+                missing_edges.push(edge_desc);
+            }
+        }
+    }
+
+    // Determine modified files:
+    // 1. Use explicit override if provided by caller, OR
+    // 2. Use git working-tree modified files if project_root is a git repo, OR
+    // 3. Otherwise (in-memory unit tests without git), only inspect files when
+    //    explicitly provided so untouched baseline repo files are never falsely flagged.
+    let candidate_modified_files: std::collections::HashSet<String> =
+        if let Some(override_set) = modified_files_override {
+            override_set
+                .iter()
+                .map(|p| normalize_plan_path(p, project_root))
+                .collect()
+        } else {
+            detect_git_modified_files(project_root).unwrap_or_default()
+        };
+
+    let mut unplanned_modified_files: Vec<String> = if planned_files.is_empty() {
+        Vec::new()
+    } else {
+        candidate_modified_files
+            .difference(&planned_files)
+            .filter(|f| !crate::serve::traversal::is_test_like_path(f))
+            .cloned()
+            .collect()
+    };
     unplanned_modified_files.sort();
     unplanned_modified_files.truncate(20);
 
@@ -184,6 +334,8 @@ pub fn verify_plan(graph: &GrapheniumGraph, plan_id: &str) -> PlanVerificationRe
         plan_id: plan_id.to_string(),
         implemented_nodes,
         missing_nodes,
+        implemented_edges,
+        missing_edges,
         unplanned_modified_files,
         passes_compliance,
     }
@@ -520,6 +672,71 @@ mod tests {
         let graph = GrapheniumGraph::new();
         let result = check_resolution_quality(&graph, &report, 90.0, 5);
         assert!(!result.passed);
+    }
+
+    #[test]
+    fn verify_plan_does_not_flag_untouched_baseline_files_as_scope_creep() {
+        use crate::model::FileType;
+
+        let mut graph = GrapheniumGraph::new();
+        // 5 untouched baseline files in the repository
+        for i in 0..5 {
+            graph.upsert_node(Node::new(
+                &format!("untouched_{i}"),
+                &format!("Untouched{i}"),
+                FileType::Code,
+                &format!("src/module_{i}.rs"),
+            ));
+        }
+
+        // Plan only touches src/feature.rs
+        let mut p_node = Node::new("plan_feat", "NewFeature", FileType::Code, "src/feature.rs");
+        p_node.plan_id = Some("plan-clean".to_string());
+        graph.upsert_node(p_node);
+
+        // Physical implementation of NewFeature in src/feature.rs
+        graph.upsert_node(Node::new(
+            "real_feat",
+            "NewFeature",
+            FileType::Code,
+            "src/feature.rs",
+        ));
+
+        let report = verify_plan(&graph, "plan-clean");
+        assert!(
+            report.unplanned_modified_files.is_empty(),
+            "Untouched repo files must not be flagged as unplanned edits: {:?}",
+            report.unplanned_modified_files
+        );
+        assert!(report.passes_compliance);
+    }
+
+    #[test]
+    fn verify_plan_with_modified_files_detects_real_scope_creep() {
+        use crate::model::FileType;
+
+        let mut graph = GrapheniumGraph::new();
+        let mut p_node = Node::new("plan_feat", "NewFeature", FileType::Code, "src/feature.rs");
+        p_node.plan_id = Some("plan-creep".to_string());
+        graph.upsert_node(p_node);
+        graph.upsert_node(Node::new(
+            "real_feat",
+            "NewFeature",
+            FileType::Code,
+            "src/feature.rs",
+        ));
+
+        let modified = std::collections::HashSet::from([
+            "src/feature.rs".to_string(),
+            "src/unrelated_sneaky_edit.rs".to_string(),
+        ]);
+
+        let report = verify_plan_with_modified_files(&graph, "plan-creep", Some(&modified));
+        assert!(!report.passes_compliance);
+        assert_eq!(
+            report.unplanned_modified_files,
+            vec!["src/unrelated_sneaky_edit.rs".to_string()]
+        );
     }
 
     #[test]

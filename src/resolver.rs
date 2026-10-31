@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use crate::model::{Edge, ExtractionResult, FileType, Node};
+use crate::model::ExtractionResult;
 
 /// Post-process extraction results to mark import resolution status.
 /// Builds an export index from all results, then walks every edge:
@@ -57,10 +57,9 @@ pub fn resolve_imports(results: &mut [ExtractionResult]) {
 
 /// A file-scoped symbol index entry.
 #[derive(Debug, Clone)]
-struct FileSymbolEntry {
+pub struct FileSymbolEntry {
     pub file_id: String,
     pub node_id: String,
-    pub qualified_label: Option<String>,
 }
 
 /// Build a file-scoped symbol index keyed by label (or qualified_label).
@@ -69,24 +68,17 @@ pub fn build_file_index(results: &[ExtractionResult]) -> HashMap<String, Vec<Fil
     let mut index: HashMap<String, Vec<FileSymbolEntry>> = HashMap::new();
     for result in results {
         for node in &result.nodes {
-            let entry = FileSymbolEntry {
-                file_id: node.source_file.clone(),
-                node_id: node.id.clone(),
-                qualified_label: node.qualified_label.clone(),
-            };
             index
                 .entry(node.label.clone())
                 .or_default()
                 .push(FileSymbolEntry {
                     file_id: node.source_file.clone(),
                     node_id: node.id.clone(),
-                    qualified_label: node.qualified_label.clone(),
                 });
             if let Some(ref ql) = node.qualified_label {
                 index.entry(ql.clone()).or_default().push(FileSymbolEntry {
                     file_id: node.source_file.clone(),
                     node_id: node.id.clone(),
-                    qualified_label: node.qualified_label.clone(),
                 });
             }
         }
@@ -163,8 +155,83 @@ fn lang_family(path: &str) -> u8 {
         "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "hh" | "hxx" => 2, // C/C++
         "py" | "pyi" => 3,                                            // Python
         "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => 4,             // JS/TS
+        "lean" => 5,                                                  // Lean 4
         _ => 0,
     }
+}
+
+/// Build a map from `source_file` -> set of normalized imported target tokens/stems.
+/// Used to disambiguate cross-file calls when a symbol name appears in multiple files.
+fn build_caller_import_scopes(
+    results: &[ExtractionResult],
+) -> HashMap<String, std::collections::HashSet<String>> {
+    let mut file_imports: HashMap<String, std::collections::HashSet<String>> = HashMap::new();
+    for result in results {
+        for edge in &result.edges {
+            if edge.relation != "imports" {
+                continue;
+            }
+            let scope_set = file_imports.entry(edge.source_file.clone()).or_default();
+            let norm_tgt = crate::model::id::normalize_id(&edge.target);
+            if !norm_tgt.is_empty() {
+                scope_set.insert(norm_tgt.clone());
+                for part in norm_tgt.split('_').filter(|p| !p.is_empty()) {
+                    scope_set.insert(part.to_string());
+                }
+            }
+            if !edge.tgt_original.is_empty() {
+                let raw_norm = crate::model::id::normalize_id(&edge.tgt_original);
+                if !raw_norm.is_empty() {
+                    scope_set.insert(raw_norm);
+                }
+            }
+        }
+    }
+    file_imports
+}
+
+/// Check whether a candidate `(target_file, target_node_id)` matches the caller file's
+/// imported modules/files.
+fn candidate_matches_imports(
+    target_file: &str,
+    target_node_id: &str,
+    imported_tokens: &std::collections::HashSet<String>,
+) -> bool {
+    if imported_tokens.contains(target_node_id) {
+        return true;
+    }
+    let stem = std::path::Path::new(target_file)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(crate::model::id::normalize_id)
+        .unwrap_or_default();
+    if !stem.is_empty() && imported_tokens.contains(&stem) {
+        return true;
+    }
+    // Check if the candidate node_id starts with an imported module prefix `<mod>_`
+    imported_tokens.iter().any(|imp| {
+        imp.len() >= 2
+            && target_node_id.len() > imp.len()
+            && target_node_id.starts_with(imp.as_str())
+            && target_node_id.as_bytes().get(imp.len()) == Some(&b'_')
+    })
+}
+
+/// Collapse a file-container node vs the type/method node for the SAME symbol
+/// (e.g. id "ifoo" is a `_`-prefixed ancestor of "ifoo_ifoo"): keep the most specific.
+fn collapse_subsumed_candidates<'a>(candidates: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+    let mut specific: Vec<(&'a str, &'a str)> = Vec::new();
+    for &(file, id) in candidates {
+        let subsumed = candidates.iter().any(|&(_, other)| {
+            other.len() > id.len()
+                && other.starts_with(id)
+                && other.as_bytes().get(id.len()) == Some(&b'_')
+        });
+        if !subsumed && !specific.iter().any(|&(_, existing)| existing == id) {
+            specific.push((file, id));
+        }
+    }
+    specific
 }
 
 /// Resolve all cross-file references in the extraction results.
@@ -180,6 +247,7 @@ pub fn resolve_cross_file_calls(
         Some(i) => i.clone(),
         None => build_symbol_index(results),
     };
+    let caller_imports = build_caller_import_scopes(results);
 
     let mut resolved_count = 0usize;
 
@@ -205,75 +273,78 @@ pub fn resolve_cross_file_calls(
                 continue;
             }
 
-            // Trust-safe cross-file binding: resolve ONLY when the target label maps to a
-            // SINGLE distinct definition. Colliding names (e.g. `GetValue` in 39 files) are
-            // left unresolved rather than bound to an arbitrary candidate — this preserves
-            // the EXTRACTED trust guarantee. (Scope-narrowing by imports/namespace can raise
-            // recall on ambiguous names in a follow-up, still gated on a unique survivor.)
-            // Look up by the ORIGINAL label: `symbol_index` is keyed by node label / id,
-            // but `Edge::new` has already normalized `edge.target` (lowercased). The raw
-            // label lives in `tgt_original`.
             let key = if !edge.tgt_original.is_empty() {
                 edge.tgt_original.as_str()
             } else {
                 edge.target.as_str()
             };
-            // Same-language guard: only consider candidates in the caller's language family
-            // (prevents a C# `Max(...)` binding to a same-named C++ header function).
-            let caller_fam = result
-                .nodes
-                .iter()
-                .find(|n| n.id == edge.source)
-                .map(|n| lang_family(&n.source_file))
-                .unwrap_or(0);
-            let mut distinct: Vec<&str> = Vec::new();
+
+            let caller_node = result.nodes.iter().find(|n| n.id == edge.source);
+            let caller_file = caller_node
+                .map(|n| n.source_file.as_str())
+                .unwrap_or(edge.source_file.as_str());
+            let caller_fam = lang_family(caller_file);
+
+            let mut candidates: Vec<(&str, &str)> = Vec::new();
             if let Some(entries) = symbol_index.get(key) {
                 for (file, nid) in entries {
                     if lang_family(file) != caller_fam {
                         continue;
                     }
-                    if !distinct.iter().any(|d| *d == nid.as_str()) {
-                        distinct.push(nid.as_str());
+                    if !candidates.iter().any(|(_, d)| *d == nid.as_str()) {
+                        candidates.push((file.as_str(), nid.as_str()));
                     }
                 }
             }
-            // Collapse a file-container node vs the type/method node for the SAME symbol
-            // (e.g. id "ifoo" is a `_`-prefixed ancestor of "ifoo_ifoo"): keep the most
-            // specific. This is safe — same symbol at different granularity — and lets a
-            // single genuine definition resolve while true cross-symbol collisions remain
-            // ambiguous (len > 1) and are left unresolved.
-            let mut specific: Vec<&str> = Vec::new();
-            for &id in &distinct {
-                let subsumed = distinct.iter().any(|&other| {
-                    other.len() > id.len()
-                        && other.starts_with(id)
-                        && other.as_bytes().get(id.len()) == Some(&b'_')
-                });
-                if !subsumed {
-                    specific.push(id);
+
+            let mut distinct = collapse_subsumed_candidates(&candidates);
+
+            // Import-scoped disambiguation: if multiple candidates exist across the repo,
+            // narrow to candidates from modules/files that `caller_file` explicitly imports.
+            if distinct.len() > 1 {
+                if let Some(imported_tokens) = caller_imports.get(caller_file) {
+                    let import_filtered: Vec<(&str, &str)> = distinct
+                        .iter()
+                        .copied()
+                        .filter(|&(file, nid)| {
+                            candidate_matches_imports(file, nid, imported_tokens)
+                        })
+                        .collect();
+                    if import_filtered.len() == 1 {
+                        distinct = import_filtered;
+                    }
                 }
             }
-            let distinct = specific;
+
+            // Secondary same-directory disambiguation if still > 1 and imports didn't narrow:
+            // if exactly one candidate lives in the same parent directory as caller_file,
+            // and the language uses directory/package scoping (Go, Rust, C#, Java), prefer it.
+            if distinct.len() > 1 {
+                let caller_dir = std::path::Path::new(caller_file).parent();
+                if caller_dir.is_some() {
+                    let same_dir: Vec<(&str, &str)> = distinct
+                        .iter()
+                        .copied()
+                        .filter(|&(file, _)| std::path::Path::new(file).parent() == caller_dir)
+                        .collect();
+                    if same_dir.len() == 1 {
+                        distinct = same_dir;
+                    }
+                }
+            }
+
             if distinct.len() == 1 {
-                // Unique target — bind the edge to the real node id and mark resolved.
-                // A uniquely-resolved, same-language cross-file reference is a strong hint
-                // (INFERRED), not ground truth (EXTRACTED) and not AMBIGUOUS junk.
-                edge.target = distinct[0].to_string();
+                edge.target = distinct[0].1.to_string();
                 edge.extractor = Some("tree-sitter-stack-graphs".to_string());
                 edge.resolution_status = Some("resolved".to_string());
                 edge.confidence = crate::model::Confidence::Inferred;
                 edge.confidence_score = crate::model::Confidence::Inferred.default_score();
                 resolved_count += 1;
             }
-            // else: 0 candidates (unknown) or >1 (ambiguous) → leave unresolved; dropped
-            // below. No wrong EXTRACTED edge is ever emitted.
         }
     }
 
-    // Drop the cross-file behavioral edges we could NOT uniquely resolve: they still point
-    // at a bare label (no real node), so keeping them would pollute the graph with dangling
-    // edges. Only uniquely-resolved edges (rewritten to a real node id) are retained — this
-    // keeps the graph honest and the trust model intact.
+    // Drop the cross-file behavioral edges we could NOT uniquely resolve
     for result in results.iter_mut() {
         result.edges.retain(|e| {
             !(e.resolution_status.as_deref() == Some("unresolved")
@@ -323,6 +394,7 @@ pub fn count_cross_file_edges(results: &[ExtractionResult]) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{Edge, FileType, Node};
 
     fn make_file(id: &str, label: &str, path: &str, code_file: bool) -> Node {
         let ft = if code_file {
@@ -435,5 +507,56 @@ mod tests {
         assert_eq!(report.len(), 1);
         assert_eq!(report[0].relation, "calls");
         assert!(report[0].resolved);
+    }
+
+    #[test]
+    fn import_scoped_disambiguation_resolves_colliding_method_names() {
+        // Two modules (`src/auth.rs` and `src/billing.rs`) both define `validate`.
+        // `src/controller.rs` imports `auth` and calls `validate`.
+        // Without import scoping, `validate` has 2 candidates and gets dropped.
+        // With import scoping, it uniquely binds to `auth_validate`.
+        let mut r_auth = ExtractionResult::new();
+        r_auth
+            .nodes
+            .push(make_file("auth_validate", "validate", "src/auth.rs", true));
+
+        let mut r_billing = ExtractionResult::new();
+        r_billing.nodes.push(make_file(
+            "billing_validate",
+            "validate",
+            "src/billing.rs",
+            true,
+        ));
+
+        let mut r_ctrl = ExtractionResult::new();
+        r_ctrl.nodes.push(make_file(
+            "ctrl_handle",
+            "handle",
+            "src/controller.rs",
+            true,
+        ));
+        let mut imp_edge = make_edge("ctrl_handle", "auth", "imports", "src/controller.rs");
+        imp_edge.resolution_status = Some("resolved".to_string());
+        r_ctrl.edges.push(imp_edge);
+
+        let mut call_edge = make_edge("ctrl_handle", "validate", "calls", "src/controller.rs");
+        call_edge.tgt_original = "validate".to_string();
+        call_edge.resolution_status = Some("unresolved".to_string());
+        r_ctrl.edges.push(call_edge);
+
+        let mut results = vec![r_auth, r_billing, r_ctrl];
+        let count = resolve_cross_file_calls(&mut results, None);
+        assert_eq!(
+            count, 1,
+            "Import scope should uniquely disambiguate `validate`"
+        );
+
+        let resolved_call = results[2]
+            .edges
+            .iter()
+            .find(|e| e.relation == "calls")
+            .expect("call edge should be retained");
+        assert_eq!(resolved_call.target, "auth_validate");
+        assert_eq!(resolved_call.resolution_status.as_deref(), Some("resolved"));
     }
 }

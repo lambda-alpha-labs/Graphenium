@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -507,9 +509,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             path,
             debounce,
             incremental,
-            impact,
+            impact: _,
         } => {
-            let show_impact = impact;
             match tokio::task::spawn_blocking(move || {
                 graphenium::watch::watch(&path, debounce, incremental)
             })
@@ -521,10 +522,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Graph { command } => match command {
-            GraphCommands::Migrate { graph } => {
-                eprintln!("not yet implemented: migrate {}", graph.display());
-                Ok::<(), graphenium::error::GrapheniumError>(())
-            }
+            GraphCommands::Migrate { graph } => cmd_graph_migrate(&graph),
             GraphCommands::Schema { graph } => cmd_graph_schema(&graph),
             GraphCommands::BuildMap { graph } => cmd_graph_build_map(&graph),
             GraphCommands::TestMap { graph } => cmd_graph_test_map(&graph),
@@ -535,18 +533,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             SnapshotCommands::List => cmd_snapshot_list(),
         },
 
-        Commands::Gate { diff } => {
-            if let Some(paths) = diff {
-                eprintln!(
-                    "not yet implemented: gate --diff {} {}",
-                    paths[0].display(),
-                    paths[1].display()
-                );
-            } else {
-                eprintln!("not yet implemented: gate");
-            }
-            Ok::<(), graphenium::error::GrapheniumError>(())
-        }
+        Commands::Gate { diff } => cmd_gate(diff.as_deref()),
     };
 
     if let Err(e) = &_result {
@@ -726,31 +713,17 @@ async fn cmd_run(
 
     // ── 4b. C#/CI build config extraction ──────────────────────────────────────
     let mut ci_result = ExtractionResult::default();
-    // Scan for C# project files and CI configs in the project root
-    if let Ok(entries) = std::fs::read_dir(&path) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                if let Ok(sub) = std::fs::read_dir(&p) {
-                    for s in sub.flatten() {
-                        let sp = s.path();
-                        let ext = sp.extension().and_then(|e| e.to_str()).unwrap_or("");
-                        if ext == "csproj" || ext == "sln" {
-                            eprintln!("[graphenium] Parsing C# project: {}", sp.display());
-                            if ext == "sln" {
-                                let ws = graphenium::extract::csharp_project::CSharpWorkspace::parse_solution(&sp);
-                                ci_result.merge(ci::csproj_to_extraction(&ws));
-                            } else {
-                                let ws = graphenium::extract::csharp_project::CSharpWorkspace::parse_csproj(&sp);
-                                let mut single =
-                                    graphenium::extract::csharp_project::CSharpWorkspace::default();
-                                single.projects.insert(sp.clone(), ws);
-                                ci_result.merge(ci::csproj_to_extraction(&single));
-                            }
-                        }
-                    }
-                }
-            }
+    for sp in discover_csharp_files(&root) {
+        let ext = sp.extension().and_then(|e| e.to_str()).unwrap_or("");
+        eprintln!("[graphenium] Parsing C# project: {}", sp.display());
+        if ext.eq_ignore_ascii_case("sln") {
+            let ws = graphenium::extract::csharp_project::CSharpWorkspace::parse_solution(&sp);
+            ci_result.merge(ci::csproj_to_extraction(&ws));
+        } else if ext.eq_ignore_ascii_case("csproj") {
+            let proj = graphenium::extract::csharp_project::CSharpWorkspace::parse_csproj(&sp);
+            let mut single = graphenium::extract::csharp_project::CSharpWorkspace::default();
+            single.projects.insert(sp.clone(), proj);
+            ci_result.merge(ci::csproj_to_extraction(&single));
         }
     }
 
@@ -840,6 +813,7 @@ async fn cmd_run(
                 "cpp" | "cc" | "cxx" | "hpp" => "cpp",
                 "java" => "java",
                 "cs" => "csharp",
+                "lean" => "lean",
                 _ => continue,
             };
             lang_set.insert(lang.to_string());
@@ -1082,7 +1056,7 @@ fn cmd_query(
     }
 
     // Traverse the graph.
-    let max_nodes = (budget / 40).max(5).min(200);
+    let max_nodes = (budget / 40).clamp(5, 200);
     let visited = if dfs {
         serve_traversal::dfs_with_filters(
             &graph,
@@ -1552,7 +1526,7 @@ fn cmd_snapshot_create(name: &str) -> graphenium::Result<()> {
     }
 
     let dest = snap_dir.join(format!("{name}.json"));
-    std::fs::copy(&src, &dest).map_err(|e| graphenium::GrapheniumError::Io(e))?;
+    std::fs::copy(&src, &dest).map_err(graphenium::GrapheniumError::Io)?;
 
     println!("Snapshot '{name}' saved to {}.", dest.display());
     Ok(())
@@ -1716,6 +1690,70 @@ fn label_collision_report(graph: &graphenium::model::GrapheniumGraph) -> Option<
 
 // ── `graph` sub-commands ────────────────────────────────────────────────────────
 
+/// Migrate an older graph.json file to the current schema version (`0.2.0`).
+fn cmd_graph_migrate(graph_path: &Path) -> graphenium::Result<()> {
+    let mut graph = load_graph(graph_path)?;
+    let prev_schema = graph
+        .metadata
+        .schema_version
+        .clone()
+        .unwrap_or_else(|| "0.1.0".to_string());
+    graph.metadata.schema_version = Some("0.2.0".to_string());
+    graph.metadata.graphenium_version = Some(env!("CARGO_PKG_VERSION").to_string());
+
+    let json = export::json::to_json(&graph)?;
+    let tmp = graph_path.with_extension("json.tmp");
+    std::fs::write(&tmp, &json)?;
+    std::fs::rename(&tmp, graph_path)?;
+
+    println!(
+        "Migrated '{}' from schema {} to 0.2.0 ({} nodes, {} edges).",
+        graph_path.display(),
+        prev_schema,
+        graph.node_count(),
+        graph.edge_count()
+    );
+    Ok(())
+}
+
+/// Execute automated PR containment gates over two graph snapshots (or current graph).
+fn cmd_gate(diff_paths: Option<&[PathBuf]>) -> graphenium::Result<()> {
+    if let Some(paths) = diff_paths {
+        if paths.len() == 2 {
+            let before = load_graph(&paths[0])?;
+            let after = load_graph(&paths[1])?;
+            let drift = graphenium::cluster::drift::detect_drift(&before, &after);
+            println!("{}", graphenium::cluster::drift::format_drift(&drift));
+
+            let critical_count = drift
+                .events
+                .iter()
+                .filter(|e| e.severity == graphenium::cluster::drift::DriftSeverity::Critical)
+                .count();
+            if critical_count > 0 {
+                eprintln!(
+                    "\n[FAIL] Gate rejected diff: {critical_count} critical architectural drift event(s) detected."
+                );
+                std::process::exit(1);
+            }
+            println!("[PASS] Diff gate passed (0 critical drift events).");
+            return Ok(());
+        }
+    }
+
+    // Default when `--diff` is not supplied: run standard check on graphenium-out/graph.json
+    cmd_check(
+        Path::new("graphenium-out/graph.json"),
+        80.0,
+        10,
+        true,
+        None,
+        false,
+        None,
+        None,
+    )
+}
+
 /// Load and print graph schema / metadata (`graph schema`).
 fn cmd_graph_schema(graph_path: &Path) -> graphenium::Result<()> {
     let graph = load_graph(graph_path)?;
@@ -1778,48 +1816,33 @@ fn cmd_graph_build_map(graph_path: &Path) -> graphenium::Result<()> {
         }
     }
 
-    // Scan for C# project files
+    // Scan for C# project files recursively
     println!("\n=== C# Projects ===");
-    let mut csharp_found = false;
-    if let Ok(entries) = std::fs::read_dir(root) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Ok(sub_entries) = std::fs::read_dir(&path) {
-                    for sub in sub_entries.flatten() {
-                        let sub_path = sub.path();
-                        if sub_path
-                            .extension()
-                            .map_or(false, |e| e == "csproj" || e == "sln")
-                        {
-                            if sub_path.extension().unwrap() == "sln" {
-                                let ws = graphenium::extract::csharp_project::CSharpWorkspace::parse_solution(&sub_path);
-                                println!("Solution: {}", sub_path.display());
-                                for (_p, proj) in &ws.projects {
-                                    println!(
-                                        "  Project: {} (ns: {})",
-                                        proj.name, proj.root_namespace
-                                    );
-                                    for ref_path in &proj.project_references {
-                                        println!("    -> depends on: {}", ref_path.display());
-                                    }
-                                }
-                            } else {
-                                let proj = graphenium::extract::csharp_project::CSharpWorkspace::parse_csproj(&sub_path);
-                                println!("Project: {} (ns: {})", proj.name, proj.root_namespace);
-                                for ref_path in &proj.project_references {
-                                    println!("  -> depends on: {}", ref_path.display());
-                                }
-                            }
-                            csharp_found = true;
-                        }
+    let csharp_files = discover_csharp_files(root);
+    if csharp_files.is_empty() {
+        println!("  (none found)");
+    } else {
+        for sub_path in csharp_files {
+            let ext = sub_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            if ext.eq_ignore_ascii_case("sln") {
+                let ws =
+                    graphenium::extract::csharp_project::CSharpWorkspace::parse_solution(&sub_path);
+                println!("Solution: {}", sub_path.display());
+                for proj in ws.projects.values() {
+                    println!("  Project: {} (ns: {})", proj.name, proj.root_namespace);
+                    for ref_path in &proj.project_references {
+                        println!("    -> depends on: {}", ref_path.display());
                     }
+                }
+            } else {
+                let proj =
+                    graphenium::extract::csharp_project::CSharpWorkspace::parse_csproj(&sub_path);
+                println!("Project: {} (ns: {})", proj.name, proj.root_namespace);
+                for ref_path in &proj.project_references {
+                    println!("  -> depends on: {}", ref_path.display());
                 }
             }
         }
-    }
-    if !csharp_found {
-        println!("  (none found)");
     }
     Ok(())
 }
@@ -1860,6 +1883,44 @@ fn cmd_graph_test_map(graph_path: &Path) -> graphenium::Result<()> {
     Ok(())
 }
 
+/// Recursively discover `.sln` and `.csproj` files under `root`, respecting
+/// `.gitignore`, `.grapheniumignore`, and standard skip directories.
+fn discover_csharp_files(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let walker = ignore::WalkBuilder::new(root)
+        .hidden(false)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
+        .build();
+
+    for entry in walker.flatten() {
+        let path = entry.path();
+        if entry.file_type().is_some_and(|t| t.is_dir()) {
+            continue;
+        }
+        let inside_skip = path.components().any(|c| {
+            if let std::path::Component::Normal(name) = c {
+                name.to_str()
+                    .map(graphenium::detect::classify::is_skip_dir)
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        });
+        if inside_skip {
+            continue;
+        }
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if ext.eq_ignore_ascii_case("sln") || ext.eq_ignore_ascii_case("csproj") {
+                files.push(path.to_path_buf());
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
 /// Helper: find known CI configuration files under a root directory.
 fn discover_ci_configs(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
@@ -1885,10 +1946,7 @@ fn discover_ci_configs(root: &Path) -> Vec<PathBuf> {
         if let Ok(entries) = std::fs::read_dir(&workflows) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path
-                    .extension()
-                    .map_or(false, |e| e == "yml" || e == "yaml")
-                {
+                if path.extension().is_some_and(|e| e == "yml" || e == "yaml") {
                     files.push(path);
                 }
             }
