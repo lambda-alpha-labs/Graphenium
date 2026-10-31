@@ -1,4 +1,4 @@
-/// File-watch mode: rebuild the knowledge graph automatically on code changes.
+/// File-watch mode: rebuild the relational index automatically on code changes.
 /// ## Behaviour
 /// | Change type          | Action                                          |
 /// |----------------------|-------------------------------------------------|
@@ -361,7 +361,7 @@ fn write_graph_output(
     let title = root
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("Knowledge Graph")
+        .unwrap_or("Relational Index")
         .to_string();
 
     report::write_report(

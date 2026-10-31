@@ -1,11 +1,16 @@
 ---
 name: graphenium
-description: Use when analyzing codebase structure, verifying pre-flight policy compliance, tracing transitive dependency closures, or auditing post-edit scope creep.
+description: Use as your primary structural index for codebase analysis, blast-radius/centrality queries, and transitive dependency tracing, and as your mandatory spec-driven containment contract for pre-flight validation, Virtual AST planning, and post-edit scope-creep auditing.
 ---
 
 # Graphenium Agentic Skill
 
-Graphenium is a local, external architecture gate and pre-flight linter. It compiles your workspace into an AST-proven structural index and exposes boundary constraints over an MCP server interface.
+Graphenium is a local relational codebase compiler and spec-driven containment engine. It compiles your workspace into a provenance-tagged relational index (`EXTRACTED`, `INFERRED`, `AMBIGUOUS`) and exposes both high-speed structural intelligence and mechanical write-time constraints over an MCP server interface.
+
+Use it for two jobs:
+
+1. **High-speed structural index:** Replace blind directory sweeps, raw file reads, and unbounded `grep` loops with compact topological queries. Use it to find AST-proven callers, blast radius, centrality hotspots, shortest/safest paths, and transitive closures while preserving context budget.
+2. **Mandatory containment contract:** For multi-file or cross-boundary work, follow the full loop: Virtual AST declaration → Datalog + ΔQ pre-flight validation → physical implementation → `agent_change_gate` post-edit verification of realized nodes, realized edges, and unplanned file scope.
 
 ---
 

@@ -3,7 +3,7 @@
 This playbook is written for AI assistants helping a user install, configure, and verify Graphenium.
 
 Goal:
-> Install `gm`, generate the first structural index for the current project, configure Graphenium's pre-flight architecture gates, connect Graphenium to the user's agentic workspace via MCP, and verify that the assistant can run pre-flight policy checks.
+> Install `gm`, compile the first provenance-tagged relational index for the current project, configure Graphenium's spec-driven containment gates, connect Graphenium to the user's agentic workspace via MCP, and verify that the assistant can run pre-flight policy and topological entropy checks.
 
 ---
 
@@ -118,7 +118,7 @@ If 0 nodes or edges are reported, troubleshoot:
 
 ---
 
-## Step 5: Verify Linter and Index Health
+## Step 5: Verify Index and Containment Health
 
 Confirm that the local structural index was parsed correctly and diagnostics are clean:
 
@@ -294,7 +294,7 @@ gm query "bypass" --datalog "?- bypasses_layer('auth_controller', 'auth_service'
 Once the setup is complete, provide the user with a concise architectural summary:
 
 ```text
-Graphenium Pre-Flight Gate Active: <gm path>
+Graphenium Containment Engine Active: <gm path>
 Base Codebase Index Generated: <index path>
 Current Index Scale: <nodes> symbols, <edges> boundaries
 Pre-Flight Policies Configured: <yes / no — zero-config delta gating active>

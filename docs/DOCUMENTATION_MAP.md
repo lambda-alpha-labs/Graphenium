@@ -1,8 +1,8 @@
 # Graphenium Documentation Ecosystem Map
 
-This documentation set is structured entirely around Graphenium's core mission: **providing an external, pre-flight linter and mechanical containment gate for AI coding agents**. 
+This documentation set is structured entirely around Graphenium's core mission: **compiling codebases into a provenance-tagged relational index and using it as a pre-flight verifier and mechanical containment gate for AI coding agents**.
 
-The documents have been systematically rewritten to move away from passive "graph visualization" or "GraphRAG" concepts, focusing instead on write-safety, deterministic AST-level boundaries, and Datalog policy solving.
+The documents are written around the dual value proposition: Graphenium is both a **high-speed structural compiler** that saves agent context and a **spec-driven containment engine** that enforces architectural invariants at write time. They deliberately move away from passive "graph visualization" or "GraphRAG" concepts, focusing instead on deterministic AST-level boundaries, Virtual AST planning, Datalog fixed-point proofs, zero-config Louvain ΔQ gating, and post-edit realization audits.
 
 ---
 
@@ -21,7 +21,6 @@ SECURITY.md                     # Local-first security & sensitive file rules
 docs/
   ├── DOCUMENTATION_MAP.md      # This file: Guide to Graphenium's documentation
   ├── GETTING_STARTED.md        # Initialization, AST indexing, & MCP handshake
-  ├── POSITIONING.md            # Market positioning & competitive differentiation
   ├── AGENT_WORKFLOWS.md        # Step-by-step pre-flight and verify loops
   ├── CI_AND_GOVERNANCE.md      # CI/CD gates, git hooks, & policy.json schemas
   ├── COMMAND_REFERENCE.md      # Complete CLI flags, commands, & outputs
@@ -29,7 +28,7 @@ docs/
   ├── ARCHITECTURE.md           # Tree-sitter pipelines, C# bounds, & Datalog solving
   ├── TRUST_MODEL.md            # AST-proven vs. semantic provenance
   ├── BENCHMARKING.md           # Payload budgets, latency metrics, & TTVP
-  ├── COMPARISON.md             # Graphenium vs. grep, ast-grep, & vector indexes
+  ├── COMPARISON.md             # Graphenium vs. grep, ast-grep, SCIP, RAG, & arch linters
   ├── HARNESS_ADAPTER.md        # Programmatic Rust integration reference
   ├── GRAPH_REPORT.md           # Diagnostic guidelines for codebase reports
   └── WORKED_EXAMPLES.md        # Case studies proving containment on real repos
@@ -52,12 +51,12 @@ Our documentation refactoring enforces a strict paradigm shift in terminology an
 
 | Old Concept (Passive & Saturated) | New Concept (Active & High-Value) |
 | :--- | :--- |
-| **Durable Structural Memory** | **AST-Proven Codebase Index / Pre-Flight Gate** |
-| Helping agents search and navigate the codebase. | **Stopping agents from violating boundaries and creating code bloat.** |
+| **Durable Structural Memory** / "knowledge graph engine" | **Relational Codebase Compiler / Spec-Driven Containment Engine** |
+| Helping agents search and navigate the codebase. | **Compressing structure for context savings *and* stopping agents from violating boundaries.** |
 | Passive visualization diagrams (HTML outputs). | **Automated pre-commit hooks, Datalog proofs, and CI gates.** |
-| Fictional "knowledge graph RAG" similarity guesses. | **Compiler-backed facts (`EXTRACTED`) vs. exploratory hypotheses (`INFERRED`).** |
+| Fictional "knowledge graph RAG" similarity guesses. | **Compiler-backed facts (`EXTRACTED`) vs. exploratory hypotheses (`INFERRED`) vs. collisions/proof gaps (`AMBIGUOUS`).** |
 | AI prompts (`AGENTS.md`, `CLAUDE.md`) | **External, mechanical constraints (`policy.json` / `validate_plan` / `evaluate_delta_gate` / `gm check --delta`).** |
-| Static folder-regex linters | **Zero-Drift Delta Gating — relative Louvain modularity (ΔQ) and surprise edge profiling.** |
+| Static folder-regex linters | **Virtual AST pre-flight + Zero-Drift Delta Gating — relative Louvain modularity (ΔQ), Datalog fixed points, and surprise edge profiling.** |
 
 ---
 
@@ -66,7 +65,7 @@ Our documentation refactoring enforces a strict paradigm shift in terminology an
 Graphenium's documentation set is written to address three distinct engineering profiles:
 
 1.  **Platform & DevEx Engineers:** Targeted by `docs/CI_AND_GOVERNANCE.md`, `docs/GETTING_STARTED.md`, and `AI_SETUP.md`. They need to know how to install `gm`, construct automated pre-commit gates, and standardize agent containment across development teams.
-2.  **Software Architects & Tech Leads:** Targeted by `docs/POSITIONING.md`, `docs/ARCHITECTURE.md`, `docs/TRUST_MODEL.md`, and `.graphenium/policy.json` schemas. They need to know how Graphenium uses Datalog to mathematically prove boundary safety and how to declare strict module layers.
+2.  **Software Architects & Tech Leads:** Targeted by `docs/ARCHITECTURE.md`, `docs/TRUST_MODEL.md`, `docs/COMPARISON.md`, and `.graphenium/policy.json` schemas. They need to know how Graphenium compiles structure, uses Datalog to mathematically prove boundary safety, and applies relative Louvain ΔQ gating to protect modularity.
 3.  **AI Assistant Engines:** Targeted by `skills/graphenium/SKILL.md` and `docs/MCP_TOOLS.md`. These files provide structured rules and handshake protocols that the agent parses to govern its own change planning.
 
 ---

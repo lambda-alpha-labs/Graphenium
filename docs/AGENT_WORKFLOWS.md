@@ -1,6 +1,6 @@
 # Agentic Containment Workflows
 
-Graphenium establishes strict, write-time containment boundaries for AI coding agents. The core rule governing all agent interactions is simple:
+Graphenium compiles your workspace into a provenance-tagged relational index and establishes strict, write-time containment boundaries for AI coding agents. Use the index first to replace blind grep/file-read loops, then use the containment loop to govern multi-file writes. The core rule governing all agent interactions is simple:
 
 > **Verify boundaries pre-flight, read source files before implementing, and audit scope creep post-edit.**
 

@@ -48,7 +48,7 @@ impl Default for GraphMetadata {
     }
 }
 
-/// The central knowledge graph structure.
+/// The central relational index structure.
 /// Wraps a `petgraph::Graph` (undirected) and adds:
 /// - O(1) node lookup by string ID via `id_index`.
 /// - A side-car `Vec<HyperEdge>` for N-ary relationships.

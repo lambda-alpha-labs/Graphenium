@@ -1,6 +1,6 @@
 # MCP Tool Catalog and Containment Protocol
 
-Graphenium exposes a Model Context Protocol (MCP) interface, turning its background server into an active **pre-flight linter and structural containment gate** for AI agents. Rather than allowing agents to grep blindly or read raw codebase files, Graphenium provides precise, compiler-proven metadata to govern their write-time designs.
+Graphenium exposes a Model Context Protocol (MCP) interface with 24 tools, turning its background server into both a **high-speed relational codebase compiler** and an active **spec-driven containment gate** for AI agents. Rather than allowing agents to grep blindly or read raw codebase files, Graphenium provides compact, compiler-proven structural metadata for context-efficient orientation, then uses the same index to govern write-time designs through Virtual AST validation, Datalog invariants, ΔQ gating, and post-edit realization audits.
 
 ---
 

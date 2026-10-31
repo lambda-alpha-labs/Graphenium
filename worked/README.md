@@ -2,7 +2,7 @@
 
 This directory contains **worked case studies** documenting Graphenium's performance and behavioral guardrails across real-world, production repositories. 
 
-These case studies are designed to demonstrate Graphenium's ability to mechanically enforce engineering safety, detect AI-driven codebase erosion, and block unauthorized transitive dependencies.
+These case studies are designed to demonstrate Graphenium's ability to compile structural context for agents, mechanically enforce engineering safety, detect AI-driven codebase erosion, and block unauthorized transitive dependencies.
 
 ---
 

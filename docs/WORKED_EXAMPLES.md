@@ -1,6 +1,6 @@
 # Worked Case Studies: Structural Containment in Practice
 
-Graphenium is a localized verification and containment layer. Its value is best demonstrated through **worked case studies** on real, production repositories. These studies verify Graphenium's ability to mechanically enforce architectural boundaries, prevent AI-scale code bloat, and block design drift.
+Graphenium is a local relational codebase compiler and spec-driven containment engine. Its value is best demonstrated through **worked case studies** on real, production repositories. These studies verify Graphenium's ability to compress structural context for agents, mechanically enforce architectural boundaries, prevent AI-scale code bloat, and block design drift.
 
 ---
 

@@ -1,8 +1,19 @@
 # Graphenium System Architecture
 
-Graphenium is an active engineering containment layer and pre-flight linter for AI coding agents. It is not a passive code search index. 
+Graphenium is a local relational codebase compiler and spec-driven containment engine for AI coding agents. It is not a passive code search index, a visualizer, or a folder-regex linter.
 
-Its architecture is engineered to mechanically govern the write-time behaviors of AI assistants, executing pre-flight policy checks and post-facto scope audits before code changes are committed to your repository.
+Its architecture serves two reinforcing goals. First, it compiles a polyglot codebase into a provenance-tagged relational index so agents can replace blind `grep`/file-read loops with compact, sub-50ms structural queries. Second, it uses that same index to mechanically govern write-time behavior: pre-flight Virtual AST validation, embedded Datalog invariant solving, zero-config Louvain modularity (ΔQ) gating, Lean 4 proof-gap auditing, and post-edit realization/scope audits before changes are committed.
+
+### Layer 4 of the Verification Stack
+
+Graphenium is the **topological, architectural, and epistemic integrity layer** above the three conventional verification layers:
+
+| Layer | Tooling | What It Proves |
+|---|---|---|
+| **1 — Lexical & Syntactic** | `rustc`, `tsc`, parsers | Syntactic validity. |
+| **2 — Type & Memory Safety** | Type and borrow checkers | Local signatures and lifetimes align. |
+| **3 — Behavioral Correctness** | `cargo test`, `pytest` | Inputs produce expected outputs. |
+| **4 — Topological, Architectural & Epistemic Integrity** | **Graphenium** | Transitive invariants hold, ΔQ does not decay, proof gaps do not taint verified theorems, and diffs match the approved Virtual AST. |
 
 ---
 
@@ -121,10 +132,10 @@ Proposed Plan (Virtual AST)   ----->   Evaluated against .graphenium/policy.json
 Physical Implementation      ----->   gm check --plan compares physical to virtual
 ```
 
-By maintaining a virtual-to-physical mapping, Graphenium mechanically detects:
-*   **Implemented Nodes:** Successfully written classes and methods that match the approved design.
-*   **Missing Nodes:** Declared symbols that the agent failed to implement.
-*   **Scope Creep / Unplanned Edits:** Files modified by the agent that were not declared in the pre-flight plan.
+By maintaining a virtual-to-physical mapping, Graphenium mechanically detects all three post-edit compliance dimensions enforced in `v0.21.0`:
+*   **Implemented vs. Missing Nodes:** Successfully written classes and methods that match the approved design, and declared symbols the agent failed to implement.
+*   **Implemented vs. Missing Edges:** Declared dependency relationships that were physically realized, and planned edges that never appeared in the compiled AST.
+*   **Scope Creep / Unplanned Edits:** Files modified by the agent that were not declared in the pre-flight plan, detected via git status or an explicit snapshot diff (with test-file allowances and override support).
 
 ---
 

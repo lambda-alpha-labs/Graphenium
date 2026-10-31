@@ -16,7 +16,7 @@ use super::client::ContentBlock;
 /// Build the system prompt string.  Deep mode appends extra instructions for
 /// aggressive inference.
 pub fn system_prompt(mode: &ExtractMode) -> String {
-    let base = r#"You are a knowledge graph extraction assistant. Analyze the provided files and extract entities and relationships.
+    let base = r#"You are a structural extraction assistant for a relational codebase index. Analyze the provided files and extract entities and relationships.
 
 Return ONLY a JSON object (no other text, no markdown, no explanation) with this exact structure:
 {
@@ -71,7 +71,7 @@ pub fn build_user_content(files: &[(impl AsRef<Path>, FileType)]) -> Vec<Content
     let mut blocks = Vec::new();
 
     blocks.push(ContentBlock::text(format!(
-        "Analyze the following {} file(s) and extract a knowledge graph.\n",
+        "Analyze the following {} file(s) and extract a relational index.\n",
         files.len()
     )));
 

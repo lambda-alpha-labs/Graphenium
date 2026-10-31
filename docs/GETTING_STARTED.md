@@ -1,6 +1,6 @@
 # Getting Started: Establishing Workspace Containment
 
-This guide walks you from a clean repository to an active, write-gated developer workspace governed by Graphenium.
+This guide walks you from a clean repository to an active, write-gated developer workspace governed by Graphenium. You will compile a provenance-tagged relational index that both compresses structural context for your agent and acts as the substrate for spec-driven containment gates.
 
 ---
 
@@ -53,9 +53,9 @@ graphenium-out/
 
 ---
 
-## 4. Generate the Baseline Structural Index
+## 4. Compile the Baseline Relational Index
 
-Compile your first codebase index. We recommend starting with a local AST-only run. This runs 100% offline, requires no API keys, and establishes your baseline compiler-proven truth:
+Compile your first codebase index. We recommend starting with a local AST-only run. This runs 100% offline, requires no API keys, and establishes your baseline compiler-proven truth — the same index that powers fast structural queries and all containment gates:
 
 ```sh
 gm run . --no-semantic --no-viz
@@ -121,7 +121,7 @@ To intercept and govern agentic actions, start Graphenium's background MCP serve
 gm serve --graph graphenium-out/graph.json --watch
 ```
 
-*For Grok and other project-local tools, we recommend using Graphenium's pre-flight launcher script (`scripts/graphenium-mcp`). Refer to [`docs/AI_SETUP.md`](AI_SETUP.md) for tool-specific configuration blocks.*
+*For Grok and other project-local tools, we recommend using Graphenium's containment-aware launcher script (`scripts/graphenium-mcp`). Refer to [`docs/AI_SETUP.md`](AI_SETUP.md) for tool-specific configuration blocks.*
 
 ### The Verification Handshake:
 Once MCP is active, instruct your agent to run an initial hand-off check:

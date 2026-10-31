@@ -1,4 +1,4 @@
-/// MCP server tools exposing the knowledge graph.
+/// MCP server tools exposing the relational index.
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -771,8 +771,8 @@ fn top_bridge_nodes(
 
 #[tool(tool_box)]
 impl GrapheniumServer {
-    /// Query the knowledge graph with keywords via BFS or DFS traversal.
-    #[tool(description = "Query the knowledge graph with keywords. \
+    /// Query the relational index with keywords via BFS or DFS traversal.
+    #[tool(description = "Query the relational index with keywords. \
         Scores nodes by keyword match and traverses the graph via BFS (default) or DFS. \
         Returns matching nodes and their connections formatted as Markdown.")]
     fn query_graph(
@@ -836,7 +836,7 @@ impl GrapheniumServer {
         let include_tests = include_tests.unwrap_or(false);
         let min_degree_val = min_degree.unwrap_or(0).max(0) as usize;
         if self.graph().node_count() == 0 {
-            return "The knowledge graph is currently empty. Please run `gm run . --no-semantic` in your project directory to generate the codebase map.".to_string();
+            return "The relational index is currently empty. Please run `gm run . --no-semantic` in your project directory to compile the relational index.".to_string();
         }
         let depth = (depth.unwrap_or(3) as usize).clamp(1, 6);
         let budget = (budget.unwrap_or(2000) as usize).max(200);
@@ -1256,9 +1256,9 @@ impl GrapheniumServer {
         out
     }
 
-    /// Return summary statistics for the knowledge graph.
+    /// Return summary statistics for the relational index.
     #[tool(
-        description = "Return summary statistics for the loaded knowledge graph: \
+        description = "Return summary statistics for the loaded relational index: \
         node/edge/hyperedge counts, number of communities, node-type breakdown, \
         and edge confidence distribution."
     )]
@@ -2564,8 +2564,8 @@ impl GrapheniumServer {
         }
     }
 
-    /// Add or update a node in the knowledge graph.
-    #[tool(description = "Add or update a node in the knowledge graph. \
+    /// Add or update a node in the relational index.
+    #[tool(description = "Add or update a node in the relational index. \
         Use this to register architectural concepts, rationale nodes, or \
         other logical entities the AST extractor does not capture. \
         If a node with the given ID already exists, it is updated in place. \
@@ -2630,7 +2630,7 @@ impl GrapheniumServer {
         )
     }
 
-    /// Add an edge between two nodes in the knowledge graph.
+    /// Add an edge between two nodes in the relational index.
     #[tool(description = "Add a directed edge between two existing nodes. \
         Resolves endpoints by ID first, then by case-insensitive label match. \
         Use this when you have confirmed a relationship through code inspection \
@@ -2715,7 +2715,7 @@ impl GrapheniumServer {
         )
     }
 
-    /// Remove edges matching the given criteria from the knowledge graph.
+    /// Remove edges matching the given criteria from the relational index.
     #[tool(description = "Remove edges between two nodes. \
         If a relation filter is provided, only matching edges are removed; \
         otherwise all edges between the two nodes are removed. \
@@ -2806,7 +2806,7 @@ impl GrapheniumServer {
     /// already took a snapshot via `self.graph()` keep seeing the old graph
     /// until their request finishes — swaps are lock-free on the read side.
     #[tool(
-        description = "Reload the knowledge graph from a graph.json file without restarting the \
+        description = "Reload the relational index from a graph.json file without restarting the \
         MCP server. If no path is given, reloads from the path the server was launched with. \
         Use this to point a running server at a different repository's graph, or to pick up \
         changes after re-running `gm run`."
@@ -4038,7 +4038,7 @@ impl ServerHandler for GrapheniumServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
             instructions: Some(
-                "Graphenium knowledge graph server. \
+                "Graphenium relational index server. \
                  Use query_graph to explore by keywords, get_node/get_neighbors for details, \
                  get_community to inspect clusters, god_nodes for hotspots, \
                  graph_stats for counts, architecture_summary for repo-level structure, \

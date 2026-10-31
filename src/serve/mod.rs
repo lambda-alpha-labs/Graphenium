@@ -1,4 +1,4 @@
-/// MCP server for the Graphenium knowledge graph.
+/// MCP server for the Graphenium relational index.
 /// Exposes 8 tools over the stdio JSON-RPC transport:
 /// - `query_graph`   — BFS/DFS traversal from keyword-matched seed nodes
 /// - `get_node`      — Full node details by ID or label
@@ -53,7 +53,7 @@ pub async fn serve_with_watch(graph_path: &Path, watch: bool) -> crate::Result<(
                 graph_path.display()
             );
             eprintln!(
-                "[graphenium] Run `gm run . --no-semantic` in your workspace to generate the codebase map."
+                "[graphenium] Run `gm run . --no-semantic` in your workspace to compile the relational index."
             );
             let mut g = crate::model::GrapheniumGraph::new();
             g.metadata.ast_only = true;

@@ -29,7 +29,12 @@ use graphenium::trust;
 #[derive(Parser)]
 #[command(
     name = "gm",
-    about = "Graphenium (gm) — the elemental knowledge graph engine for your codebase",
+    about = "Graphenium (gm) — relational codebase compiler and spec-driven containment engine for AI coding agents",
+    long_about = "Graphenium (gm) compiles a polyglot codebase into a provenance-tagged relational index \
+(EXTRACTED / INFERRED / AMBIGUOUS) and mechanically contains AI coding agents inside an approved \
+architectural contract. It combines Tree-sitter + Stack Graphs resolution, an indexed semi-naive \
+Datalog engine, zero-config Louvain modularity (ΔQ) gating, Virtual AST planning workspaces, Lean 4 \
+proof-gap auditing, and post-edit node/edge/scope-creep verification.",
     version
 )]
 struct Cli {
@@ -142,7 +147,7 @@ enum Commands {
         plan: bool,
     },
 
-    /// Query the knowledge graph with keywords
+    /// Query the relational index with keywords
     Query {
         /// Keywords or question to match against the graph
         question: String,
@@ -319,7 +324,7 @@ enum Commands {
         impact: bool,
     },
 
-    /// Inspect and manage the knowledge graph
+    /// Inspect and manage the relational index
     Graph {
         #[command(subcommand)]
         command: GraphCommands,
@@ -566,7 +571,7 @@ async fn cmd_run(
     let title = root
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("Knowledge Graph")
+        .unwrap_or("Relational Index")
         .to_string();
 
     let extract_mode = match mode.as_deref() {
@@ -1614,8 +1619,8 @@ fn cmd_setup(target: &str, gm_path: Option<PathBuf>, graph: &Path) -> graphenium
             println!("Verify registration:");
             println!("  claude mcp list");
             println!();
-            println!("The server will start with an empty graph. Run `gm run . --no-semantic`");
-            println!("in your project directory to generate the codebase map.");
+            println!("The server will start with an empty index. Run `gm run . --no-semantic`");
+            println!("in your project directory to compile the relational index.");
             println!();
             println!("You can also install the Graphenium skill for Claude Code:");
             println!("  Copy skills/graphenium/SKILL.md to ~/.claude/skills/graphenium/SKILL.md");

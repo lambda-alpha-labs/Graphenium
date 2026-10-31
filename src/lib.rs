@@ -1,10 +1,18 @@
 //! # Graphenium
 //!
-//! The elemental knowledge graph engine for your codebase.
+//! A relational codebase compiler and spec-driven containment engine for AI
+//! coding agents.
 //!
-//! Graphenium builds a persistent, queryable knowledge graph from source code
-//! and documents.  It can be used as a standalone CLI tool (`gm`) or embedded
-//! as a library in AI coding harnesses.
+//! Graphenium compiles source code into a persistent, provenance-tagged
+//! relational index (`EXTRACTED`, `INFERRED`, `AMBIGUOUS`) using Tree-sitter
+//! and import-scoped Stack Graphs resolution. The index powers fast structural
+//! queries (blast radius, centrality, pathfinding) as well as write-time
+//! containment: Virtual AST planning workspaces, embedded Datalog invariants,
+//! zero-config Louvain modularity (ΔQ) gating, Lean 4 proof-gap auditing, and
+//! post-edit node/edge/scope-creep verification.
+//!
+//! It can be used as a standalone CLI tool (`gm`) or embedded as a library in
+//! AI coding harnesses.
 //!
 //! ## Library usage
 //!
@@ -25,12 +33,15 @@
 //!
 //! ## Feature flags
 //!
-//! - `harness` — compatibility marker for core graph-engine embedding. Use
-//!   `default-features = false` to omit the MCP server, watch mode, and
-//!   semantic HTTP client.
-//! - `mcp` — MCP server (`rmcp`, `arc-swap`, `tokio`).
-//! - `watch` — file-watching mode (`notify`, `tokio`).
-//! - `semantic` — remote LLM extraction (`reqwest`, `base64`, `tokio`).
+//! - `harness` — compatibility marker for embedding the relational compiler
+//!   and containment engine. Use `default-features = false` to omit the MCP
+//!   server, watch mode, and semantic HTTP client.
+//! - `mcp` — MCP server exposing the 24-tool structural/containment interface
+//!   (`rmcp`, `arc-swap`, `tokio`).
+//! - `watch` — file-watching mode for incremental recompilation (`notify`,
+//!   `tokio`).
+//! - `semantic` — optional remote LLM extraction for `INFERRED` relationships
+//!   (`reqwest`, `base64`, `tokio`).
 //! - Language features (`lang-python`, `lang-rust`, etc.) — enable specific
 //!   tree-sitter grammars. All enabled by default.
 

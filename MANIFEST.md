@@ -1,12 +1,12 @@
 # Package Manifest
 
-This manifest indexes all core documentation and playbook assets maintained in Graphenium's repository. These files define our positioning as an external structural linter and containment gate, protecting codebases from AI-driven architectural drift.
+This manifest indexes all core documentation and playbook assets maintained in Graphenium's repository. These files define our positioning as a relational codebase compiler, pre-flight verifier, and external containment gate that protects codebases from AI-driven architectural drift while compressing structural context for agents.
 
 ---
 
 ## Root Directory
 *   `README.md` — Graphenium's primary positioning, capabilities overview, and fast pre-flight workflow guide.
-*   `AI_SETUP.md` — Environmental playbook for assistants installing and verifying local linter controls.
+*   `AI_SETUP.md` — Environmental playbook for assistants installing and verifying the local relational index and containment gates.
 *   `CHANGELOG.md` — Graphenium release and milestone history.
 *   `CODE_OF_CONDUCT.md` — Project code of conduct and community enforcement policies.
 *   `CONTRIBUTING.md` — Developer contribution guidelines, package module index, and extractor templates.
@@ -18,7 +18,6 @@ This manifest indexes all core documentation and playbook assets maintained in G
 ## Core Documentation Set (`docs/`)
 *   `docs/DOCUMENTATION_MAP.md` — Documentation directory restructure guide.
 *   `docs/GETTING_STARTED.md` — Workspace initialization, index generation, and baseline workspace setups.
-*   `docs/POSITIONING.md` — Analysis of competitive differentiation, target audiences, and messaging core.
 *   `docs/AGENT_WORKFLOWS.md` — Step-by-step operating playbooks for AI agents (pre-flight, in-edit planning, post-facto verification).
 *   `docs/CI_AND_GOVERNANCE.md` — CI pipeline gates, git hooks, PR comment templates, and declarative policy schemas.
 *   `docs/COMMAND_REFERENCE.md` — Syntax and flag definitions for Graphenium's CLI commands (`gm run`, `gm check`, `gm query`, etc.).
@@ -26,8 +25,8 @@ This manifest indexes all core documentation and playbook assets maintained in G
 *   `docs/ARCHITECTURE.md` — Deep technical dive into Graphenium's AST parsing pipelines, C# project bounds, and Datalog solvers.
 *   `docs/TRUST_MODEL.md` — Technical reference defining AST-proven vs. semantic provenance.
 *   `docs/BENCHMARKING.md` — Performance testing methodologies: latencies, token budgets, and scaling limits.
-*   `docs/COMPARISON.md` — Context comparison matrix mapping Graphenium against standard developer tools (grep, ast-grep, RAG indexes).
-*   `docs/HARNESS_ADAPTER.md` — Reference guide for programmatically embedding Graphenium's containment engine as a library.
+*   `docs/COMPARISON.md` — Comparison matrix mapping Graphenium against grep, ast-grep, SCIP, RAG indexes, and traditional static architecture linters.
+*   `docs/HARNESS_ADAPTER.md` — Reference guide for programmatically embedding Graphenium's relational compiler and containment engine as a library.
 *   `docs/GRAPH_REPORT.md` — Diagnostic guidelines for interpreting generated codebase report summaries.
 *   `docs/LICENSE.md` — Legal MIT license text *(.md copy)*.
 *   `docs/AI_SETUP.md` — Assistant setup playbook *(.md copy)*.

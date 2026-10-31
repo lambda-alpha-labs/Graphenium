@@ -2,35 +2,52 @@
   <img src="https://github.com/lambda-alpha-labs/lambda-alpha-labs/blob/main/assets/banner.png?raw=true" alt="Graphenium Banner" width="100%">
 </p>
 
-**Graphenium is a local, pre-flight linter and external architecture gate for AI coding agents.**
+# The Relational Codebase Compiler & Spec-Driven Containment Engine for AI Coding Agents
 
-It enforces structural compliance on AI assistants (such as Claude Code, Cursor, Aider, and Grok) by mechanically blocking code changes that violate your module boundaries, bypass your service layers, or introduce architectural drift. 
+**Graphenium (`gm`) compiles a polyglot codebase into a provenance-tagged relational index and mechanically contains AI agents inside an approved architectural contract.**
 
-Standard developer tools help agents find files. Graphenium prevents agents from creating architectural debt.
+Graphenium is not a passive search index or a folder-regex linter. It is a local compiler that turns source code into queryable structural facts, then uses those facts to govern what an agent is allowed to write. It replaces blind `grep`/file-read loops with sub-50ms topological queries, and it blocks agents from bypassing service layers, decaying modularity, leaving unproved `sorry` stubs, or editing files outside their declared plan.
+
+**Capability bar:** Tree-sitter + Stack Graphs · Indexed Semi-Naive Datalog · Zero-Config Louvain ΔQ Gating · Virtual AST Workspaces · Lean 4 Proof-Gap Auditing · 24 MCP Tools
+
+Standard developer tools help agents find files. Graphenium compiles the system's structure, compresses it for the agent's context budget, and then enforces it as a mechanical write-time contract.
 
 ```text
-Without Graphenium (Vibe-Coding)        With Graphenium (Containment)
---------------------------------        -----------------------------
-Agent edits files blindly               Agent validates design pre-flight
-Agent ignores architectural layers      Graphenium blocks direct boundary violations
-Constraints decay in long chats         External Datalog engine enforces strict rules
-Reviewer hunts for bypassed layers      Reviewer gets deterministic scope-creep audits
-CI checks only test passing             CI fails on architectural drift
+                            Uncontained Agent                         Graphenium-Contained Agent
+--------------------------  ----------------------------------------  ----------------------------------------------
+Context & search            Blind grep + raw file sweeps              ~85% fewer tokens via compressed AST/Stack-Graphs index
+Dependency truth            Fuzzy vector guesses, hallucinated calls  Provenance-tagged EXTRACTED / INFERRED / AMBIGUOUS edges
+Design validation           Edits files, hopes tests catch drift      Virtual AST + Datalog + ΔQ pre-flight before disk writes
+Modularity                  Silent community decay                    Zero-config Louvain ΔQ gate rejects new topological entropy
+Scope                       Quiet edits to unrelated files            Post-edit node/edge/git-diff audit blocks scope creep
+Formal verification         Unnoticed sorry/admit stubs               Transitive proof-gap taint gating
+CI                          Checks only that tests pass               Fails on architectural drift and unrealized specs
 ```
 
 Binary: `gm`  
 Schema: `0.2.0`  
-Status: AST + Stack Graphs resolver stable, pre-flight policy engine stable, zero-drift delta gating stable, Lean 4 proof-gap auditing stable, telemetry overlay experimental
+Status: AST + Stack Graphs resolver stable, indexed semi-naive Datalog stable, Virtual AST pre-flight stable, zero-config ΔQ gating stable, post-edit realization auditing stable, Lean 4 proof-gap auditing stable, telemetry overlay experimental
 
 ---
 
-## Why Graphenium Exists: The Containment Gap
+## Why Graphenium Exists: The Structural Compilation & Containment Gap
 
 AI coding agents are highly efficient at local edits, but they suffer from **structural blindness and context decay**. Over a long chat session, an agent will lose track of your system instructions and optimize for the path of least resistance (e.g., writing a raw database call inside an HTTP controller to make a local test pass). 
 
 Relying on "soft" guardrails like `CLAUDE.md` or system prompts to maintain design patterns does not work. When context windows get full, these constraints are dropped.
 
-Graphenium establishes **external engineering governance**. It operates outside the LLM context, treating architectural boundaries as a strict, compiled contract.
+Graphenium establishes **external engineering governance**. It operates outside the LLM context, treating architectural boundaries as a strict, compiled contract. It also attacks the same context decay from the other side: instead of forcing the agent to rediscover structure through tens of thousands of tokens of file reads, Graphenium compiles that structure once and serves it back as compact, provenance-tagged facts.
+
+### The Missing Layer in the Compiler Stack
+
+Autonomous software engineering needs more than syntax, types, and tests. It needs a layer that proves the *shape* of the system still holds after an agent writes code. Graphenium is that layer.
+
+| Layer | Tooling | What It Proves |
+|---|---|---|
+| **1 — Lexical & Syntactic** | `rustc`, `tsc`, Tree-sitter | Code is syntactically valid. |
+| **2 — Type & Memory Safety** | Type checkers, borrow checkers | Local types, signatures, and lifetimes align. |
+| **3 — Behavioral Correctness** | `cargo test`, `pytest` | Specific inputs produce expected runtime outputs. |
+| **4 — Topological, Architectural & Epistemic Integrity** | **Graphenium (`gm`)** | Transitive architectural invariants hold, Louvain modularity (ΔQ) does not decay, formal proof gaps do not taint verified theorems, and physical diffs match an approved Virtual AST spec. |
 
 ```mermaid
 graph TD
@@ -46,7 +63,7 @@ graph TD
 
 ## The Core Technical Lifecycle: Design-then-Verify
 
-Graphenium enforces an explicit three-step compiler loop on the agent:
+Graphenium enforces an explicit four-phase compiler loop on the agent:
 
 1.  **Declare Intent (Pre-Flight Spec):** Before editing any code, the agent registers its planned changes (classes, methods, and dependencies) in a virtual planning workspace.
 2.  **Transitive Policy Solving:** Graphenium's engine runs a local Datalog solver to analyze the proposed virtual AST. If the design bypasses an intermediary architectural layer or uses banned symbols, Graphenium blocks the plan and provides structural feedback.
@@ -90,26 +107,44 @@ curl -fsSL https://raw.githubusercontent.com/lambda-alpha-labs/Graphenium/main/i
 
 ---
 
-## Core Technical Capabilities
+## Five Technical Pillars
 
-### 1. AST-Proven Provenance (Facts vs. Heuristics)
-Most AI developer tools use LLMs to guess how modules depend on each other, leading to hallucinations. Graphenium establishes an index of compiler-proven truth using Tree-sitter and Stack Graphs. Every relationship carries explicit provenance:
-*   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, type inheritance, explicit call signatures).
-*   `INFERRED` **(Heuristics):** Semantic leads that the agent is forced to verify.
+### Pillar 1: Deterministic Polyglot Compilation & Epistemic Provenance
+Graphenium compiles 10 languages — Rust, Python, Go, TypeScript, JavaScript, Java, C, C++, C# (including recursive `.sln`/`.csproj` assembly and project-reference discovery), and Lean 4 — into a unified relational index (`schema 0.2.0`) using Tree-sitter and import-scoped Stack Graphs resolution.
+
+For agents, this replaces 30,000-token brute-force `grep`/file-read loops with ~1,500-token topological queries (PageRank hotspots, Brandes betweenness bottlenecks, blast radius, and safest paths). Every relationship carries explicit provenance:
+*   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, type inheritance, explicit call signatures). Safe planning backbone.
+*   `INFERRED` **(Heuristics):** Semantic leads that the agent is forced to verify against source.
 *   `AMBIGUOUS` **(Collisions / Proof Gaps):** Identifier collisions that force the agent to halt and inspect source files directly, plus Lean 4 `sorry` / `admit` proof gaps that must be resolved before a theorem is treated as verified.
 
-### 2. Datalog-Powered Policy Solving
-Static linters can check direct imports, but they are blind to multi-hop architectural bypasses. Graphenium solves this by compiling your codebase structure into logical facts and running an embedded **Datalog inference engine** (`src/analyze/query.rs` & `stdlib.dl`). 
+### Pillar 2: Intent–Implementation Decoupling via Virtual AST Workspaces
+Before touching disk, the agent declares its proposed classes, functions, and dependency edges in an in-memory planning workspace (`create_planning_workspace`, `add_planned_symbol`). Graphenium models the future topology of the repository in milliseconds. If the design violates an invariant, the agent receives an exact topological counterexample *in memory* before wasting thousands of tokens rewriting physical files — eliminating the "agent linter deadlock" loop.
 
-It uses first-order logic, first-column hash indexing, and semi-naive fixed-point evaluation to mathematically prove boundary violations over an infinite number of dependency hops. The standard library also includes containment, aliasing-hazard, reachability, and proof-gap taint predicates (`contains_transitive`, `aliased_container_call`, `unreachable_from`, `tainted_by_proof_gap`).
+### Pillar 3: Embedded Semi-Naive Datalog Verification Engine
+Graphenium compiles the codebase and Virtual AST into strongly typed EDB relations (`node`, `calls`, `imports`, `inherits`, `implements`, `contains`, `degree`, `hub`) and evaluates first-order rules (`stdlib.dl`) with goal-directed pruning, first-column hash indexing, and semi-naive delta iteration (up to 10M EDB facts within a bounded step budget).
 
-### 3. Zero-Drift Delta Gating (Topological Entropy Guardrails)
-Even without explicit policy rules, Graphenium applies in-memory modularity analysis to every planning workspace. The delta engine compares physical-only and virtual (plan-overlay) subgraphs, computing Louvain modularity deltas (ΔQ) and profiling surprise edges. Plans that degrade community structure or introduce architectural shortcuts (`cross-community`, `peripheral→hub`) are rejected automatically.
+Beyond simple folder rules, `stdlib.dl` proves:
+*   Multi-hop transitive layer bypasses (`bypasses_layer(X, Y, Z)`).
+*   Mutual recursion and cycles (`circular_dependency(X, Y)`).
+*   Call-site container/member aliasing hazards (`aliased_container_call(Caller, Target, Container, Member)`).
+*   Entry-point dead-code and unreachability (`unreachable_from(Entry, Node)`).
+*   Transitive formal proof-gap taint propagation (`has_proof_gap(X)` and `tainted_by_proof_gap(X)`).
 
-Available via `evaluate_delta_gate` (MCP), `validate_plan` (orchestrator), and `gm check --delta --plan <id>` (CLI).
+### Pillar 4: Zero-Config Topological Entropy Guardrails (Louvain ΔQ + Surprise Profiling)
+Even with **zero configuration files** (no `.graphenium/policy.json`), Graphenium partitions the physical baseline subgraph (`G_baseline`) and the proposed Virtual AST overlay (`G_virtual`) in memory, runs deterministic Louvain community detection on both, computes the modularity delta (`ΔQ = Q(G_virtual) − Q(G_baseline)`), and scores planned edges for structural surprise (`cross-community`, `peripheral→hub`).
 
-### 4. Declarative Structural Governance
-Enforce system design boundaries at commit-time or in CI. You declare rules in `.graphenium/policy.json` at the root of your repository:
+This solves the "legacy codebase paradox": Graphenium accepts existing architectural complexity as baseline reality while mechanically blocking agents from introducing *new* topological entropy. Available via `evaluate_delta_gate` (MCP), `validate_plan` (orchestrator), and `gm check --delta --plan <id>` (CLI).
+
+### Pillar 5: Closed-Loop Post-Edit Realization & Scope-Creep Auditing
+After physical edits are made and the index is refreshed, `gm check --plan <id>` and the MCP `agent_change_gate` / `get_plan_details` tools audit physical reality against the approved Virtual AST spec across three dimensions:
+*   **Realized vs. missing nodes:** Did the agent implement every declared symbol?
+*   **Realized vs. missing edges:** Did the physical code realize the declared dependency relationships?
+*   **Unplanned file modifications (scope creep):** Did the agent touch any non-test files outside the declared plan scope, according to git status or an explicit snapshot diff?
+
+For PR-level containment, `gm gate --diff <before> <after>` blocks merges that introduce critical architectural drift between snapshots.
+
+### Declarative Structural Governance
+Explicit rules remain available for teams that need them. Declare contracts in `.graphenium/policy.json` at the root of your repository:
 
 ```json
 {
@@ -169,7 +204,7 @@ Traditional static analysis tools and natural-language guardrails (like `CLAUDE.
 
 ### 3. Resolving Agent Integration Friction (Direct Skill-Folder Injection)
 
-* **The Friction:** Standard stateless MCP setups mean agents can easily bypass sequential "three-step" design loops (Declare → Solve → Post-audit), requiring manual developer mediation.
+* **The Friction:** Standard stateless MCP setups mean agents can easily bypass sequential four-phase design loops (Declare → Solve → Gate → Audit), requiring manual developer mediation.
 * **Graphenium's Mechanism:** Graphenium circumvents this integration barrier by programmatically injecting its behavioral rules directly into the agentic runtime. During installation (`install.sh` or `install.ps1`), Graphenium copies its standard system skill instruction set (`skills/graphenium/SKILL.md`) directly into Claude Code's native skill directory (`~/.claude/skills/graphenium/SKILL.md`).
 * This ensures that the moment the assistant handshakes with Graphenium, it ingests explicit, structured operating parameters on how to manage virtual workspaces and resolve topological violations, without requiring the developer to configure system prompts manually.
 
@@ -244,9 +279,8 @@ Add to `~/.cursor/mcp.json`:
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Indexing pipelines, C# project references, and Datalog evaluation. |
 | [`docs/TRUST_MODEL.md`](docs/TRUST_MODEL.md) | Under-the-hood details of AST-proven vs heuristic confidence. |
 | [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) | Performance metrics: latency, token budgets, and scaling limits. |
-| [`docs/COMPARISON.md`](docs/COMPARISON.md) | Why Graphenium is distinct from grep, AST tools, and GraphRAG. |
-| [`docs/POSITIONING.md`](docs/POSITIONING.md) | Market positioning, target personas, and competitive differentiation. |
-| [`docs/HARNESS_ADAPTER.md`](docs/HARNESS_ADAPTER.md) | Embedding Graphenium's structural engine as a library. |
+| [`docs/COMPARISON.md`](docs/COMPARISON.md) | Why Graphenium supersedes grep, AST tools, GraphRAG, and static architecture linters. |
+| [`docs/HARNESS_ADAPTER.md`](docs/HARNESS_ADAPTER.md) | Embedding Graphenium's relational compiler and containment engine as a library. |
 | [`docs/WORKED_EXAMPLES.md`](docs/WORKED_EXAMPLES.md) | Case studies proving containment on real repositories. |
 | [`docs/GRAPH_REPORT.md`](docs/GRAPH_REPORT.md) | Interpreting the generated codebase audit report. |
 | [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md) | Full documentation ecosystem overview. |

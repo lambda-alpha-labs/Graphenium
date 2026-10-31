@@ -1,6 +1,6 @@
 # Performance and Efficiency Benchmarking
 
-Traditional RAG and search tools are measured solely by keyword retrieval accuracy. Graphenium, as an engineering containment linter, is benchmarked by a more critical engineering metric:
+Traditional RAG and search tools are measured solely by keyword retrieval accuracy. Graphenium, as a relational codebase compiler and containment engine, is benchmarked by a more critical engineering metric:
 
 > **Tokens-to-Verifiable-Plan (TTVP)**
 

@@ -1,8 +1,10 @@
 # Epistemic Trust and Provenance in AI-Assisted Engineering
 
-Graphenium is built on a fundamental principle of engineering safety: **AI coding agents must operate under a strict, mathematically verifiable distinction between compiler-proven facts, heuristic hypotheses, and identifier collisions.**
+Graphenium is a local relational codebase compiler and spec-driven containment engine. It is built on a fundamental principle of engineering safety: **AI coding agents must operate under a strict, mathematically verifiable distinction between compiler-proven facts, heuristic hypotheses, and identifier collisions.**
 
-Relying on "vibe-coding" or probabilistic vector search leads to structural decay because AI agents treat assumed dependencies as ground truth. Graphenium enforces **epistemic trust boundaries**, mapping your codebase's dependencies with strict, source-backed provenance.
+Relying on "vibe-coding" or probabilistic vector search leads to structural decay because AI agents treat assumed dependencies as ground truth. Graphenium enforces **epistemic trust boundaries**, mapping your codebase's dependencies with strict, source-backed provenance. This is Layer 4 of the verification stack: the layer that proves *topological, architectural, and epistemic* integrity after syntax, types, and tests have done their jobs.
+
+Provenance is also what makes the speed story trustworthy. A compressed index is only useful if the agent can distinguish compiler-proven edges from guesses; otherwise token savings simply compress hallucinations. Every `EXTRACTED`, `INFERRED`, and `AMBIGUOUS` edge is therefore an explicit contract about what the agent may plan against, what it must verify in source, and what it must halt on.
 
 ---
 
@@ -115,7 +117,21 @@ gm check --min-resolution 85 --max-ambiguous 5 --strict
 
 ---
 
-## 6. Security and Trust Anti-Patterns
+## 6. Post-Edit Realization and Scope-Creep Auditing
+
+Pre-flight trust is necessary but not sufficient: an agent can approve a safe plan and then implement something else. `gm check --plan <id>` and the MCP `agent_change_gate` / `get_plan_details` tools close the loop by comparing physical reality against the approved Virtual AST spec across three dimensions:
+
+| Dimension | Question Audited | Failure Mode |
+|---|---|---|
+| **Implemented / missing symbols** | Did the agent implement every declared class, method, or function? | Declared node absent from the recompiled index. |
+| **Implemented / missing planned edges** | Did the physical code realize every declared dependency relationship? | Planned edge missing, or an unplanned edge appeared. |
+| **Git / override file scope** | Did the agent modify non-test files outside the declared plan scope? | Scope creep detected via git status or an explicit snapshot diff. |
+
+Snapshot diff gating (`gm gate --diff <before> <after>`) applies the same trust contract at PR level, blocking merges that introduce critical architectural drift even when the pre-flight plan is unavailable.
+
+---
+
+## 7. Security and Trust Anti-Patterns
 
 To prevent generative software erosion, avoid the following operational anti-patterns:
 

@@ -7,7 +7,7 @@ Traditional continuous integration (CI) environments verify syntax, type safety,
 
 For AI-generated changes, these checks are necessary but fundamentally insufficient. Agents can write code that passes tests while quietly eroding your architecture—bypassing module boundaries, introducing transitive circular dependencies, or modifying unplanned files. 
 
-Graphenium integrates into your CI/CD pipeline and git hooks as an **external structural gate**, mechanically verifying the architectural integrity of agent-authored PRs before they reach a human reviewer.
+Graphenium compiles the codebase into a provenance-tagged relational index and integrates into your CI/CD pipeline and git hooks as an **external structural gate**, mechanically verifying the architectural integrity of agent-authored PRs before they reach a human reviewer.
 
 ---
 

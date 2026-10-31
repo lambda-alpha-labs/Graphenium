@@ -1,8 +1,8 @@
 # Competitive Analysis: Active Gating vs. Passive Search
 
-AI developer tooling is currently saturated with passive codebase search indexes, codebase visualization tools, and "GraphRAG" databases. These tools help agents *read* or *search* repositories. Graphenium is designed for a completely different and far more critical engineering role: **active write-time containment and pre-flight gating**.
+AI developer tooling is currently saturated with passive codebase search indexes, codebase visualization tools, and "GraphRAG" databases. These tools help agents *read* or *search* repositories. Graphenium is a **relational codebase compiler** that both compresses that reading and enforces a far more critical engineering role: **active write-time containment and spec-driven pre-flight gating**.
 
-This document outlines how Graphenium compares to alternative categories of developer tooling.
+This document outlines how Graphenium compares to alternative categories of developer tooling, including traditional static architecture linters. The short version: Graphenium matches their boundary intent, but adds Virtual AST pre-flight workspaces, zero-config Louvain ΔQ relative modularity gating, Datalog fixed-point reasoning, and Lean 4 proof-gap taint analysis — none of which classic import-rule linters provide.
 
 ---
 
@@ -14,6 +14,7 @@ This document outlines how Graphenium compares to alternative categories of deve
 | **Syntactic AST Matchers** (`ast-grep`) | Single-file pattern-matching and syntax rewrites. | Graphenium maintains a persistent, cross-file structural index and enforces pre-flight design specs. |
 | **Enterprise Search** (Sourcegraph) | Federated human search across thousands of repositories. | Graphenium is local-first, MCP-native, and designed as a machine-level write-gate for agents. |
 | **Symbol Indexers** (SCIP, LSIF, Kythe) | Compiler-perfect reference indices for IDE definitions. | Graphenium incorporates provenance confidence tracking, transitive solvers, and design planning workspaces. |
+| **Static Architecture Linters** (ArchUnit, import-linter, dependency-cruiser) | Declared import/folder rules checked against source. | Graphenium adds Virtual AST pre-flight plans, zero-config Louvain ΔQ relative modularity gating, Datalog fixed-point proofs, and Lean 4 proof-gap taint analysis. |
 | **Codebase RAG / Vector Indexes** | Probabilistic semantic retrieval from text chunks. | Graphenium is AST-proven and deterministic. It uses a local Datalog engine instead of neural "guesses." |
 | **AI Coding Agents** (Cursor, Claude Code) | Generating and editing file contents. | Graphenium acts as an **external containment gate**, blocking these agents from violating architecture rules. |
 
@@ -37,6 +38,11 @@ These indexers provide compiler-perfect reference tracking for IDE navigations (
 *   **The Gap for Agents:** They are built for human-oriented read pathways. They are flat, passive reference structures that do not include provenance confidence mapping, Datalog-powered layering constraints, or change-impact verifications.
 *   **The Graphenium Edge:** Graphenium is built for the **agentic write lifecycle**. It includes an embedded Datalog solver to prove layer-bypassing violations, separates compiler truth (`EXTRACTED`) from semantic hypotheses (`INFERRED`), and runs post-edit scope audits to detect unplanned file edits.
 
+### Traditional Static Architecture Linters (ArchUnit, import-linter, dependency-cruiser)
+Classic architecture linters encode human-written import or folder rules and fail builds when a direct dependency violates them. That is useful, but it stops at the exact point where AI agents create the most risk.
+*   **The Gap for Agents:** They evaluate physical code after the agent has already edited it. They generally require hand-maintained glob/layer configuration, cannot model a proposed design before files change, do not reason over multi-hop fixed points beyond simple transitive imports, and have no notion of provenance tiers, relative modularity decay, or formal proof gaps.
+*   **The Graphenium Edge:** Graphenium compiles a provenance-tagged relational index, lets the agent declare a **Virtual AST** in memory, and validates that future topology before disk mutation. It runs embedded semi-naive Datalog for transitive/aliasing/unreachability proofs, applies zero-config Louvain ΔQ gating that accepts legacy complexity as baseline while rejecting *new* entropy, audits Lean 4 `sorry`/`admit` taint, and then verifies realized nodes, realized edges, and file-scope compliance after the edit.
+
 ### Codebase RAG & Semantic Vector Databases
 Vector databases split code files into text chunks and use embedding models to perform nearest-neighbor searches.
 *   **The Gap for Agents:** Vector search is inherently probabilistic and "fuzzy." It is highly prone to hallucinating connections, cannot trace dependency chains, and suffers from context bloat because it returns large chunks of irrelevant text.
@@ -46,17 +52,19 @@ Vector databases split code files into text chunks and use embedding models to p
 
 ## 3. Structural Capabilities Matrix
 
-| Feature | Graphenium | `ripgrep` | `ast-grep` | Kythe / SCIP | RAG / Vector |
-|---|---|---|---|---|---|
-| **Local-First Parsing** | **Yes** | Yes | Yes | Yes | No |
-| **Offline Import Resolution** | **Yes** | No | No | Yes | No |
-| **Provenance Tracking** | **Yes** | No | No | Partial | No |
-| **Confidence Tiering** | **Yes** | No | No | No | No |
-| **Transitive Closure Proofs** | **Yes (Datalog)** | No | No | No | No |
-| **Pre-Flight Design Specs** | **Yes (`plan_id`)** | No | No | No | No |
-| **Scope-Creep Audits** | **Yes** | No | No | No | No |
-| **Declarative CI Policy Gates** | **Yes** | No | No | No | No |
-| **Telemetry Context Overlays** | **Yes (Experimental)** | No | No | No | No |
+| Feature | Graphenium | Arch Linters | `ripgrep` | `ast-grep` | Kythe / SCIP | RAG / Vector |
+|---|---|---|---|---|---|---|
+| **Local-First Parsing** | **Yes** | Yes | Yes | Yes | Yes | No |
+| **Offline Import Resolution** | **Yes** | Partial | No | No | Yes | No |
+| **Provenance Tracking** | **Yes** | No | No | No | Partial | No |
+| **Confidence Tiering** | **Yes** | No | No | No | No | No |
+| **Transitive Closure Proofs** | **Yes (Datalog)** | Partial | No | No | No | No |
+| **Virtual AST Pre-Flight Specs** | **Yes (`plan_id`)** | No | No | No | No | No |
+| **Zero-Config Louvain ΔQ Gating** | **Yes** | No | No | No | No | No |
+| **Lean 4 Proof-Gap Taint** | **Yes** | No | No | No | No | No |
+| **Scope-Creep Audits** | **Yes** | No | No | No | No | No |
+| **Declarative CI Policy Gates** | **Yes** | Yes | No | No | No | No |
+| **Telemetry Context Overlays** | **Yes (Experimental)** | No | No | No | No | No |
 
 ---
 

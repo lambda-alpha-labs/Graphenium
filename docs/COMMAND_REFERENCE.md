@@ -1,6 +1,6 @@
 # CLI Command Reference
 
-The Graphenium command-line interface (`gm`) serves as both an interactive analysis tool and an automated gatekeeper. It compiles codebases into AST-proven structural indexes, runs Datalog policy solvers, and executes pre-flight containment checks.
+The Graphenium command-line interface (`gm`) serves as both a relational codebase compiler and an automated gatekeeper. It compiles codebases into provenance-tagged relational indexes, runs indexed semi-naive Datalog invariants, and executes Virtual AST pre-flight and post-edit containment checks.
 
 ---
 

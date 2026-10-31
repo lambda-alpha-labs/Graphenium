@@ -21,5 +21,5 @@ Other approaches you've tried or thought about.
 
 ## Would this help AI coding assistants?
 
-Graphenium's focus is structural memory for AI coding agents. Does
-this feature improve that workflow?
+Graphenium's focus is relational codebase compilation and spec-driven
+containment for AI coding agents. Does this feature improve that workflow?

@@ -2,7 +2,7 @@
 
 Thank you for contributing to Graphenium. 
 
-Graphenium is a Rust-native structural containment layer and pre-flight linter for AI coding agents. The most valuable contributions improve Graphenium's ability to mechanically enforce engineering safety, protect module boundaries, and audit agent-generated PRs before they introduce codebase erosion.
+Graphenium is a Rust-native relational codebase compiler, pre-flight verifier, and external containment gate for AI coding agents. The most valuable contributions improve Graphenium's ability to compile polyglot code into trustworthy structural facts, mechanically enforce engineering safety, protect module boundaries, and audit agent-generated PRs before they introduce codebase erosion.
 
 ---
 
@@ -23,7 +23,7 @@ cargo install --locked --path .
 gm init
 gm run . --no-semantic --no-viz
 
-# Run a declarative linter check
+# Run a declarative Datalog invariant check
 gm query --datalog "?- is_orphan(X)."
 ```
 
@@ -116,5 +116,5 @@ If you encounter an issue, please file a report on GitHub with the following det
 
 Documentation must prioritize safe, deterministic agent behavior. 
 *   Avoid describing Graphenium as a "visual codebase map" or "AI search engine." 
-*   Explain features in terms of **external governance, structural verification, pre-flight linting, and compile-time boundaries**.
+*   Explain features in terms of **relational compilation, external governance, structural verification, Datalog invariants, topological entropy gating, and compile-time boundaries**.
 *   Write guides that teach users how to construct strict engineering policy contracts rather than passive query workflows.

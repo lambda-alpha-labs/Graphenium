@@ -20,7 +20,7 @@ This case study documents Graphenium's automated, local self-analysis of its own
 
 ---
 
-## 2. Pre-Flight Policy & Linter Successes
+## 2. Pre-Flight Policy & Containment Successes
 
 ### Multi-Hop Cross-File Call Resolution
 Graphenium's Stack Graphs resolver successfully mapped **927 cross-file references** locally and offline. Graphenium established an AST-proven baseline containing:

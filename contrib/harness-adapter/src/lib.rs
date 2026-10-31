@@ -1,7 +1,8 @@
 //! ## Graphenium Harness Adapter
 //!
-//! Reference integration for embedding the Graphenium knowledge graph engine
-//! inside an AI coding harness. The adapter provides a small, opinionated API
+//! Reference integration for embedding Graphenium's relational codebase
+//! compiler and containment engine inside an AI coding harness. The adapter
+//! provides a small, opinionated API
 //! surface that a harness can call at the right lifecycle points:
 //!
 //! - **Workspace open** → `initialize_graph(path)`
@@ -49,7 +50,7 @@ pub struct InitResult {
 
 // ── Lifecycle functions ───────────────────────────────────────────────────
 
-/// Build a fresh knowledge graph from all code files under `root`.
+/// Build a fresh relational index from all code files under `root`.
 ///
 /// Call this once when the harness opens a workspace for the first time.
 /// Uses AST-only extraction (no API key required). Returns the graph and

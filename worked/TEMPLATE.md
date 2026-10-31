@@ -44,7 +44,7 @@ gm doctor --graph graphenium-out/graph.json --resolution
 
 ---
 
-## 4. Primary Gating and Linter Queries
+## 4. Primary Containment and Datalog Queries
 
 ```sh
 # Hybrid structural domain query
@@ -62,7 +62,7 @@ gm check --graph graphenium-out/graph.json --plan <id>
 
 ---
 
-## 5. Pre-Flight Policy & Linter Successes
+## 5. Pre-Flight Policy & Containment Successes
 
 *   *Detail how Graphenium's local AST index successfully mapped the codebase's boundaries.*
 *   *Explain which declarative policies in `.graphenium/policy.json` were triggered.*

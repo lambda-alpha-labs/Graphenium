@@ -8,7 +8,7 @@ Graphenium is designed to govern and inspect source code in local developer envi
 
 Graphenium's core AST-parsing and Stack Graphs resolution pipelines run **100% offline on your local machine**. 
 *   **Zero Network Leakage:** By default, Graphenium does not send your source code, file structures, or metadata to any remote service.
-*   **Free and Offline:** No API keys, subscriptions, or network connections are required to parse your codebase, run Datalog linter rules, or enforce pre-flight architectural policies.
+*   **Free and Offline:** No API keys, subscriptions, or network connections are required to parse your codebase, run Datalog invariants, or enforce pre-flight architectural policies.
 
 ---
 

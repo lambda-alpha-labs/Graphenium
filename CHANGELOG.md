@@ -1,6 +1,6 @@
 # Changelog
 
-This changelog summarizes key updates and engineering milestones for Graphenium, emphasizing improvements in AI-agent write-safety, structural verification, and external governance gates.
+This changelog summarizes key updates and engineering milestones for Graphenium, emphasizing relational codebase compilation, AI-agent write-safety, structural verification, and external governance gates.
 
 ---
 
@@ -18,6 +18,7 @@ Minor release closing post-v0.20.0 compliance, MCP audit, feature-gating, and ad
 ### Changed
 *   **Feature Gating:** Added positive `mcp`, `watch`, and `semantic` features. `harness = []` remains for compatibility, and `default-features = false, features = ["harness"]` now produces a genuinely lightweight core library.
 *   **Harness Adapter:** Fixed the reference adapter’s imports, edge-removal API, feature configuration, and tests. `cargo test` in `contrib/harness-adapter` passes without warnings.
+*   **Repository Positioning:** Reframed Graphenium across the README, CLI help, rustdoc, MCP tool descriptions, and documentation as a **relational codebase compiler and spec-driven containment engine**, highlighting the dual value proposition (context compression + mechanical containment) and the five technical pillars.
 
 ---
 

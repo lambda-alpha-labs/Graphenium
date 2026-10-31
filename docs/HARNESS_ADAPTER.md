@@ -1,6 +1,6 @@
 # Programmatic Integration: Graphenium Harness Adapter
 
-Graphenium can be embedded directly inside an AI coding platform, developer workspace, or custom agent runner. By consuming Graphenium as a programmatic library, your platform can maintain a real-time, AST-proven index of the workspace and run strict, mechanical pre-flight checks as files are opened, edited, or saved.
+Graphenium can be embedded directly inside an AI coding platform, developer workspace, or custom agent runner. By consuming Graphenium as a programmatic library, your platform can maintain a real-time, provenance-tagged relational index of the workspace, serve compact structural queries to agents, and run strict, mechanical pre-flight and post-edit containment checks as files are opened, edited, or saved.
 
 ---
 
