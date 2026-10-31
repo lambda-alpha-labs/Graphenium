@@ -222,7 +222,7 @@ Configure your agent or CI pipeline to append Graphenium's structural audit to e
 
 - [ ] **Pre-Flight Policy Check:** PASSED / FAILED (policy.json rules)
 - [ ] **Topological Delta Gate:** PASSED / FAILED (ΔQ ≥ -0.02, no high-surprise planned edges)
-- [ ] **Scope-Creep Verification:** PASSED / FAILED (files modified according to git/manifest diffs outside the declared plan)
+- [ ] **Scope-Creep Verification:** PASSED / FAILED (files modified according to git status or an explicit snapshot diff outside the declared plan)
 - [ ] **Planned-Edge Verification:** PASSED / FAILED (declared dependency edges missing from the physical index)
 
 #### Codebase Modifications

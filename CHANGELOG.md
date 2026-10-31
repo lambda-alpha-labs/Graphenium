@@ -4,6 +4,23 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.21.0 — 2026-10-31
+
+### Summary
+Minor release closing post-v0.20.0 compliance, MCP audit, feature-gating, and adapter gaps.
+
+### Fixed
+*   **Planned-Edge Compliance:** `passes_compliance` now fails when a planned dependency edge is missing. `gm check --plan` and the MCP tools report implemented and missing edges.
+*   **MCP Post-Edit Audits:** `agent_change_gate` and `get_plan_details` now run `verify_plan`, so MCP clients can detect missing nodes/edges and unplanned modified files after implementation.
+*   **C# Inheritance Cleanup:** Removed the unreachable `base_list` branch and `handle_csharp_base_list` from `src/extract/import_handlers.rs`; canonical walker node IDs and the `I`-prefix heuristic remain.
+*   **Scope-Audit Docs:** Corrected “git/manifest” wording to git status or explicit snapshot overrides; `verify_plan` does not read the manifest.
+
+### Changed
+*   **Feature Gating:** Added positive `mcp`, `watch`, and `semantic` features. `harness = []` remains for compatibility, and `default-features = false, features = ["harness"]` now produces a genuinely lightweight core library.
+*   **Harness Adapter:** Fixed the reference adapter’s imports, edge-removal API, feature configuration, and tests. `cargo test` in `contrib/harness-adapter` passes without warnings.
+
+---
+
 ## v0.20.0 — 2026-10-31
 
 ### Summary
@@ -20,9 +37,9 @@ This release delivers foundational compiler, Datalog, C# discovery, CLI, and for
 *   **Planned-Edge Verification:** `PlanVerificationReport` now reports `implemented_edges` and `missing_edges` alongside planned nodes.
 
 ### Changed
-*   **Post-Edit Scope Audits:** `verify_plan` now compares against git/manifest modified files instead of treating every physical repository file as a potential unplanned edit. `verify_plan_with_modified_files` accepts explicit snapshot-diff inputs.
+*   **Post-Edit Scope Audits:** `verify_plan` now compares against git-status modified files (or an explicit override) instead of treating every physical repository file as a potential unplanned edit. `verify_plan_with_modified_files` accepts explicit snapshot-diff inputs.
 *   **Language Detection:** Lean 4 is recognized by `gm run` language metadata and `gm doctor` integrity checks.
-*   **Release Metadata:** Version bumped to `0.20.0`; release notes now advertise 24 MCP tools and the new compiler/gating capabilities.
+*   **Release Metadata:** Version bumped to `0.20.0`; release notes advertise the expanded MCP tool catalog and the new compiler/gating capabilities.
 
 ### Fixed
 *   **Scope-Creep False Positives:** Valid plans on repositories with many untouched files no longer fail compliance because of baseline files.

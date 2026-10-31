@@ -15,7 +15,7 @@ To embed the structural engine as a dependency, declare it in your `Cargo.toml`.
 graphenium = { git = "https://github.com/lambda-alpha-labs/Graphenium", default-features = false, features = ["harness", "lang-rust", "lang-python"] }
 ```
 
-*Enable compilation support for only the target programming languages your platform needs to govern.*
+*Enable compilation support for only the target programming languages your platform needs to govern. `mcp`, `watch`, and `semantic` are default features; disabling defaults omits the MCP server, watch mode, and semantic HTTP client.*
 
 ---
 

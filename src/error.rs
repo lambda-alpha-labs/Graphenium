@@ -8,6 +8,7 @@ pub enum GrapheniumError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[cfg(feature = "semantic")]
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
 

@@ -457,7 +457,7 @@ fn extract_callee_name(node: Node<'_>, source: &[u8]) -> Option<String> {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-#[cfg(test)]
+#[cfg(all(test, feature = "lang-python"))]
 mod tests {
     use super::*;
 

@@ -13,6 +13,8 @@ To keep compilation times fast and exclude the background MCP server and file-wa
 graphenium = { git = "https://github.com/lambda-alpha-labs/Graphenium", default-features = false, features = ["harness", "lang-rust", "lang-python", "lang-csharp"] }
 ```
 
+`mcp`, `watch`, and `semantic` are default features; `default-features = false` omits the MCP server, watch mode, and semantic HTTP client. The `harness` feature remains as a compatibility marker.
+
 ---
 
 ## 2. Core Library APIs

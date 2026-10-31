@@ -25,8 +25,12 @@
 //!
 //! ## Feature flags
 //!
-//! - `harness` — core graph engine only, without the MCP server or watch mode.
-//!   Use this when embedding Graphenium as a library.
+//! - `harness` — compatibility marker for core graph-engine embedding. Use
+//!   `default-features = false` to omit the MCP server, watch mode, and
+//!   semantic HTTP client.
+//! - `mcp` — MCP server (`rmcp`, `arc-swap`, `tokio`).
+//! - `watch` — file-watching mode (`notify`, `tokio`).
+//! - `semantic` — remote LLM extraction (`reqwest`, `base64`, `tokio`).
 //! - Language features (`lang-python`, `lang-rust`, etc.) — enable specific
 //!   tree-sitter grammars. All enabled by default.
 
@@ -52,11 +56,14 @@ pub mod policy;
 pub mod ranking;
 pub mod report;
 pub mod resolver;
+#[cfg(feature = "semantic")]
 pub mod semantic;
+#[cfg(feature = "mcp")]
 pub mod serve;
 pub mod telemetry;
 pub mod trust;
 pub mod validate;
+#[cfg(feature = "watch")]
 pub mod watch;
 
 pub use error::GrapheniumError;

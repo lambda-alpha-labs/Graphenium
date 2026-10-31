@@ -183,6 +183,37 @@ impl GrapheniumGraph {
             .collect()
     }
 
+    /// Remove edges between `source` and `target`, optionally filtered by relation.
+    /// Returns the number of edges removed.
+    pub fn remove_edges_between(
+        &mut self,
+        source: &str,
+        target: &str,
+        relation: Option<&str>,
+    ) -> usize {
+        let (Some(&src_idx), Some(&tgt_idx)) =
+            (self.id_index.get(source), self.id_index.get(target))
+        else {
+            return 0;
+        };
+        let relation = relation.map(|r| r.trim().to_lowercase());
+        let edge_indices: Vec<_> = self
+            .inner
+            .edges_connecting(src_idx, tgt_idx)
+            .filter(|eref| {
+                relation
+                    .as_ref()
+                    .is_none_or(|rel| eref.weight().relation.to_lowercase() == *rel)
+            })
+            .map(|eref| eref.id())
+            .collect();
+        let count = edge_indices.len();
+        for edge_idx in edge_indices {
+            self.inner.remove_edge(edge_idx);
+        }
+        count
+    }
+
     pub fn edges_iter(&self) -> impl Iterator<Item = &Edge> {
         self.inner.edge_weights()
     }
@@ -485,5 +516,19 @@ mod tests {
         g.upsert_node(make_node("a"));
         let removed = g.remove_edges_for("does_not_exist");
         assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn remove_edges_between_filters_by_relation() {
+        let mut g = GrapheniumGraph::new();
+        g.upsert_node(make_node("a"));
+        g.upsert_node(make_node("b"));
+        g.add_edge(Edge::extracted("a", "b", "calls", "x.py"));
+        g.add_edge(Edge::extracted("a", "b", "imports", "x.py"));
+
+        assert_eq!(g.remove_edges_between("a", "b", Some("CALLS")), 1);
+        assert_eq!(g.edge_count(), 1);
+        assert_eq!(g.remove_edges_between("a", "b", None), 1);
+        assert_eq!(g.edge_count(), 0);
     }
 }

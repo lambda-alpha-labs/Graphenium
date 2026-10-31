@@ -1,6 +1,7 @@
 pub mod classify;
 pub mod corpus;
 pub mod paper;
+pub mod path;
 pub mod sensitive;
 
 use std::path::{Path, PathBuf};

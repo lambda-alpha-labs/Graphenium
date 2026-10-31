@@ -5,6 +5,8 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use crate::model::{GrapheniumGraph, Node};
 use crate::ranking::{self, RankedNode};
 
+pub use crate::detect::path::is_test_like_path;
+
 /// Strip the Windows extended-length prefix (`\\?\`) from a path.
 pub fn clean_windows_path(path: &str) -> String {
     path.strip_prefix(r"\\?\")
@@ -22,22 +24,6 @@ pub fn relative_path(path: &str, project_root: Option<&str>) -> String {
         }
     }
     clean_path
-}
-
-/// Identify test/benchmark/spec modules by analyzing file path fragments.
-pub fn is_test_like_path(path: &str) -> bool {
-    let normalized = path.replace('\\', "/").to_lowercase();
-    normalized.contains("/tests/")
-        || normalized.contains("/test/")
-        || normalized.contains("_test.")
-        || normalized.contains(".test.")
-        || normalized.contains("/spec/")
-        || normalized.contains("/specs/")
-        || normalized.contains("_spec.")
-        || normalized.contains("tests.rs")
-        || normalized.contains("test_bench")
-        || normalized.contains("_test.rs")
-        || normalized.contains("_tests.rs")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

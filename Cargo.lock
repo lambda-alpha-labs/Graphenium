@@ -606,14 +606,13 @@ dependencies = [
 
 [[package]]
 name = "graphenium"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "arc-swap",
  "assert_cmd",
  "base64 0.22.1",
  "clap",
- "futures",
  "globset",
  "hex",
  "ignore",
@@ -634,7 +633,6 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
- "tokio-util",
  "tree-sitter",
  "tree-sitter-c",
  "tree-sitter-c-sharp",

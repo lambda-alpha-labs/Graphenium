@@ -51,7 +51,7 @@ Graphenium enforces an explicit three-step compiler loop on the agent:
 1.  **Declare Intent (Pre-Flight Spec):** Before editing any code, the agent registers its planned changes (classes, methods, and dependencies) in a virtual planning workspace.
 2.  **Transitive Policy Solving:** Graphenium's engine runs a local Datalog solver to analyze the proposed virtual AST. If the design bypasses an intermediary architectural layer or uses banned symbols, Graphenium blocks the plan and provides structural feedback.
 3.  **Zero-Drift Delta Gating:** Even without a `.graphenium/policy.json` file, Graphenium applies in-memory modularity analysis (ΔQ) and surprise edge profiling to reject plans that mathematically degrade community structure.
-4.  **Post-Facto Compliance Audit:** After the agent writes the code, Graphenium parses the physical modifications, checking planned and missing symbols, planned dependency edges, and files modified according to git/manifest diffs. It ensures that the agent did not touch files outside the declared scope, introduce unplanned dependencies, or fail to implement its declared spec.
+4.  **Post-Facto Compliance Audit:** After the agent writes the code, Graphenium parses the physical modifications, checking planned and missing symbols, planned dependency edges, and files modified according to git status or an explicit snapshot diff. It ensures that the agent did not touch files outside the declared scope, introduce unplanned dependencies, or fail to implement its declared spec.
 
 ---
 

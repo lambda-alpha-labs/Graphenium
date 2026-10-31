@@ -127,7 +127,7 @@ These are Graphenium's containment and compliance enforcement tools.
 
 ### `agent_change_gate`
 *   **Purpose:** Executes an automated structural verification audit against current index properties.
-*   **Optional Parameter `plan_id`:** When provided, Graphenium integrates a pre-flight architectural policy check alongside the index-wide resolution gates.
+*   **Optional Parameter `plan_id`:** When provided, Graphenium runs the pre-flight architectural policy check, then performs a post-edit compliance audit of implemented/missing nodes, planned dependency edges, and unplanned modified files.
 *   **When to Use:** In CI/CD pipelines, git pre-commit hooks, or pre-review agent workflows.
 
 ---

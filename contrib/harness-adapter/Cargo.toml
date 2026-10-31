@@ -7,3 +7,10 @@ license = "MIT"
 
 [dependencies]
 graphenium = { path = "../..", default-features = false, features = ["harness"] }
+
+[features]
+default = ["lang-python"]
+lang-python = ["graphenium/lang-python"]
+
+[dev-dependencies]
+tempfile = "3"

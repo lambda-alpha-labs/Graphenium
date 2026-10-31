@@ -2,9 +2,11 @@ pub mod ci;
 pub mod config;
 pub mod cross_file;
 pub mod csharp_project;
+#[cfg(feature = "lang-go")]
 pub mod go;
 pub mod import_handlers;
 pub mod lean;
+#[cfg(feature = "lang-rust")]
 pub mod rust_lang;
 pub mod walker;
 
@@ -125,7 +127,9 @@ pub fn extract_file(file: &DetectedFile, opts: &ExtractOptions) -> ExtractionRes
 pub fn dispatch(source: &[u8], ext: &str, file_path: &str) -> ExtractionResult {
     match ext {
         // Rust, Go, and Lean 4 have dedicated extractors.
+        #[cfg(feature = "lang-rust")]
         "rs" => rust_lang::extract(source, file_path),
+        #[cfg(feature = "lang-go")]
         "go" => go::extract(source, file_path),
         "lean" => lean::extract(source, file_path),
 
@@ -143,7 +147,9 @@ pub fn dispatch(source: &[u8], ext: &str, file_path: &str) -> ExtractionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "lang-python")]
     use std::io::Write;
+    #[cfg(feature = "lang-python")]
     use tempfile::NamedTempFile;
 
     #[cfg(feature = "lang-python")]
@@ -222,6 +228,37 @@ mod tests {
         // 4. Verify structural edge linking class to its method
         let has_method_edge = r.edges.iter().any(|e| e.relation == "method");
         assert!(has_method_edge, "Missing 'method' edge — C# extraction may not have linked class to method (expected at minimum a 'method' relation edge)");
+    }
+
+    #[cfg(feature = "lang-csharp")]
+    #[test]
+    fn extract_csharp_inheritance_uses_canonical_node_ids() {
+        let src =
+            b"namespace N\n{\n    public class Foo : BaseClass, IMyInterface\n    {\n    }\n}";
+        let r = dispatch(src, "cs", "Inheritance.cs");
+
+        let class_id = crate::model::make_id(&["Inheritance", "Foo"]);
+        assert!(
+            r.nodes.iter().any(|n| n.id == class_id && n.label == "Foo"),
+            "class node should use the canonical make_id form"
+        );
+        assert!(
+            !r.nodes.iter().any(|n| n.id.contains("::")),
+            "no fabricated file_path::kind::name node IDs should be emitted"
+        );
+
+        assert!(
+            r.edges.iter().any(|e| e.relation == "inherits"
+                && e.source == class_id
+                && e.target == "baseclass"),
+            "class base type should produce an inherits edge from the canonical class node"
+        );
+        assert!(
+            r.edges.iter().any(|e| e.relation == "implements"
+                && e.source == class_id
+                && e.target == "imyinterface"),
+            "I-prefixed base type should produce an implements edge"
+        );
     }
 
     #[test]

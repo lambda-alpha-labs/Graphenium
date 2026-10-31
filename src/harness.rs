@@ -321,14 +321,15 @@ pub fn verify_plan_with_modified_files(
     } else {
         candidate_modified_files
             .difference(&planned_files)
-            .filter(|f| !crate::serve::traversal::is_test_like_path(f))
+            .filter(|f| !crate::detect::path::is_test_like_path(f))
             .cloned()
             .collect()
     };
     unplanned_modified_files.sort();
     unplanned_modified_files.truncate(20);
 
-    let passes_compliance = missing_nodes.is_empty() && unplanned_modified_files.is_empty();
+    let passes_compliance =
+        missing_nodes.is_empty() && missing_edges.is_empty() && unplanned_modified_files.is_empty();
 
     PlanVerificationReport {
         plan_id: plan_id.to_string(),
@@ -737,6 +738,74 @@ mod tests {
             report.unplanned_modified_files,
             vec!["src/unrelated_sneaky_edit.rs".to_string()]
         );
+    }
+
+    #[test]
+    fn verify_plan_fails_when_planned_edge_is_missing() {
+        use crate::model::{Confidence, FileType};
+
+        let mut graph = GrapheniumGraph::new();
+        let mut plan_alpha = Node::new("plan_alpha", "Alpha", FileType::Code, "src/a.rs");
+        plan_alpha.plan_id = Some("plan-edge".to_string());
+        graph.upsert_node(plan_alpha);
+        let mut plan_beta = Node::new("plan_beta", "Beta", FileType::Code, "src/b.rs");
+        plan_beta.plan_id = Some("plan-edge".to_string());
+        graph.upsert_node(plan_beta);
+
+        // Both endpoints exist physically, but the planned dependency edge was not written.
+        graph.upsert_node(Node::new("real_alpha", "Alpha", FileType::Code, "src/a.rs"));
+        graph.upsert_node(Node::new("real_beta", "Beta", FileType::Code, "src/b.rs"));
+
+        let mut planned_edge = Edge::new(
+            "plan_alpha",
+            "plan_beta",
+            "calls",
+            Confidence::Extracted,
+            "src/a.rs",
+        );
+        planned_edge.plan_id = Some("plan-edge".to_string());
+        graph.add_edge(planned_edge);
+
+        let report = verify_plan(&graph, "plan-edge");
+        assert_eq!(report.missing_edges.len(), 1);
+        assert!(!report.passes_compliance);
+    }
+
+    #[test]
+    fn verify_plan_passes_when_planned_edge_is_implemented() {
+        use crate::model::{Confidence, FileType};
+
+        let mut graph = GrapheniumGraph::new();
+        let mut plan_alpha = Node::new("plan_alpha", "Alpha", FileType::Code, "src/a.rs");
+        plan_alpha.plan_id = Some("plan-edge-ok".to_string());
+        graph.upsert_node(plan_alpha);
+        let mut plan_beta = Node::new("plan_beta", "Beta", FileType::Code, "src/b.rs");
+        plan_beta.plan_id = Some("plan-edge-ok".to_string());
+        graph.upsert_node(plan_beta);
+
+        graph.upsert_node(Node::new("real_alpha", "Alpha", FileType::Code, "src/a.rs"));
+        graph.upsert_node(Node::new("real_beta", "Beta", FileType::Code, "src/b.rs"));
+        graph.add_edge(Edge::extracted(
+            "real_alpha",
+            "real_beta",
+            "calls",
+            "src/a.rs",
+        ));
+
+        let mut planned_edge = Edge::new(
+            "plan_alpha",
+            "plan_beta",
+            "calls",
+            Confidence::Extracted,
+            "src/a.rs",
+        );
+        planned_edge.plan_id = Some("plan-edge-ok".to_string());
+        graph.add_edge(planned_edge);
+
+        let report = verify_plan(&graph, "plan-edge-ok");
+        assert!(report.missing_edges.is_empty());
+        assert_eq!(report.implemented_edges.len(), 1);
+        assert!(report.passes_compliance);
     }
 
     #[test]

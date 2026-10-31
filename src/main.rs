@@ -1245,6 +1245,12 @@ fn cmd_check(
         if !report.missing_nodes.is_empty() {
             println!("Missing: {:?}", report.missing_nodes);
         }
+        if !report.implemented_edges.is_empty() {
+            println!("\nImplemented edges: {:?}", report.implemented_edges);
+        }
+        if !report.missing_edges.is_empty() {
+            println!("Missing edges: {:?}", report.missing_edges);
+        }
         if !report.unplanned_modified_files.is_empty() {
             println!("Unplanned changes: {:?}", report.unplanned_modified_files);
         }

@@ -15,13 +15,14 @@
 //! events and mutates the graph. The harness owns the event loop and
 //! lifecycle.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use graphenium::{
-    analyze, build, cluster,
+    build, cluster,
     cluster::ClusterOptions,
+    detect::DetectedFile,
     extract::{extract_file, ExtractOptions},
-    model::{Confidence, DetectedFile, Edge, FileType, GrapheniumGraph, Node, ReplaceStats},
+    model::{Edge, FileType, GrapheniumGraph},
     CommunityStats,
 };
 
@@ -133,33 +134,7 @@ pub fn on_edge_invalid(
     target: &str,
     relation: Option<&str>,
 ) -> usize {
-    let src_idx = match graph.node_index(source) {
-        Some(idx) => idx,
-        None => return 0,
-    };
-    let tgt_idx = match graph.node_index(target) {
-        Some(idx) => idx,
-        None => return 0,
-    };
-
-    let edge_indices: Vec<_> = graph
-        .inner()
-        .edges_connecting(src_idx, tgt_idx)
-        .filter(|eref| {
-            if let Some(rel) = relation {
-                eref.weight().relation.to_lowercase() == rel.trim().to_lowercase()
-            } else {
-                true
-            }
-        })
-        .map(|eref| eref.id())
-        .collect();
-
-    let count = edge_indices.len();
-    for ei in edge_indices {
-        graph.inner.remove_edge(ei);
-    }
-    count
+    graph.remove_edges_between(source, target, relation)
 }
 
 /// Re-run Louvain community detection and return updated statistics.
@@ -200,7 +175,8 @@ fn extract_all(files: &[DetectedFile]) -> graphenium::ExtractionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
+    use graphenium::model::Node;
+    use std::path::PathBuf;
     use tempfile::TempDir;
 
     fn write_file(dir: &TempDir, name: &str, content: &str) -> PathBuf {

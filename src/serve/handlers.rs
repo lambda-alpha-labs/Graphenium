@@ -571,6 +571,50 @@ fn normalize_display_path(path: &str) -> String {
         .to_string()
 }
 
+/// Format a plan verification report for MCP/CLI output.
+fn format_plan_verification(report: &crate::harness::PlanVerificationReport) -> String {
+    let mut out = String::new();
+    out.push_str(&format!(
+        "- Compliance: **{}**\n",
+        if report.passes_compliance {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    ));
+    if !report.implemented_nodes.is_empty() {
+        out.push_str(&format!(
+            "- Implemented nodes: {}\n",
+            report.implemented_nodes.join(", ")
+        ));
+    }
+    if !report.missing_nodes.is_empty() {
+        out.push_str(&format!(
+            "- Missing nodes: {}\n",
+            report.missing_nodes.join(", ")
+        ));
+    }
+    if !report.implemented_edges.is_empty() {
+        out.push_str(&format!(
+            "- Implemented edges: {}\n",
+            report.implemented_edges.join("; ")
+        ));
+    }
+    if !report.missing_edges.is_empty() {
+        out.push_str(&format!(
+            "- Missing edges: {}\n",
+            report.missing_edges.join("; ")
+        ));
+    }
+    if !report.unplanned_modified_files.is_empty() {
+        out.push_str(&format!(
+            "- Unplanned modified files: {}\n",
+            report.unplanned_modified_files.join(", ")
+        ));
+    }
+    out
+}
+
 /// Strip the project root prefix from an absolute path to produce a relative path.
 /// If the path is already relative or the root is unknown, returns as-is.
 fn relative_path(path: &str, root: Option<&str>) -> String {
@@ -3349,6 +3393,10 @@ impl GrapheniumServer {
                     output.push_str(&format!("- {v}\n"));
                 }
             }
+
+            output.push_str("\n## Post-Edit Compliance\n\n");
+            let verification = crate::harness::verify_plan(graph.as_ref(), pid);
+            output.push_str(&format_plan_verification(&verification));
         }
 
         output
@@ -3836,6 +3884,7 @@ impl GrapheniumServer {
         plan_id: String,
     ) -> String {
         let graph = self.graph();
+        let report = crate::harness::verify_plan(graph.as_ref(), &plan_id);
         let planned_ids: Vec<String> = graph
             .nodes()
             .filter(|n| n.plan_id.as_deref() == Some(&plan_id))
@@ -3843,17 +3892,24 @@ impl GrapheniumServer {
             .collect();
 
         if planned_ids.is_empty() {
-            return format!("No planned nodes found for plan ID '{}'.", plan_id);
+            return format!(
+                "No planned nodes found for plan ID '{}'.\n\n## Plan Verification\n\n{}",
+                plan_id,
+                format_plan_verification(&report)
+            );
         }
 
-        crate::serve::traversal::subgraph_to_text_with_match_details(
+        let mut output = crate::serve::traversal::subgraph_to_text_with_match_details(
             &graph,
             &planned_ids,
             4000,
             &[],
             &[],
             &[],
-        )
+        );
+        output.push_str("\n\n## Plan Verification\n\n");
+        output.push_str(&format_plan_verification(&report));
+        output
     }
 
     // ── Meta tools ──────────────────────────────────────────────────────────
@@ -4838,5 +4894,42 @@ mod tests {
             g_final.edges_iter().map(|e| e.relation.as_str()).collect();
         assert!(relation_types.contains("calls"));
         assert!(relation_types.contains("depends_on"));
+    }
+
+    #[test]
+    fn agent_change_gate_reports_missing_planned_edges() {
+        use crate::model::Confidence;
+
+        let mut g = GrapheniumGraph::new();
+        let mut plan_alpha = Node::new("plan_alpha", "Alpha", FileType::Code, "src/a.rs");
+        plan_alpha.plan_id = Some("plan-x".to_string());
+        g.upsert_node(plan_alpha);
+        let mut plan_beta = Node::new("plan_beta", "Beta", FileType::Code, "src/b.rs");
+        plan_beta.plan_id = Some("plan-x".to_string());
+        g.upsert_node(plan_beta);
+        g.upsert_node(Node::new("real_alpha", "Alpha", FileType::Code, "src/a.rs"));
+        g.upsert_node(Node::new("real_beta", "Beta", FileType::Code, "src/b.rs"));
+
+        let mut planned_edge = Edge::new(
+            "plan_alpha",
+            "plan_beta",
+            "calls",
+            Confidence::Extracted,
+            "src/a.rs",
+        );
+        planned_edge.plan_id = Some("plan-x".to_string());
+        g.add_edge(planned_edge);
+
+        let server = GrapheniumServer::new(g);
+        let output = server.agent_change_gate(
+            "real_alpha".to_string(),
+            None,
+            None,
+            Some("plan-x".to_string()),
+        );
+
+        assert!(output.contains("## Post-Edit Compliance"), "{output}");
+        assert!(output.contains("Missing edges"), "{output}");
+        assert!(output.contains("Alpha -[calls]-> Beta"), "{output}");
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "graphenium"
-version = "0.20.0"
+version = "0.21.0"
 edition = "2021"
 description = "Graphenium (gm) — structural containment and pre-flight gating for AI coding agents"
 license = "MIT"
@@ -11,11 +11,16 @@ readme = "README.md"
 [[bin]]
 name = "gm"
 path = "src/main.rs"
+required-features = ["mcp", "watch", "semantic"]
 
-# Feature flags: enable/disable language support to control binary size.
-# All 9 languages are included by default.
+# Feature flags: enable/disable language support and optional subsystems.
+# All 9 tree-sitter languages are included by default. Lean 4 support is
+# always compiled in (pure Rust, no grammar feature flag).
 [features]
 default = [
+    "mcp",
+    "watch",
+    "semantic",
     "lang-python",
     "lang-js",
     "lang-ts",
@@ -26,9 +31,12 @@ default = [
     "lang-cpp",
     "lang-csharp",
 ]
-# Core graph engine only — no MCP server or watch-mode dependencies.
-# Use when embedding Graphenium as a library in a harness.
+# Compatibility marker for embedded harnesses. Use `default-features = false`
+# to omit the MCP server, watch mode, and semantic HTTP client.
 harness = []
+mcp = ["watch", "dep:rmcp", "dep:arc-swap"]
+watch = ["dep:notify", "dep:notify-debouncer-mini", "dep:tokio"]
+semantic = ["dep:reqwest", "dep:tokio", "dep:base64"]
 lang-python = ["dep:tree-sitter-python"]
 lang-js     = ["dep:tree-sitter-javascript"]
 lang-ts     = ["dep:tree-sitter-typescript"]
@@ -54,14 +62,12 @@ petgraph = "0.6"
 ignore = "0.4"
 globset = "0.4"
 
-# Concurrency: rayon for CPU-bound AST, tokio for async LLM I/O
+# Concurrency: rayon for CPU-bound AST, tokio for async MCP/semantic I/O
 rayon = "1"
-tokio = { version = "1", features = ["full"] }
-futures = "0.3"
-tokio-util = { version = "0.7", features = ["codec"] }
+tokio = { version = "1", features = ["full"], optional = true }
 
-# HTTP client for Claude API calls
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# HTTP client for Claude API calls (semantic feature)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 
 # SHA256 hashing for cache keys
 sha2 = "0.10"
@@ -70,9 +76,9 @@ sha2 = "0.10"
 thiserror = "1"
 anyhow = "1"
 
-# File watching (watch mode)
-notify = "6"
-notify-debouncer-mini = "0.4"
+# File watching (watch feature)
+notify = { version = "6", optional = true }
+notify-debouncer-mini = { version = "0.4", optional = true }
 
 # AST parsing (Phase 3)
 tree-sitter = "0.23"
@@ -90,10 +96,10 @@ tree-sitter-c-sharp    = { version = "0.23.1", optional = true }
 
 # MCP Server (Phase 11) — official Rust MCP SDK
 # NOTE: Verify the latest version at https://crates.io/crates/rmcp
-rmcp = { version = "0.1", features = ["server", "transport-io", "macros"] }
+rmcp = { version = "0.1", features = ["server", "transport-io", "macros"], optional = true }
 
-# Base64 encoding for image content blocks in LLM requests
-base64 = "0.22"
+# Base64 encoding for image content blocks in LLM requests (semantic feature)
+base64 = { version = "0.22", optional = true }
 
 # Regex (used in make_id and detection patterns)
 regex = "1"
@@ -108,7 +114,7 @@ hex = "0.4"
 rand = "0.8"
 
 # Lock-free atomic Arc swaps for the MCP server's hot-reloadable graph state.
-arc-swap = "1"
+arc-swap = { version = "1", optional = true }
 
 # Incremental computation / demand-driven queries
 salsa = "0.27"
