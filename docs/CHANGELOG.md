@@ -4,6 +4,32 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.20.0 — 2026-10-31
+
+### Summary
+This release delivers foundational compiler, Datalog, C# discovery, CLI, and formal-verification upgrades, including first-class Lean 4 indexing and proof-gap auditing.
+
+### Added
+*   **Import-Scoped Cross-File Resolution (`src/resolver.rs`):** Cross-file call, use, inheritance, and implementation edges now narrow colliding symbol names using the caller file's explicit imports, with same-directory fallback. This raises call-resolution recall without binding ambiguous names arbitrarily.
+*   **Indexed Semi-Naive Datalog Evaluation (`src/analyze/query.rs`):** Positive and negated body atoms use first-column hash indexes for bound joins; evaluation now uses true semi-naive delta relations and stops early for fully-ground existence goals.
+*   **Native Lean 4 Extractor (`src/extract/lean.rs`):** Pure-Rust support for `.lean` repositories, extracting imports, namespaces, `theorem`/`lemma`/`def`/`structure`/`class`/`inductive`/`axiom`/`opaque` declarations, dependency edges, and `sorry`/`admit` proof gaps as `AMBIGUOUS` `unverified_sorry` self-edges.
+*   **Formal Verification Datalog Predicates (`src/analyze/query/stdlib.dl`):** Added `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, and `tainted_by_proof_gap`.
+*   **`gm graph migrate`:** Migrates older index files to schema `0.2.0` and records the current Graphenium version.
+*   **`gm gate`:** Runs a critical-drift gate over two snapshots (`--diff <before> <after>`), or the standard `gm check` gate over `graphenium-out/graph.json` when no diff is supplied.
+*   **Recursive C# Project Discovery (`src/main.rs`):** `.sln` and `.csproj` files are now found at any depth with `.gitignore` / `.grapheniumignore` and skip-directory awareness.
+*   **Planned-Edge Verification:** `PlanVerificationReport` now reports `implemented_edges` and `missing_edges` alongside planned nodes.
+
+### Changed
+*   **Post-Edit Scope Audits:** `verify_plan` now compares against git/manifest modified files instead of treating every physical repository file as a potential unplanned edit. `verify_plan_with_modified_files` accepts explicit snapshot-diff inputs.
+*   **Language Detection:** Lean 4 is recognized by `gm run` language metadata and `gm doctor` integrity checks.
+*   **Release Metadata:** Version bumped to `0.20.0`; release notes now advertise 24 MCP tools and the new compiler/gating capabilities.
+
+### Fixed
+*   **Scope-Creep False Positives:** Valid plans on repositories with many untouched files no longer fail compliance because of baseline files.
+*   **Clippy Cleanliness:** Resolved pre-existing library and CLI warnings so `cargo clippy --lib -- -D warnings` and `cargo clippy --bin gm -- -D warnings` pass.
+
+---
+
 ## v0.19.3 — 2026-07-13
 
 ### Summary

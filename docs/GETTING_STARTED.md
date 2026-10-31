@@ -7,9 +7,9 @@ This guide walks you from a clean repository to an active, write-gated developer
 ## 1. Prerequisites
 
 Before installing Graphenium, ensure your environment meets the following requirements:
-*   **Compilation Toolchain:** Rust 1.81 or later (`rustc` and `cargo` installed).
+*   **Compilation Toolchain:** Rust 1.87 or later (`rustc` and `cargo` installed).
 *   **Repository Languages:** One or more supported languages:
-    *   *Rust, Python, Go, JavaScript, TypeScript, Java, C, C++, and C#.*
+    *   *Rust, Python, Go, JavaScript, TypeScript, Java, C, C++, C#, and Lean 4.*
 *   **AI Agent Workspace:** An MCP-compatible coding agent (Claude Code, Cursor, Grok, or Codex).
 
 ---
@@ -161,6 +161,16 @@ gm run . --no-semantic --no-viz
 gm check --delta --plan my-feature --graph graphenium-out/graph.json
 ```
 
+### PR-Level Diff Gate
+
+Compare two compiled indexes and fail on critical architectural drift:
+
+```sh
+gm gate --diff graphenium-snapshots/before-change.json graphenium-out/graph.json
+```
+
+When `--diff` is omitted, `gm gate` runs the standard trust check against `graphenium-out/graph.json`.
+
 ### Optional: Explicit Policy Rules
 
 When you need declarative folder-level constraints beyond modularity invariants, write a `.graphenium/policy.json` at your repository root. Example — forbid direct database imports from API controllers:
@@ -207,3 +217,4 @@ You have successfully established workspace containment when:
 4.  `graph_info` reports active policy gates (Dynamic Delta Gating, with or without explicit rules).
 5.  Agent plans that degrade modularity are blocked by `evaluate_delta_gate` or `gm check --delta`.
 6.  *(Optional)* Agent design plans violating `.graphenium/policy.json` are blocked pre-flight.
+7.  *(Optional)* PR-level `gm gate --diff` comparisons fail on critical architectural drift.

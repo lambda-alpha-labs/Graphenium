@@ -83,6 +83,8 @@ Available language compilation flags:
 *   `lang-cpp`
 *   `lang-csharp`
 
+Lean 4 support is always compiled in (pure Rust, no tree-sitter grammar feature flag).
+
 ---
 
 ## Step 4: Generate the Structural Index

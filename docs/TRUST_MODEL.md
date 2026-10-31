@@ -14,7 +14,7 @@ Every symbol declaration and dependency edge in Graphenium's structural index ca
 |---|---|---|
 | `EXTRACTED` **(Facts)** | AST-proven and compiler-backed. Discovered directly in code by Tree-sitter, Stack Graphs, or Visual Studio solution parsers. | **Planning Backbone:** Safe to plan and build against. (Agent must still read the targeted source files before writing edits). |
 | `INFERRED` **(Hypotheses)** | Generatively or heuristically inferred. Discovered via Graphenium's optional semantic pass, naming convention heuristics, or cross-file fuzzy resolution. | **Exploratory Leads:** Treat as a hypothesis. The agent is strictly blocked from editing until it inspects at least one source file to prove the dependency. |
-| `AMBIGUOUS` **(Collisions)** | Identifier or namespace collision (e.g., matching a symbol that exists in multiple directories). | **Risk Gated:** Rejects automated edits. The agent is forced to halt, flag the collision, and request human review or execute targeted file-level disambiguation. |
+| `AMBIGUOUS` **(Collisions / Proof Gaps)** | Identifier or namespace collision (e.g., matching a symbol that exists in multiple directories), or a Lean 4 `sorry` / `admit` proof gap. | **Risk Gated:** Rejects automated edits. The agent is forced to halt, flag the collision or unproved theorem, and request human review or execute targeted file-level disambiguation. |
 
 ---
 
@@ -22,7 +22,7 @@ Every symbol declaration and dependency edge in Graphenium's structural index ca
 
 Graphenium's resolver (`src/resolver.rs`) audits every import, call, and inheritance boundary in the index, assigning a resolution state:
 
-*   **`resolved`:** The target symbol exists as a physical node in the AST index. This is the highest-trust state.
+*   **`resolved`:** The target symbol exists as a physical node in the AST index. This is the highest-trust state. When a symbol name collides across files, the resolver narrows candidates using the caller's explicit imports before binding; only a unique survivor is accepted.
 *   **`unresolved`:** The target symbol was referenced but not found in Graphenium's static scan. This indicates a dependency on an external system, standard library, or unindexed vendor package.
 *   **`heuristic`:** The connection was linked via heuristic matching rather than explicit AST resolution. It requires source validation before modification.
 
@@ -38,6 +38,7 @@ The `extractor` metadata field discloses exactly which module compiled the relat
 | `resolver` | Local import matching | High trust (`EXTRACTED`). Compiler-proven. |
 | `tree-sitter-stack-graphs` | Local cross-file call resolution | High trust (`EXTRACTED` / `INFERRED` unique bindings). |
 | `csproj-parser` | Visual Studio project boundaries | High trust (`EXTRACTED`). Solution-proven. |
+| `lean-extractor` | Native Lean 4 syntax extraction | High trust for declarations/imports (`EXTRACTED`); `AMBIGUOUS` for `sorry`/`admit` proof gaps. |
 | `llm` | Remote semantic inference | Medium trust (`INFERRED`). Heuristic guess. |
 | `manual-mcp-write` | Programmatic agent injection | Auditable. Only accepted if the agent provides explicit proof of source inspection. |
 

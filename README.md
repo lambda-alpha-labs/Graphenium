@@ -20,7 +20,7 @@ CI checks only test passing             CI fails on architectural drift
 
 Binary: `gm`  
 Schema: `0.2.0`  
-Status: AST + Stack Graphs resolver stable, pre-flight policy engine stable, zero-drift delta gating stable, telemetry overlay experimental
+Status: AST + Stack Graphs resolver stable, pre-flight policy engine stable, zero-drift delta gating stable, Lean 4 proof-gap auditing stable, telemetry overlay experimental
 
 ---
 
@@ -51,7 +51,7 @@ Graphenium enforces an explicit three-step compiler loop on the agent:
 1.  **Declare Intent (Pre-Flight Spec):** Before editing any code, the agent registers its planned changes (classes, methods, and dependencies) in a virtual planning workspace.
 2.  **Transitive Policy Solving:** Graphenium's engine runs a local Datalog solver to analyze the proposed virtual AST. If the design bypasses an intermediary architectural layer or uses banned symbols, Graphenium blocks the plan and provides structural feedback.
 3.  **Zero-Drift Delta Gating:** Even without a `.graphenium/policy.json` file, Graphenium applies in-memory modularity analysis (ΔQ) and surprise edge profiling to reject plans that mathematically degrade community structure.
-4.  **Post-Facto Compliance Audit:** After the agent writes the code, Graphenium parses the physical modifications, ensuring that the agent did not touch files outside the declared scope, introduce unplanned dependencies, or fail to implement its declared spec.
+4.  **Post-Facto Compliance Audit:** After the agent writes the code, Graphenium parses the physical modifications, checking planned and missing symbols, planned dependency edges, and files modified according to git/manifest diffs. It ensures that the agent did not touch files outside the declared scope, introduce unplanned dependencies, or fail to implement its declared spec.
 
 ---
 
@@ -86,7 +86,7 @@ cargo install --locked --path .
 # Or use the platform installer
 curl -fsSL https://raw.githubusercontent.com/lambda-alpha-labs/Graphenium/main/install.sh | sh
 ```
-*Requires Rust 1.81 or later. Tree-sitter language grammars are compiled and bundled.*
+*Requires Rust 1.87 or later. Tree-sitter language grammars are compiled and bundled.*
 
 ---
 
@@ -96,12 +96,12 @@ curl -fsSL https://raw.githubusercontent.com/lambda-alpha-labs/Graphenium/main/i
 Most AI developer tools use LLMs to guess how modules depend on each other, leading to hallucinations. Graphenium establishes an index of compiler-proven truth using Tree-sitter and Stack Graphs. Every relationship carries explicit provenance:
 *   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, type inheritance, explicit call signatures).
 *   `INFERRED` **(Heuristics):** Semantic leads that the agent is forced to verify.
-*   `AMBIGUOUS` **(Collisions):** Identifier collisions that force the agent to halt and inspect source files directly.
+*   `AMBIGUOUS` **(Collisions / Proof Gaps):** Identifier collisions that force the agent to halt and inspect source files directly, plus Lean 4 `sorry` / `admit` proof gaps that must be resolved before a theorem is treated as verified.
 
 ### 2. Datalog-Powered Policy Solving
 Static linters can check direct imports, but they are blind to multi-hop architectural bypasses. Graphenium solves this by compiling your codebase structure into logical facts and running an embedded **Datalog inference engine** (`src/analyze/query.rs` & `stdlib.dl`). 
 
-It uses first-order logic and fixed-point iteration to mathematically prove boundary violations over an infinite number of dependency hops.
+It uses first-order logic, first-column hash indexing, and semi-naive fixed-point evaluation to mathematically prove boundary violations over an infinite number of dependency hops. The standard library also includes containment, aliasing-hazard, reachability, and proof-gap taint predicates (`contains_transitive`, `aliased_container_call`, `unreachable_from`, `tainted_by_proof_gap`).
 
 ### 3. Zero-Drift Delta Gating (Topological Entropy Guardrails)
 Even without explicit policy rules, Graphenium applies in-memory modularity analysis to every planning workspace. The delta engine compares physical-only and virtual (plan-overlay) subgraphs, computing Louvain modularity deltas (ΔQ) and profiling surprise edges. Plans that degrade community structure or introduce architectural shortcuts (`cross-community`, `peripheral→hub`) are rejected automatically.
@@ -141,6 +141,14 @@ Use `gm check --plan <id> --strict` to run pre-flight policy checks and post-fac
 gm check --delta --plan <id>
 ```
 
+For PR-level containment, compare two compiled indexes with `gm gate`:
+
+```sh
+gm gate --diff graphenium-snapshots/before.json graphenium-out/graph.json
+```
+
+Without `--diff`, `gm gate` runs the standard trust check against `graphenium-out/graph.json`.
+
 ---
 
 ## Technical Safeguards: Friction & Loop Mitigations
@@ -169,9 +177,11 @@ Traditional static analysis tools and natural-language guardrails (like `CLAUDE.
 
 ## Language Support
 
-Graphenium supports mixed repositories with Rust, Python, Go, JavaScript, TypeScript, Java, C, C++, and C#.
+Graphenium supports mixed repositories with Rust, Python, Go, JavaScript, TypeScript, Java, C, C++, C#, and Lean 4.
 
-C# projects receive build-boundary awareness through `.sln` and `.csproj` parsing, enabling Graphenium to model assemblies, namespaces, and project references as structural boundaries.
+C# projects receive build-boundary awareness through recursive `.sln` and `.csproj` discovery, enabling Graphenium to model assemblies, namespaces, and project references as structural boundaries even in deeply nested enterprise layouts.
+
+Lean 4 support is built in and requires no tree-sitter grammar feature flag. It extracts namespaces, declarations, imports, and proof dependencies, and emits `AMBIGUOUS` `unverified_sorry` edges for `sorry` / `admit` proof gaps so CI can gate incomplete formal verification work.
 
 ---
 

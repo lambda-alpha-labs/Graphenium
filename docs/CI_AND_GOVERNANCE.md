@@ -164,7 +164,9 @@ Graphenium enforces these policies at multiple checkpoints in the development li
 | **`evaluate_delta_gate` (MCP)** | Pre-Flight (Agent Session) | In-memory modularity delta check and surprise analysis on a proposed plan. |
 | **`add_planned_symbol`** | Pre-Flight (Agent Session) | Automatic pre-flight hook. If the proposed class/method violates policy, Graphenium returns `PRE_FLIGHT_VIOLATION` and blocks the plan. |
 | **`gm check --delta --plan <id>`** | CI / Pre-Commit Hook | Topological entropy gate: modularity delta + surprise edge profiling. |
-| **`gm check --plan <id>`** | CI / Pre-Commit Hook | Double Gate: Evaluates pre-flight design compliance first, then performs a post-facto scope-creep audit. |
+| **`gm check --plan <id>`** | CI / Pre-Commit Hook | Double Gate: Evaluates pre-flight design compliance first, then performs a post-facto scope-creep and planned-edge audit. |
+| **`gm gate --diff <before> <after>`** | CI / PR Pipeline | Compares two compiled indexes and exits non-zero on any `Critical` architectural drift event. |
+| **`gm gate`** | CI / Pre-Commit Hook | Runs the default trust gate against `graphenium-out/graph.json`. |
 | **`agent_change_gate`** | CI / PR Pipeline | Evaluates global trust quality metrics (import resolution ratio, maximum allowed ambiguity). |
 
 ---
@@ -179,8 +181,16 @@ gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 1
 
 ### Evaluation Parameters:
 *   `--min-resolution <pct>`: Fails the build if the AST import resolution ratio drops below the target percentage (default: 80%).
-*   `--max-ambiguous <count>`: Fails the build if Graphenium detects more than `<count>` unresolved name collisions (default: 10).
+*   `--max-ambiguous <count>`: Fails the build if Graphenium detects more than `<count>` unresolved name collisions (default: 10). Lean 4 `sorry` / `admit` proof gaps are emitted as `AMBIGUOUS` edges and count toward this limit, so `--max-ambiguous 0` can gate incomplete formal proofs.
 *   `--strict`: Exits non-zero on any parser or configuration warnings.
+
+For snapshot-to-snapshot containment, compare a pre-change snapshot with the current index:
+
+```sh
+gm gate --diff graphenium-snapshots/before-change.json graphenium-out/graph.json
+```
+
+`gm gate` fails the build when critical architectural drift is detected. Omit `--diff` to run the standard trust gate against `graphenium-out/graph.json`.
 
 ---
 
@@ -212,7 +222,8 @@ Configure your agent or CI pipeline to append Graphenium's structural audit to e
 
 - [ ] **Pre-Flight Policy Check:** PASSED / FAILED (policy.json rules)
 - [ ] **Topological Delta Gate:** PASSED / FAILED (ΔQ ≥ -0.02, no high-surprise planned edges)
-- [ ] **Scope-Creep Verification:** PASSED / FAILED (unplanned file modifications)
+- [ ] **Scope-Creep Verification:** PASSED / FAILED (files modified according to git/manifest diffs outside the declared plan)
+- [ ] **Planned-Edge Verification:** PASSED / FAILED (declared dependency edges missing from the physical index)
 
 #### Codebase Modifications
 *   **Added Symbols:** `[list of added classes/methods]`

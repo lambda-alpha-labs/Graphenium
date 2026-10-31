@@ -37,7 +37,7 @@ gm init [path]
 ---
 
 ## `gm run`
-Parses codebase source files, extracts declarations (classes, structs, functions, methods, interfaces, types), resolves cross-file import paths and calls, partitions cohesive domains (communities), and writes the structural index.
+Parses codebase source files, extracts declarations (classes, structs, functions, methods, interfaces, types), resolves cross-file import paths and calls, partitions cohesive domains (communities), and writes the structural index. C# `.sln` / `.csproj` files are discovered recursively, and Lean 4 `.lean` files are indexed with proof-gap auditing.
 
 ```sh
 gm run [path] [flags]
@@ -76,7 +76,7 @@ gm query "<query>" [flags]
     *   `lexical`: Relevance matching against symbol names, qualified paths, and source files.
     *   `structural`: Topological distance sorting radiating outward from matched seed nodes.
     *   `hybrid`: Combined score weighting lexical relevance (60%) and structural distance (40%).
-*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs.
+*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Evaluation uses first-column hash indexing and semi-naive delta relations, with early stopping for fully-ground existence goals. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs. Built-in predicates include `calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, and `tainted_by_proof_gap`.
 *   `--budget <tokens>` (integer, default: `2000`) — Limits Graphenium's printed output to remain within the specified context-token limit.
 *   `--dfs` (bool) — Uses Depth-First Search for structural tracing (default: BFS).
 *   `--safe` (bool) — Restricts query-tracing strictly to AST-proven (`EXTRACTED`) dependencies.
@@ -99,16 +99,16 @@ gm check [flags]
 ### Flags:
 *   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Path to the codebase index file.
 *   `--min-resolution <pct>` (float, default: `80.0`) — Fails the check if Graphenium's AST import resolution ratio drops below the target percentage.
-*   `--max-ambiguous <count>` (integer, default: `10`) — Fails the check if Graphenium detects more than `<count>` unresolved name collisions.
+*   `--max-ambiguous <count>` (integer, default: `10`) — Fails the check if Graphenium detects more than `<count>` unresolved name collisions. Lean 4 `sorry` / `admit` proof gaps are emitted as `AMBIGUOUS` edges and count toward this threshold.
 *   `--strict` (bool) — Fails the check on any index, parser, or configuration warnings.
-*   `--plan <id>` (string) — Executes a double-gate verification for a planning workspace: runs pre-flight policy validation, followed by a post-facto scope-creep audit.
+*   `--plan <id>` (string) — Executes a double-gate verification for a planning workspace: runs pre-flight policy validation, followed by a post-facto audit of implemented/missing nodes, planned dependency edges, and unplanned modified files.
 *   `--delta` (bool) — Activates **Topological Delta Gating**: in-memory modularity delta (ΔQ) and surprise edge analysis on a planning workspace. Requires `--plan`.
 *   `--mod-tolerance <val>` (float, default: `-0.02`) — Maximum acceptable modularity decay when `--delta` is set.
 *   `--surprise-threshold <val>` (float, default: `5.0`) — Surprise score above which a planned edge is flagged when `--delta` is set.
 
 ### Modes:
 *   **Baseline quality gate** (default): `--min-resolution` / `--max-ambiguous` thresholds.
-*   **Plan compliance gate**: `--plan <id>` — policy validation + scope-creep audit.
+*   **Plan compliance gate**: `--plan <id>` — policy validation + node/edge/scope-creep audit.
 *   **Topological delta gate**: `--delta --plan <id>` — modularity delta + surprise profiling. Exits non-zero on failure.
 
 ```sh
@@ -252,9 +252,9 @@ gm graph <subcommand>
 ```
 
 ### Subcommands:
-*   `schema` — Displays the index schema version.
-*   `migrate` — Migrates older index schemas to the current version.
-*   `build-map` — Prints the extracted build-to-source mapping.
+*   `schema` — Displays the index schema version and build metadata.
+*   `migrate` — Migrates older index files to the current `0.2.0` schema and records the active Graphenium version.
+*   `build-map` — Prints the extracted build-to-source mapping, including recursively discovered C# projects.
 *   `test-map` — Prints the extracted test-to-source validation mapping.
 
 ---
@@ -273,11 +273,21 @@ gm snapshot <subcommand>
 ---
 
 ## `gm gate`
-Executes automated PR containment gates over index differences.
+Executes automated PR containment gates over index differences, or runs the standard trust check when no diff is supplied.
 
 ```sh
-gm gate --diff <before> <after>
+gm gate [--diff <before> <after>]
 ```
 
 ### Flags:
-*   `--diff <before> <after>` (strings, required) — The baseline and post-change index files to gate.
+*   `--diff <before> <after>` (strings, optional) — The baseline and post-change index files to gate. The command reports architectural drift and exits non-zero if any `Critical` drift event is detected.
+*   When `--diff` is omitted, `gm gate` runs the standard `gm check` gate against `graphenium-out/graph.json` with `--min-resolution 80`, `--max-ambiguous 10`, and `--strict` semantics.
+
+### Examples:
+```sh
+# Compare two compiled snapshots
+gm gate --diff graphenium-snapshots/before-change.json graphenium-out/graph.json
+
+# Run the default trust gate on the current index
+gm gate
+```

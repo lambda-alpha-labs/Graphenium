@@ -105,13 +105,15 @@ Scope creep is one of the most dangerous failure modes of AI coding agents. An a
 3.  **Executive Audit:** Call `agent_change_gate` and pass the same `plan_id` used during pre-flight. Graphenium evaluates:
     *   **Resolution Health:** Are AST import and call ratios still above threshold?
     *   **Pre-Flight Compliance:** Is the physical code still compliant with `.graphenium/policy.json`?
-    *   **Scope-Creep Audit:** Did the agent modify any files not declared in the approved plan?
+    *   **Scope-Creep Audit:** Did the agent modify any files not declared in the approved plan? Graphenium compares git/manifest modified files against the plan's declared files, so untouched baseline files are not falsely flagged.
+    *   **Planned-Edge Audit:** Were all declared dependency edges realized in the physical index?
 4.  **Generate Review Plan:** Call `verification_plan` to retrieve a risk-sorted list of targeted tests.
 5.  **Evaluate Downstream Impact:** Call `blast_radius` to verify that changed symbols did not accidentally break dependent callers.
 
 When this workflow completes, the agent must report:
 *   **Unplanned Edits (Scope Creep):** If the agent modified files outside the declared plan, Graphenium fails the build and flags the unapproved edits.
 *   **Missing Implementations:** If the agent failed to write a class it declared in the plan, Graphenium flags it.
+*   **Missing Planned Edges:** If the agent declared a dependency edge but the physical index contains no corresponding edge, Graphenium reports it as a missing planned edge.
 
 ---
 
@@ -134,6 +136,12 @@ gm check --graph graphenium-out/graph.json --plan "refactor-session-handling" --
 Fail the build if a proposed plan degrades community modularity or introduces high-surprise architectural shortcuts:
 ```sh
 gm check --graph graphenium-out/graph.json --delta --plan "refactor-session-handling"
+```
+
+### PR Diff Gate
+Compare a pre-change snapshot with the current index and fail on critical architectural drift:
+```sh
+gm gate --diff graphenium-snapshots/before-change.json graphenium-out/graph.json
 ```
 
 ---

@@ -21,8 +21,8 @@ graph TD
 ### Tier 1: AST plus Resolver (Compiler Truth)
 This is Graphenium's core foundation. It runs entirely offline, requiring no remote API calls. 
 *   **AST Parsing:** Graphenium uses local Tree-sitter parsers to extract code symbols (classes, structs, functions, interfaces, methods) directly from source files.
-*   **Resolution Engine:** Our cross-file reference resolver builds an export index and binds imports, uses, and calls across file boundaries. 
-*   **Boundary Parsing:** For C# environments, Graphenium parses Visual Studio `.sln` and `.csproj` files to model compiled assembly boundaries and namespaces.
+*   **Resolution Engine:** Our cross-file reference resolver builds an export index and binds imports, uses, and calls across file boundaries. When a symbol name collides across files, it narrows candidates using the caller's explicit imports (and same-directory scoping where applicable) before binding, preserving the unique-survivor trust guarantee.
+*   **Boundary Parsing:** For C# environments, Graphenium recursively discovers Visual Studio `.sln` and `.csproj` files to model compiled assembly boundaries and namespaces. For Lean 4, a native pure-Rust extractor models namespaces, declarations, imports, and proof dependencies.
 
 ### Tier 2: Semantic Pass (Conceptual Enrichment)
 An optional, remote pass that uses LLMs (such as Claude, GPT-4o, or DeepSeek) to identify high-level design relationships that static compilers miss. It infers conceptual dependencies, delegation patterns, and architectural intent.
@@ -52,7 +52,7 @@ Graphenium enforces an explicit trust model on every relationship in the index. 
 ```text
 EXTRACTED + resolved: AST-proven compile truth  -> Safe to plan against
 INFERRED  + inferred: Semantic guess             -> Treat as a hypothesis (verify)
-AMBIGUOUS + ambiguous: Multi-target collision    -> Stop and inspect source code
+AMBIGUOUS + ambiguous: Multi-target collision or proof gap -> Stop and inspect source code
 ```
 
 *   **`extractor`:** Which module generated the edge (e.g., `tree-sitter`, `tree-sitter-stack-graphs`, `llm`, `csproj-parser`).
@@ -77,8 +77,8 @@ graph LR
 ```
 
 1.  **File Detection:** Walks the project root, respects `.gitignore` and `.grapheniumignore`, and filters out sensitive credentials or keys.
-2.  **AST Parsing:** Uses parallel rayon worker threads to parse changed code files into tree-sitter ASTs.
-3.  **Cross-File Resolution:** Resolves imports and binds behavior calls using a local, single-pass Stack Graphs binder.
+2.  **AST Parsing:** Uses parallel rayon worker threads to parse code files into tree-sitter ASTs. Rust, Go, and Lean 4 use dedicated extractors; other supported languages use the configured generic walker.
+3.  **Cross-File Resolution:** Resolves imports and binds behavior calls using a local Stack Graphs-style binder with import-scoped disambiguation for colliding symbol names.
 4.  **Semantic Inference:** (Optional) Batches uncached text and image files through remote LLM endpoints to extract high-level conceptual boundaries.
 5.  **Cohesion Partitioning:** Runs a native Louvain community clustering algorithm to partition the index into structural folder domains.
 6.  **Hotspot & Anomaly Analysis:** Calculates centrality metrics (PageRank, betweenness centrality) and anomaly scores (Surprise Connections) to identify architectural erosion.
@@ -88,12 +88,25 @@ graph LR
 
 ## 5. C# Compilation Boundary & Namespace Resolution
 
-Enterprise C# codebases often have complex build boundaries that do not align with folder layouts. Graphenium's parser reads `.sln` and `.csproj` configurations to capture:
+Enterprise C# codebases often have complex build boundaries that do not align with folder layouts. Graphenium recursively discovers `.sln` and `.csproj` configurations at any depth (while respecting `.gitignore`, `.grapheniumignore`, and skip directories) to capture:
 *   Project references and compilation dependencies.
 *   Assembly output names and Root Namespace definitions.
 *   Inheritance chains and interface contracts (`inherits`, `implements`) from AST `base_list` structures.
 
-This ensures that AI agents can reason about C# assemblies and namespace scopes, preventing them from introducing invalid cross-project dependencies in Visual Studio solutions.
+This ensures that AI agents can reason about C# assemblies and namespace scopes, preventing them from introducing invalid cross-project dependencies in Visual Studio solutions — including projects nested under paths like `src/Services/Billing/Billing.Api.csproj`.
+
+---
+
+## 5.1 Lean 4 Formal Verification Extraction
+
+Graphenium indexes Lean 4 `.lean` files with a native pure-Rust extractor (`src/extract/lean.rs`), requiring no external tree-sitter grammar. It captures:
+*   `import Foo.Bar` declarations as `imports` edges.
+*   `namespace ... end` scopes, producing qualified labels such as `Verification.main_safety`.
+*   `theorem`, `lemma`, `def`, `abbrev`, `structure`, `class`, `inductive`, `axiom`, and `opaque` declarations with exact source spans.
+*   Body identifier references as intra-file `calls` edges, or unresolved cross-file references for the Stack Graphs resolver.
+*   Incomplete proofs containing `sorry` or `admit`, emitted as `AMBIGUOUS` `unverified_sorry` self-edges.
+
+The proof-gap edges feed `gm check --max-ambiguous`, so CI can mechanically block unproved theorems. The standard library also exposes `has_proof_gap(X)` and `tainted_by_proof_gap(X)` for transitive proof-gap taint analysis.
 
 ---
 
@@ -174,6 +187,19 @@ Graphenium parses your `.graphenium/policy.json` rules and translates them into 
     ```
 *   **`banned_symbol`:** Proves if the agent attempted to introduce or call a restricted module (e.g., direct raw SQL utilities).
 
+### Evaluation Strategy
+
+The solver uses goal-directed rule selection, first-column hash indexes for bound joins, and semi-naive delta relations so recursive rules only join newly derived tuples. Fully-ground existence goals stop as soon as every goal atom is satisfied.
+
+### Verification Predicates
+
+Beyond architectural policy helpers, `stdlib.dl` includes:
+
+*   `contains_transitive(X, Y)` — recursive containment closure.
+*   `aliased_container_call(Caller, Target, Container, Member)` — detects calls that depend on both a container and a member transitively contained inside it.
+*   `unreachable_from(Entry, Node)` — finds symbols not transitively reachable from an entry point.
+*   `has_proof_gap(X)` / `tainted_by_proof_gap(X)` — detects Lean `sorry`/`admit` gaps and propagates taint through dependency chains.
+
 ---
 
 ## 9. Structural Domain Analysis & Anomaly Detection
@@ -192,3 +218,4 @@ Graphenium implements advanced network analysis algorithms to identify architect
 | **Dynamic Dispatch & Reflection** | Purely static analysis may miss runtime dependency injections. | Use Graphenium's **optional semantic pass** or import **runtime telemetry traces** to overlay execution paths. |
 | **Contextual Ambiguity** | Identical names in different folders can create identifier collisions. | Graphenium enforces the use of **qualified labels** and namespace scoping to distinguish identically named classes. |
 | **No Source-Code Mutation** | Graphenium is a gating layer; it does not write code edits. | Run Graphenium directly inside git commit hooks or CI pipelines to block bad agentic output before merge. |
+| **Syntactic Proof Gaps** | Lean 4 `sorry` / `admit` detection is token-based; custom axioms or tactics that conceal incompleteness may not be flagged. | Inspect `unverified_sorry` edges and run the Lean compiler in CI for semantic proof checking. |

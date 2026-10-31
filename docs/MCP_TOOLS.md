@@ -90,7 +90,8 @@ These tools link structural pathfinding with first-order logic proofs, enabling 
 
 ### `run_datalog`
 *   **Purpose:** Executes a declarative, first-order logic program over Graphenium's compiled EDB.
-*   **Standard Library:** Automatically includes `stdlib.dl` predicates (`calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, etc.) without requiring manual rule definitions.
+*   **Standard Library:** Automatically includes `stdlib.dl` predicates (`calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, etc.) without requiring manual rule definitions.
+*   **Evaluation:** Goal-directed rule selection with first-column hash indexing, semi-naive delta relations, and early stopping for fully-ground existence goals.
 *   **Evaluation Bounds:** Derived-relation blow-up during inference is capped by the `budget` parameter (default: 1,000 solver steps). Base EDB relations (e.g. `edge`, `calls`) are accepted up to 10 million facts — large enough for real codebases; narrow bound queries (`calls(seed, X)`) rather than unbounded scans (`is_hub(X)`) on dense graphs.
 *   **When to Use:** To mathematically prove transitive boundary violations, circular dependencies, or identify orphaned nodes.
 
@@ -149,7 +150,7 @@ These tools support Graphenium's write-time containment loop, allowing agents to
 *   **When to Use:** After the agent completes its virtual plan and before it edits any source files.
 
 ### `get_plan_details`
-*   **Purpose:** Retrieves the virtual design spec, highlights currently implemented symbols, and flags missing declarations or scope creep.
+*   **Purpose:** Retrieves the virtual design spec, highlights currently implemented symbols and planned edges, and flags missing declarations, missing planned dependencies, or unplanned modified files.
 *   **When to Use:** Prior to generating a PR or requesting human review.
 
 ---
