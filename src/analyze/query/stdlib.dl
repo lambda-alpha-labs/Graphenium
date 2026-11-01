@@ -81,6 +81,10 @@ unreachable_from(Entry, Node) :-
 
 # Proof-gap taint propagation:
 # Symbol X directly contains or transitively depends on an unverified_sorry gap.
+# Propagate backwards from the gaps instead of materialising the entire
+# depends_transitive closure first. The two formulations are equivalent, but
+# reverse propagation is near-linear and keeps large Lean repositories
+# (thousands of nodes) well inside the 30s solver budget.
 has_proof_gap(X) :- edge(X, X, "unverified_sorry", _).
 tainted_by_proof_gap(X) :- has_proof_gap(X).
-tainted_by_proof_gap(X) :- depends_transitive(X, Y), has_proof_gap(Y).
+tainted_by_proof_gap(X) :- depends_on(X, Y), tainted_by_proof_gap(Y).

@@ -3,7 +3,7 @@
 /// `threshold` or `max_level` aggregation levels are reached.
 /// Returns a `Vec<usize>` of length `n` where `result[i]` is the community
 /// ID of node `i`. Community IDs are renumbered 0..K, largest community first.
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -170,7 +170,7 @@ fn phase1(g: &LGraph, rng: &mut Xorshift64) -> Vec<usize> {
             let f_ci = k_i_ci - (comm_deg[ci] - ki) * ki / g.two_m;
 
             // Weights from i to each neighbouring community.
-            let mut neigh: HashMap<usize, f64> = HashMap::new();
+            let mut neigh: BTreeMap<usize, f64> = BTreeMap::new();
             for &(j, w) in &g.adj[i] {
                 if j != i {
                     *neigh.entry(comm[j]).or_insert(0.0) += w;
@@ -211,7 +211,7 @@ fn aggregate(g: &LGraph, comm: &[usize], renumber: &[usize], num_c: usize) -> LG
 
     // Accumulate edge weights between super-nodes.
     // Iterate adj[i] with j >= i to visit each original edge once.
-    let mut ew: HashMap<(usize, usize), f64> = HashMap::new();
+    let mut ew: BTreeMap<(usize, usize), f64> = BTreeMap::new();
     for i in 0..g.n {
         for &(j, w) in &g.adj[i] {
             if j >= i {

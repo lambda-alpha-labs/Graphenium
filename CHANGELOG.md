@@ -4,6 +4,26 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.22.0 — 2026-11-01
+
+### Summary
+Lean 4 proof-gap case study release: deterministic clustering, stable anonymous-instance IDs, import-stub source attribution, and a faster goal-directed taint query.
+
+### Added
+*   **FLT Lean 4 Case Study (`worked/flt-lean4-proof-gaps/README.md`):** End-to-end study of `ImperialCollegeLondon/FLT`, including the proof-gap/bottleneck map, the difference between module/import-propagated taint (11.8%) and strict declaration-level taint (1.93%), and a Lean-verified proof of the four `sorry`s in `WeierstrassCurve.galoisRepresentation`.
+*   **Stable Anonymous Instance IDs (`src/extract/lean.rs`):** Anonymous `instance` declarations now derive IDs from a normalized header signature (up to `:=` or `where`) plus an FNV-1a suffix, with a per-file ordinal for duplicate signatures. Inserting lines above an anonymous instance no longer renames its graph node.
+*   **Lean 4 Extractor Upgrades (`src/extract/lean.rs`):** Parses `public import`, `@[expose] public section`, named and anonymous `instance` declarations, and module-qualified IDs relative to the project root. FNV-1a suffixes disambiguate lossy Lean names such as `actionTensorCAlg'` versus `actionTensorCAlg`.
+
+### Fixed
+*   **Deterministic Louvain Clustering (`src/cluster/louvain.rs`):** Replaced `HashMap` with `BTreeMap` for neighbour and aggregation maps. Identical graphs no longer produce different community counts (previously 9–20) across runs.
+*   **Import-Stub Source Attribution (`src/model/graph.rs`):** Import-site stubs no longer overwrite a real module node’s `source_file` and source span. Added a regression test.
+*   **Goal-Directed Taint Query (`src/analyze/query/stdlib.dl`):** `tainted_by_proof_gap` now propagates backwards from gaps instead of materialising the full `depends_transitive` closure, keeping large Lean repositories inside the solver budget.
+
+### Changed
+*   **Documentation:** Linked the FLT case study from the root `README.md`, `MANIFEST.md`, and `docs/WORKED_EXAMPLES.md`.
+
+---
+
 ## v0.21.0 — 2026-10-31
 
 ### Summary

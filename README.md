@@ -298,6 +298,7 @@ Add to `~/.cursor/mcp.json`:
 | [`worked/TEMPLATE.md`](worked/TEMPLATE.md) | Template for documenting new codebase case studies. |
 | [`worked/graphenium-self-analysis/README.md`](worked/graphenium-self-analysis/README.md) | Graphenium self-analysis: applying the containment engine to itself. |
 | [`worked/graphenium-self-analysis/sample-queries.md`](worked/graphenium-self-analysis/sample-queries.md) | Sample query output on Graphenium's own codebase. |
+| [`worked/flt-lean4-proof-gaps/README.md`](worked/flt-lean4-proof-gaps/README.md) | Lean 4 proof-gap taint mapping and a verified `sorry` proof in Buzzard's Fermat's Last Theorem repository. |
 
 ---
 

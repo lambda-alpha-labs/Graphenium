@@ -151,7 +151,7 @@ fn full_rebuild(root: &Path, out_dir: &Path) -> crate::Result<(usize, usize, usi
     let (files, corpus_warnings) = detect::detect(root, &DetectOptions::default())?;
 
     // 2. AST extraction via Salsa (memoized — unchanged files skip re-parsing)
-    let ast_result = crate::cache::query::salsa_extract_all(&files);
+    let ast_result = crate::cache::query::salsa_extract_all(&files, Some(root));
 
     // 3. Build graph
     let (mut graph, _stats) = build::build_merged([ast_result]);
@@ -239,7 +239,11 @@ fn try_incremental(
 
     for path_str in &paths_to_extract {
         let file_path = std::path::Path::new(path_str);
-        let result = crate::cache::query::salsa_extract_file(file_path, FileType::Code);
+        let result = crate::cache::query::salsa_extract_file(
+            file_path,
+            FileType::Code,
+            Some(root.to_path_buf()),
+        );
         if result.is_empty() {
             continue; // unrecognised or empty file — skip
         }

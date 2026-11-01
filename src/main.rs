@@ -643,6 +643,7 @@ async fn cmd_run(
         cache_manager: Some(std::sync::Arc::new(graphenium::cache::CacheManager::new(
             out_dir.join("cache"),
         ))),
+        project_root: Some(root.clone()),
     };
     let ast_result = extract::extract_all(&files_to_process, &ast_opts);
     eprintln!(

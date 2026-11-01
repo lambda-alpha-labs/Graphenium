@@ -81,3 +81,10 @@ Graphenium's repository includes a fully compiled, AST-proven case study of its 
 *   **Sample Queries:** `worked/graphenium-self-analysis/sample-queries.md`
 
 This case study illustrates how Graphenium resolved **927 cross-file references** using local Stack Graphs, achieving a 100% import resolution ratio and mathematically proving the decoupling of its model tier from its background MCP server layer.
+
+A second, language-specific case study covers Buzzard's Lean 4 formalization of Fermat's Last Theorem:
+
+*   **Case Study Directory:** `worked/flt-lean4-proof-gaps/`
+*   **Summary Report:** `worked/flt-lean4-proof-gaps/README.md`
+
+It documents the Lean 4 extractor upgrades required for a real proof repository (`public import`, anonymous `instance` declarations, module-qualified IDs, and FNV-1a name disambiguation), the deterministic Louvain and import-stub merge fixes, and the difference between module/import-propagated proof-gap taint (11.8%) and strict declaration-level taint (1.93%). It also includes a verified proof of the four `sorry`s in `WeierstrassCurve.galoisRepresentation` and the resulting graph diff.

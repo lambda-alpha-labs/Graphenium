@@ -12,6 +12,7 @@ pub mod walker;
 
 use rayon::prelude::*;
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::cache::CacheManager;
@@ -35,6 +36,9 @@ pub struct ExtractOptions {
     /// Optional cache manager. When set, extract_file will skip tree-sitter
     /// parsing on cache hits and persist results on cache misses.
     pub cache_manager: Option<Arc<CacheManager>>,
+    /// Project root used to derive stable, unique module paths for languages
+    /// whose symbols otherwise collide across same-named files (Lean).
+    pub project_root: Option<PathBuf>,
 }
 
 /// Extract AST structure from all code files in `files`, using rayon for
@@ -109,7 +113,7 @@ pub fn extract_file(file: &DetectedFile, opts: &ExtractOptions) -> ExtractionRes
         .unwrap_or("")
         .to_ascii_lowercase();
 
-    let result = dispatch(&source, &ext, &path_str);
+    let result = dispatch_with_root(&source, &ext, &path_str, opts.project_root.as_deref());
 
     // Save to AST cache when a cache manager is available
     if let Some(ref cache) = opts.cache_manager {
@@ -125,13 +129,23 @@ pub fn extract_file(file: &DetectedFile, opts: &ExtractOptions) -> ExtractionRes
 
 /// Extension-dispatch: choose the right extractor for the given extension.
 pub fn dispatch(source: &[u8], ext: &str, file_path: &str) -> ExtractionResult {
+    dispatch_with_root(source, ext, file_path, None)
+}
+
+/// Extension-dispatch with an optional project root for module-qualified IDs.
+pub fn dispatch_with_root(
+    source: &[u8],
+    ext: &str,
+    file_path: &str,
+    project_root: Option<&Path>,
+) -> ExtractionResult {
     match ext {
         // Rust, Go, and Lean 4 have dedicated extractors.
         #[cfg(feature = "lang-rust")]
         "rs" => rust_lang::extract(source, file_path),
         #[cfg(feature = "lang-go")]
         "go" => go::extract(source, file_path),
-        "lean" => lean::extract(source, file_path),
+        "lean" => lean::extract_with_root(source, file_path, project_root),
 
         // All other supported languages use the generic walker.
         _ => {

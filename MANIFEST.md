@@ -53,3 +53,4 @@ This manifest indexes all core documentation and playbook assets maintained in G
 *   `worked/graphenium-self-analysis/README.md` — Self-analysis verification study applying Graphenium to its own Rust repository.
 *   `worked/graphenium-self-analysis/GRAPH_REPORT.md` — Automated codebase report output for Graphenium's repository.
 *   `worked/graphenium-self-analysis/sample-queries.md` — Practical query examples illustrating AST-proven cross-file resolution.
+*   `worked/flt-lean4-proof-gaps/README.md` — Lean 4 proof-gap taint mapping and a verified `sorry` proof in Buzzard's Fermat's Last Theorem repository.

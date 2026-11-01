@@ -23,6 +23,8 @@ pub struct SourceFile {
     pub text: String,
     /// Categorized file type.
     pub file_type: FileType,
+    /// Project root used to derive stable, unique module paths.
+    pub project_root: Option<PathBuf>,
 }
 
 // ── Phase 2: Tracked Query Functions ───────────────────────────────────────
@@ -39,7 +41,8 @@ pub fn parse_ast(db: &dyn salsa::Database, file: SourceFile) -> ExtractionResult
         .unwrap_or("")
         .to_lowercase();
     let path_str = path.to_string_lossy();
-    crate::extract::dispatch(text.as_bytes(), &ext, &path_str)
+    let project_root = file.project_root(db);
+    crate::extract::dispatch_with_root(text.as_bytes(), &ext, &path_str, project_root.as_deref())
 }
 
 /// Extract imported symbol names from a file's AST.
@@ -84,7 +87,11 @@ thread_local! {
 /// `parse_ast` result instantly without re-parsing. When content changes, Salsa
 /// automatically re-runs only the affected queries.
 /// Falls back to direct extraction when Salsa is unavailable (unlikely).
-pub fn salsa_extract_file(path: &std::path::Path, file_type: FileType) -> ExtractionResult {
+pub fn salsa_extract_file(
+    path: &std::path::Path,
+    file_type: FileType,
+    project_root: Option<PathBuf>,
+) -> ExtractionResult {
     // Read current file content
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
@@ -104,7 +111,8 @@ pub fn salsa_extract_file(path: &std::path::Path, file_type: FileType) -> Extrac
                 None => (true, false),
                 Some(existing) => {
                     let cached = existing.text(db);
-                    (false, cached != text)
+                    let root_changed = existing.project_root(db) != project_root;
+                    (false, cached != text || root_changed)
                 }
             }
         });
@@ -113,7 +121,7 @@ pub fn salsa_extract_file(path: &std::path::Path, file_type: FileType) -> Extrac
         SALSA_INPUTS.with(|inputs_cell| {
             let mut inputs = inputs_cell.borrow_mut();
             if is_new || is_changed {
-                let sf = SourceFile::new(db, path_buf.clone(), text, file_type);
+                let sf = SourceFile::new(db, path_buf.clone(), text, file_type, project_root);
                 inputs.insert(path_buf.clone(), sf);
             }
         });
@@ -133,13 +141,17 @@ pub fn salsa_extract_file(path: &std::path::Path, file_type: FileType) -> Extrac
 /// equivalent of `extract::extract_all()` for use in `full_rebuild`.
 /// Files are processed in parallel via rayon for performance; the Salsa DB
 /// is thread-local so each rayon worker gets its own DB instance.
-pub fn salsa_extract_all(files: &[crate::detect::DetectedFile]) -> ExtractionResult {
+pub fn salsa_extract_all(
+    files: &[crate::detect::DetectedFile],
+    project_root: Option<&std::path::Path>,
+) -> ExtractionResult {
     use rayon::prelude::*;
 
+    let root = project_root.map(std::path::Path::to_path_buf);
     let results: Vec<ExtractionResult> = files
         .par_iter()
         .filter(|f| f.file_type == FileType::Code)
-        .map(|f| salsa_extract_file(&f.path, f.file_type.clone()))
+        .map(|f| salsa_extract_file(&f.path, f.file_type.clone(), root.clone()))
         .collect();
 
     let mut merged = ExtractionResult::new();
@@ -167,7 +179,7 @@ mod tests {
             .unwrap();
         f.flush().unwrap();
 
-        let result = salsa_extract_file(&file_path, FileType::Code);
+        let result = salsa_extract_file(&file_path, FileType::Code, None);
         assert!(!result.is_empty(), "Expected non-empty extraction");
         assert!(!result.nodes.is_empty(), "Expected at least one AST node");
         let fn_nodes: Vec<_> = result.nodes.iter().filter(|n| n.label == "greet").collect();
@@ -185,8 +197,8 @@ mod tests {
         f.write_all(b"pub struct Cache { pub field: u32 }").unwrap();
         f.flush().unwrap();
 
-        let result1 = salsa_extract_file(&file_path, FileType::Code);
-        let result2 = salsa_extract_file(&file_path, FileType::Code);
+        let result1 = salsa_extract_file(&file_path, FileType::Code, None);
+        let result2 = salsa_extract_file(&file_path, FileType::Code, None);
 
         assert!(!result1.is_empty(), "First extraction should succeed");
         assert!(!result2.is_empty(), "Second extraction should succeed");
@@ -225,7 +237,7 @@ mod tests {
             },
         ];
 
-        let merged = salsa_extract_all(&files);
+        let merged = salsa_extract_all(&files, None);
         assert!(
             merged.nodes.len() >= 2,
             "Expected at least 2 nodes (one per function), got {}",

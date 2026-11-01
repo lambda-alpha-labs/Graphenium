@@ -80,9 +80,25 @@ impl GrapheniumGraph {
 
     /// Insert a node, or overwrite an existing one with the same ID.
     /// Last-write-wins: semantic results override AST results.
+    ///
+    /// Import-site stubs are an exception: they are created with the importing
+    /// file's path and an empty source location. If the real file node has
+    /// already been extracted, keep its path and span instead of letting the
+    /// stub clobber them.
     pub fn upsert_node(&mut self, node: Node) {
         if let Some(&idx) = self.id_index.get(&node.id) {
-            self.inner[idx] = node;
+            let existing = &mut self.inner[idx];
+            let mut merged = node;
+            if merged.source_location.is_empty() && !existing.source_location.is_empty() {
+                merged.source_location = existing.source_location.clone();
+                if !existing.source_file.is_empty() {
+                    merged.source_file = existing.source_file.clone();
+                }
+            }
+            if merged.qualified_label.is_none() {
+                merged.qualified_label = existing.qualified_label.clone();
+            }
+            *existing = merged;
         } else {
             let id = node.id.clone();
             let idx = self.inner.add_node(node);
@@ -425,6 +441,26 @@ mod tests {
 
         assert_eq!(g.node_count(), 1);
         assert_eq!(g.node_data("foo").unwrap().label, "FooUpdated");
+    }
+
+    #[test]
+    fn upsert_node_import_stub_preserves_real_source_file() {
+        let mut g = GrapheniumGraph::new();
+        let mut real = Node::new("module", "Module", FileType::Code, "src/module.lean");
+        real.source_location = "L1:C1-L20:C1".into();
+        g.upsert_node(real);
+
+        // Import-site stub: importer path, no span.
+        g.upsert_node(Node::new(
+            "module",
+            "Module",
+            FileType::Code,
+            "src/importer.lean",
+        ));
+
+        let node = g.node_data("module").unwrap();
+        assert_eq!(node.source_file, "src/module.lean");
+        assert_eq!(node.source_location, "L1:C1-L20:C1");
     }
 
     #[test]
