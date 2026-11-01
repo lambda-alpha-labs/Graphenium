@@ -188,6 +188,8 @@ noncomputable instance WeierstrassCurve.galoisRepresentation
         exact map_add _ _ _
 ```
 
+Public proof commit on the fork: [`6dbb0de`](https://github.com/lambda-alpha-labs/FLT/commit/6dbb0de09cf1e0af664a79cdd28ad362b8ff06e0)
+
 Lean verification:
 
 ```text
