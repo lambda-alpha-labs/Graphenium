@@ -9,9 +9,10 @@
 - The first index said **76% of the repo was tainted by `sorry`**. That number was mostly an artifact of duplicate module IDs, missed `public import`s, and unparsed `instance` declarations.
 - After fixing the indexer: **4,564 nodes, 1,519 imports 100% resolved, 50 gap declarations, 538 tainted nodes (11.8%)**.
 - At declaration level, ignoring import/containment noise: **72 tainted declarations out of 3,732 (1.93%)**.
-- The bottlenecks are not spread evenly. **`TateCurve.lean` has 11 gaps; `Torsion.lean` has 6; `Flat.lean` has 3 gaps with 473–474-node downstream cones.**
-- I proved all four `sorry`s in `WeierstrassCurve.galoisRepresentation` and verified it with Lean 4.35.0.
-- The graph went from **50 → 49 gap declarations** and **538 → 537 tainted nodes**. The small global move is the interesting part: **taint is module-coherent**, so clearing one leaf inside a still-sorryful module barely changes the repo-wide number.
+- The bottlenecks are not spread evenly. **`TateCurve.lean` has 11 gaps; `Torsion.lean` has 6; `Flat.lean` has 3 gaps with 473-474-node downstream cones.**
+- Graphenium's top-ranked bottleneck cluster is `Flat.lean` (3 gaps, 473-474-node cones). This independently matches maintainer Issue #1060, discovered purely from static graph topology in about 1 second.
+- I proved all four `sorry`s in `WeierstrassCurve.galoisRepresentation` and verified it with Lean 4.35.0 (commit `6dbb0de`). Upstream PRs #1155 and #1177 already target the same `-- these should all be easy` comment, but they have sat unmerged. This is a controlled test of why isolated leaf-`sorry` PRs barely move repo-wide taint: **538 -> 537**.
+- The graph went from **50 -> 49 gap declarations**. The small global move is the interesting part: **taint is module-coherent**, so clearing one leaf inside a still-sorryful module barely changes the repo-wide number.
 
 ---
 
@@ -130,7 +131,7 @@ Two views matter:
 | `Group.subsingleton_of_pow_prime_eq_one` | 441 | 4 | `CompactHausdorffRings.lean` |
 | `IsDedekindDomain.diamond_fix` | 441 | 3 | `GLnDefs.lean` |
 | `FLT.Bosses.B4_proof` | 440 | 4 | `Proof.lean` |
-| `Deformation.flatFunctor` | — | 5 | `LiftFunctor.lean` |
+| `Deformation.flatFunctor` | n/a | 5 | `LiftFunctor.lean` |
 
 The bottlenecks cluster by module:
 
@@ -144,6 +145,8 @@ The bottlenecks cluster by module:
 | `KnownIn1980s/EllipticCurves/Flat.lean` | 3 |
 
 This is the map to attack: **clear whole bottleneck modules, not isolated leaves.**
+
+These static rankings line up with the maintainers' own issue tracker. Issue #1060 tracks `Flat.lean` ("n-torsion in elliptic curves with good reduction is flat"), the same file Graphenium ranks as the largest downstream cone. Issue #1065 tracks the Weil pairing work, which connects to `TateCurve.lean` (11 gaps) and `WeilPairing.lean`. Graphenium found these from graph topology alone, without reading the issue tracker.
 
 ---
 
@@ -189,6 +192,8 @@ noncomputable instance WeierstrassCurve.galoisRepresentation
 ```
 
 Public proof commit on the fork: [`6dbb0de`](https://github.com/lambda-alpha-labs/FLT/commit/6dbb0de09cf1e0af664a79cdd28ad362b8ff06e0)
+
+The same four `sorry`s have been targeted upstream in [PR #1155](https://github.com/ImperialCollegeLondon/FLT/pull/1155) and [PR #1177](https://github.com/ImperialCollegeLondon/FLT/pull/1177). Both touch `FLT/EllipticCurve/Torsion.lean` and remain open. The comment `-- these should all be easy` is exactly the kind of local signal that pulls contributors, and automated agents, toward leaf proofs. Section 7 shows why that is not the same as moving the repository-wide taint number.
 
 Lean verification:
 
@@ -267,6 +272,8 @@ The important diff is:
 
 ### Why the global taint only moved by one
 
+The verified proof is at commit [`6dbb0de`](https://github.com/lambda-alpha-labs/FLT/commit/6dbb0de09cf1e0af664a79cdd28ad362b8ff06e0).
+
 `galoisRepresentation` has a **437-node downstream blast radius**, but only **one node was uniquely tainted by this gap**: the instance itself.
 
 The other 436 nodes in its cone remain tainted. `Torsion.lean` still contains five other gaps:
@@ -281,12 +288,14 @@ Many of those 436 nodes are also tainted by other bottleneck modules, but the mo
 
 That is the core result: **proof-gap taint is module-coherent.** Removing one leaf from a module that still has other `sorry`s does not clear the module, so it does not clear the module's downstream cone.
 
+This is not just a local curiosity. Upstream PRs [#1155](https://github.com/ImperialCollegeLondon/FLT/pull/1155) and [#1177](https://github.com/ImperialCollegeLondon/FLT/pull/1177) already discharge these same four `sorry`s, and both remain unmerged. The 538 -> 537 result is a controlled measurement of what those isolated leaf PRs can change at the repository level: one declaration and one tainted node, while the module and its downstream cone stay tainted. For AI theorem-proving agents, the lesson is that topological bottleneck planning matters more than `grep`-driven leaf selection. An agent that picks `-- these should all be easy` can produce a valid PR that barely changes the taint map. An agent that ranks modules by downstream cone and clears a bottleneck cluster can move the number.
+
 This is also why the repo-wide numbers are misleading if you only count individual `sorry`s:
 
 - 50 gap declarations,
 - 538 tainted nodes,
 - but only **72 declarations** are tainted once import/containment noise is removed,
-- and the top three `Flat.lean` gaps have nearly identical cone sizes (473–474 nodes each), so they are a single bottleneck cluster rather than three independent risks.
+- and the top three `Flat.lean` gaps have nearly identical cone sizes (473-474 nodes each), so they are a single bottleneck cluster rather than three independent risks.
 
 ---
 
@@ -307,7 +316,7 @@ Ambiguous edges: 49 (threshold: 100 max)
 `gm doctor`:
 
 ```text
-graph file (graphenium-out/graph.json) ... OK — 4564 nodes, 15054 edges, 10 communities (AST-only)
+graph file (graphenium-out/graph.json) ... OK: 4564 nodes, 15054 edges, 10 communities (AST-only)
 - Imports resolved: 100% (1519/1519)
 - Calls resolved: 49% (4676/9591)
 - Methods resolved: 58% (68/117)
@@ -341,7 +350,7 @@ lake build FLT.EllipticCurve.Torsion
 
 ## 10. What I would attack next
 
-1. **`Flat.lean`**: 3 gaps, 473–474-node cones each. Clearing this cluster should produce the first real drop in the global taint number.
+1. **`Flat.lean`**: 3 gaps, 473-474-node cones each. Clearing this cluster should produce the first real drop in the global taint number.
 2. **`TateCurve.lean`**: 11 gaps. This is the densest bottleneck in the repo.
 3. **`Torsion.lean`**: 5 gaps remain after this proof. `galoisRep` alone has a declaration-only cone of 9.
 
