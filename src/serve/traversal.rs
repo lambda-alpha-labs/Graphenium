@@ -1249,7 +1249,7 @@ fn filtered_neighbor_edges_for_path<'a>(
 }
 
 /// Rank a relation name for display ordering. Lower is "more interesting"
-/// (behavioural → structural). Used by `get_neighbors` to sort output so that
+/// (behavioural → structural). Used by the inspect_symbol neighbor section to sort output so that
 /// `calls`/`uses` appear before `contains`/`imports`.
 pub fn relation_rank(relation: &str) -> u32 {
     match relation {

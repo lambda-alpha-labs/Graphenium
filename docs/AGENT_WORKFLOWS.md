@@ -15,11 +15,11 @@ Use this workflow whenever an agent is tasked with modifying a public interface,
 AI agents often choose the path of least resistance (e.g., importing a module that bypasses your repository layers). Graphenium forces the agent to analyze the structural neighborhood of a target symbol before writing code.
 
 ### Recommended Tool Sequence
-1.  `graph_info` — Verify index integrity and freshness.
-2.  `analyse_symbol` — Retrieve the target symbol's metadata, callers, and current dependency profile.
-3.  `get_neighbors` (with `extracted_only` active) — Identify direct callers and upstream dependencies.
-4.  `query_transitive` — Inspect the transitive closure of the symbol to evaluate the blast radius across multi-hop paths.
-5.  `next_files_to_read` — Identify the primary implementation files that must be read to understand the structural context.
+1.  `get_graph_info` - Verify index integrity and freshness.
+2.  `inspect_symbol` with `include_analysis = true` - Retrieve the target symbol's metadata, callers, and current dependency profile.
+3.  `inspect_symbol` with `include_neighbors = true` and `extracted_only = true` - Identify direct callers and upstream dependencies.
+4.  `trace_path` with `mode = "transitive_forward"` - Inspect the transitive closure of the symbol to evaluate the blast radius across multi-hop paths.
+5.  `verify_changes` with `target_symbols` - Identify the primary implementation files that must be read to understand the structural context.
 6.  **Human/Agent hand-off:** The agent reads the implementation files directly before writing code.
 
 ### Expected Agent Output Shape
@@ -41,10 +41,10 @@ Use this workflow when an agent initializes a session in a large, unfamiliar, or
 AI agents waste context budget by reading raw files or grepping blindly to understand a system's structure. Graphenium provides an automated, local summary of the system's modules and folder domains.
 
 ### Recommended Tool Sequence
-1.  `graph_info` — handshake and verify index size.
-2.  `architecture_summary` — Extract the top-level structural highlights, including folder domains and hotspots.
-3.  `god_nodes` — Identify highly connected hub nodes and structural bottlenecks.
-4.  `get_community` — Inspect member lists of specific structural domains.
+1.  `get_graph_info` - handshake and verify index size.
+2.  `get_architecture_summary` - Extract the top-level structural highlights, including folder domains and hotspots.
+3.  `get_architecture_summary` with `include_god_nodes = true` - Identify highly connected hub nodes and structural bottlenecks.
+4.  `get_architecture_summary` with `community_id` - Inspect member lists of specific structural domains.
 
 ### Expected Agent Behavior
 The agent must clearly report what is compiler-proven and what still requires physical file reads, avoiding assumptions about implementation:
@@ -66,9 +66,9 @@ Use this workflow to trace the exact structural path between two symbols and val
 AI agents can easily hallucinate dependency chains that do not physically exist. Graphenium forces agents to trace deterministic, AST-proven paths and halt on gaps that require manual inspection.
 
 ### Recommended Tool Sequence
-1.  `shortest_path` (semantic mode) — Find the high-provenance route between two symbols.
-2.  `safest_path` — Find the path with the highest aggregate confidence score.
-3.  For any segment marked `INFERRED` or `AMBIGUOUS`, the agent must execute `get_node` to retrieve the exact source file.
+1.  `trace_path` with `mode = "shortest"` and `path_mode = "semantic"` - Find the high-provenance route between two symbols.
+2.  `trace_path` with `mode = "safest"` - Find the path with the highest aggregate confidence score.
+3.  For any segment marked `INFERRED` or `AMBIGUOUS`, the agent must execute `inspect_symbol` to retrieve the exact source file.
 4.  If `AMBIGUOUS` collisions are detected, the agent must flag them and request human disambiguation before continuing.
 
 ---
@@ -87,7 +87,7 @@ Agents should not blindly edit files and hope they respect your architecture. Gr
     *   `strict_layering` rules (transitive layer bypasses)
     *   `banned_symbol` rules (proposed accesses to disallowed modules)
     *   **Dynamic Delta Gating** (zero-config fallback): modularity delta (ΔQ) and surprise edge profiling
-4.  **Iterative Delta Refinement (optional):** If the plan fails on topological entropy, call `evaluate_delta_gate` to inspect ΔQ, high-surprise edges, and drift events. Re-plan through intermediate services or interfaces, then re-evaluate.
+4.  **Iterative Delta Refinement (optional):** If the plan fails on topological entropy, call `validate_plan` with `skip_policy_rules = true` to inspect Delta Q, high-surprise edges, and drift events. Re-plan through intermediate services or interfaces, then re-evaluate.
 5.  **Block on Failure:** If Graphenium returns `PRE_FLIGHT_VIOLATION` or a delta gate rejection, stop immediately and report the violating dependency path and recommended structural fix.
 6.  **Implement:** If pre-flight passes, authorize file edits.
 
@@ -102,13 +102,13 @@ Scope creep is one of the most dangerous failure modes of AI coding agents. An a
 ### Step-by-Step Execution:
 1.  **Re-Compile the Index:** Run `gm run . --no-semantic --no-viz` locally to generate an updated physical codebase index.
 2.  **Hot-Swap Server State:** Call `reload_graph` to sync the running MCP server without restarting it.
-3.  **Executive Audit:** Call `agent_change_gate` and pass the same `plan_id` used during pre-flight. Graphenium evaluates:
+3.  **Executive Audit:** Call `verify_changes` with the same `plan_id` and the changed `target_symbols` used during pre-flight. Graphenium evaluates:
     *   **Resolution Health:** Are AST import and call ratios still above threshold?
     *   **Pre-Flight Compliance:** Is the physical code still compliant with `.graphenium/policy.json`?
     *   **Scope-Creep Audit:** Did the agent modify any files not declared in the approved plan? Graphenium compares git-status modified files (or an explicit snapshot diff) against the plan's declared files, so untouched baseline files are not falsely flagged.
     *   **Planned-Edge Audit:** Were all declared dependency edges realized in the physical index?
-4.  **Generate Review Plan:** Call `verification_plan` to retrieve a risk-sorted list of targeted tests.
-5.  **Evaluate Downstream Impact:** Call `blast_radius` to verify that changed symbols did not accidentally break dependent callers.
+4.  **Generate Review Plan:** `verify_changes` returns a risk-sorted list of targeted tests and must-read files.
+5.  **Evaluate Downstream Impact:** `verify_changes` also returns the blast radius so you can verify that changed symbols did not accidentally break dependent callers.
 
 When this workflow completes, the agent must report:
 *   **Unplanned Edits (Scope Creep):** If the agent modified files outside the declared plan, Graphenium fails the build and flags the unapproved edits.
@@ -153,10 +153,10 @@ Use this workflow when compiler parsing cannot automatically detect a critical r
 Do not let agents guess or invent relationships. If a dependency is verified by documentation or tests, write a manual, source-backed override to keep the index accurate.
 
 ### Recommended Tool Sequence
-1.  `add_node` — Add the logical concept, external API, or framework endpoint with explicit documentation-backed reasons.
-2.  `add_edge` — Add a verified relationship with `EXTRACTED` confidence.
-3.  `recluster` — Re-run community domain partitioning to update structural boundaries.
-4.  `agent_change_gate` — Run compliance gates to verify that the manual override resolved the boundary gap.
+1.  `mutate_graph` with `action = "add_node"` - Add the logical concept, external API, or framework endpoint with explicit documentation-backed reasons.
+2.  `mutate_graph` with `action = "add_edge"` - Add a verified relationship with `EXTRACTED` confidence.
+3.  `mutate_graph` with `action = "recluster"` - Re-run community domain partitioning to update structural boundaries.
+4.  `verify_changes` - Run compliance gates to verify that the manual override resolved the boundary gap.
 
 ---
 
@@ -164,11 +164,11 @@ Do not let agents guess or invent relationships. If a dependency is verified by 
 
 An agent running in a Graphenium-governed workspace must adhere to the following rules:
 
-*   **Handshake First:** Always call `graph_info` before performing any codebase edits to verify index freshness.
+*   **Handshake First:** Always call `get_graph_info` before performing any codebase edits to verify index freshness.
 *   **Check Policies Pre-Flight:** Never implement code for a multi-file task without initializing a planning workspace and running `validate_plan`.
 *   **Prefer AST Truth:** Build change paths on `EXTRACTED` (AST-proven) dependencies. Treat `INFERRED` paths as hypotheses, and stop to inspect code when a path hits `AMBIGUOUS` collisions.
 *   **No Redundant Reads:** Use Graphenium's structural summaries to target files precisely, avoiding context-bloating folder sweeps.
-*   **Inspect Scope Post-Edit:** Always run a post-edit audit (`verification_plan` and `blast_radius`) before declaring a task complete.
+*   **Inspect Scope Post-Edit:** Always run a post-edit audit with `verify_changes` before declaring a task complete.
 
 ### Forbidden Behaviors:
 *   *Do not* bypass Graphenium's pre-flight check by writing code directly.
@@ -184,12 +184,12 @@ Copy and paste this instruction block into your agent's system instructions, `CL
 You are operating in a Graphenium-contained workspace. 
 
 Before editing any files:
-1. Call graph_info to verify index freshness. If stale, run 'gm run . --no-semantic --no-viz' first.
+1. Call get_graph_info to verify index freshness. If stale, run 'gm run . --no-semantic --no-viz' first.
 2. Resolve your target symbol, identify direct callers, and trace downstream transitive dependencies.
-3. If this is a multi-file task, initialize a planning workspace via create_planning_workspace, declare your intended classes/files, and run validate_plan. If rejected on topological entropy, call evaluate_delta_gate, re-plan through existing domain services, and re-evaluate. Do not edit source files if pre-flight fails.
+3. If this is a multi-file task, initialize a planning workspace via create_planning_workspace, declare your intended classes/files, and run validate_plan. If rejected on topological entropy, call validate_plan with skip_policy_rules = true, re-plan through existing domain services, and re-evaluate. Do not edit source files if pre-flight fails.
 4. Read only the implementation files recommended by Graphenium. Do not sweep directories blindly.
 
 After editing files:
 1. Re-run 'gm run . --no-semantic --no-viz' to update the local index.
-2. Run verification_plan and blast_radius, then generate a structural PR audit.
+2. Run verify_changes with target_symbols, then generate a structural PR audit.
 ```

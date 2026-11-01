@@ -1,13 +1,17 @@
 /// MCP server for the Graphenium relational index.
-/// Exposes 8 tools over the stdio JSON-RPC transport:
-/// - `query_graph`   — BFS/DFS traversal from keyword-matched seed nodes
-/// - `get_node`      — Full node details by ID or label
-/// - `get_neighbors` — Direct neighbors + edge details, optional relation filter
-/// - `get_community` — All nodes in a community by ID
-/// - `god_nodes`     — Top N most-connected hub nodes
-/// - `graph_stats`   — Summary statistics
-/// - `architecture_summary` — Repo-level structural highlights
-/// - `shortest_path` — Path search between two nodes
+/// Exposes 12 consolidated tools over the stdio JSON-RPC transport:
+/// - `get_graph_info`          - Metadata, health, scoped stats, and diagnostics
+/// - `get_architecture_summary` - Communities, connectors, hotspots, and hub nodes
+/// - `reload_graph`            - Hot-swap the underlying graph
+/// - `query_graph`             - BFS/DFS traversal from keyword-matched seed nodes
+/// - `inspect_symbol`          - Node details, neighbors, references, analysis, file summary
+/// - `trace_path`              - Shortest, safest, transitive, and module dependency tracing
+/// - `run_datalog`             - Declarative logic queries over the compiled graph
+/// - `create_planning_workspace` - Initialize a virtual planning workspace
+/// - `add_planned_symbol`      - Register an intended symbol and dependency edge
+/// - `validate_plan`           - Policy rules plus the Louvain delta gate
+/// - `verify_changes`          - Scope creep audit, blast radius, and verification checklist
+/// - `mutate_graph`            - Add nodes, add edges, remove edges, and recluster
 pub mod freshness;
 pub mod handlers;
 pub mod tool_schema;

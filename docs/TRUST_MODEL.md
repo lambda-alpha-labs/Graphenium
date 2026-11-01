@@ -72,7 +72,7 @@ Graphenium distinguishes between three complementary policy layers in your gover
 | **Architecture** | `.graphenium/policy.json` | Agent Design Spec | Forbidden dependencies, strict layering domains, and banned symbols. |
 | **Topological Entropy (Zero-Drift)** | Zero-config (always on) | Agent Design Spec | Louvain modularity delta (ΔQ), surprise edge scores, community drift. |
 
-Use **Trust Quality** policies to ensure Graphenium's index is complete and healthy enough to plan against. Use **Architecture** policies to block agents from committing designs that violate declared boundaries. **Topological Entropy** gating runs automatically as a zero-config fallback — even without `.graphenium/policy.json` — rejecting plans that mathematically degrade modularity or introduce structurally anomalous dependencies (`cross-community`, `peripheral→hub`).
+Use **Trust Quality** policies to ensure Graphenium's index is complete and healthy enough to plan against. Use **Architecture** policies to block agents from committing designs that violate declared boundaries. **Topological Entropy** gating runs automatically as a zero-config fallback - even without `.graphenium/policy.json` - rejecting plans that mathematically degrade modularity or introduce structurally anomalous dependencies (`cross-community`, `peripheral→hub`).
 
 ### Topological Entropy Boundaries
 
@@ -85,7 +85,7 @@ Unlike human-declared glob patterns in `policy.json`, topological entropy bounda
 | **Modularity delta (ΔQ)** | `src/analyze/delta.rs` | Relative change between baseline and virtual plan. Evaluates *new* decay, not absolute shape. |
 | **Surprise edge score** | `src/analyze/surprise.rs` | Flags structurally anomalous connections (`cross-community`, `peripheral→hub`) with explicit factor breakdown. |
 
-These signals improve epistemic trust because they are computed from AST-proven edges and deterministic graph algorithms — not from natural-language prompts or naming assumptions.
+These signals improve epistemic trust because they are computed from AST-proven edges and deterministic graph algorithms - not from natural-language prompts or naming assumptions.
 
 ### The Existing Drift Paradox
 
@@ -101,7 +101,7 @@ G_virtual   = physical + proposed plan overlay
 Pass if:  ΔQ ≥ tolerance  AND  no high-surprise planned edges
 ```
 
-The baseline accepts your existing legacy complexity as ground truth. The gate blocks only *new* topological decay introduced by the agent's proposed edges — preserving modularity without forcing a wholesale architectural rewrite.
+The baseline accepts your existing legacy complexity as ground truth. The gate blocks only *new* topological decay introduced by the agent's proposed edges - preserving modularity without forcing a wholesale architectural rewrite.
 
 ### Trust Quality Policy Examples:
 ```sh
@@ -119,7 +119,7 @@ gm check --min-resolution 85 --max-ambiguous 5 --strict
 
 ## 6. Post-Edit Realization and Scope-Creep Auditing
 
-Pre-flight trust is necessary but not sufficient: an agent can approve a safe plan and then implement something else. `gm check --plan <id>` and the MCP `agent_change_gate` / `get_plan_details` tools close the loop by comparing physical reality against the approved Virtual AST spec across three dimensions:
+Pre-flight trust is necessary but not sufficient: an agent can approve a safe plan and then implement something else. `gm check --plan <id>` and the MCP `verify_changes` tool close the loop by comparing physical reality against the approved Virtual AST spec across three dimensions:
 
 | Dimension | Question Audited | Failure Mode |
 |---|---|---|
@@ -137,4 +137,4 @@ To prevent generative software erosion, avoid the following operational anti-pat
 
 *   **Treating All Dependencies as Equal:** Never let an agent treat a semantic, nearest-neighbor vector "similarity" connection (`INFERRED`) with the same safety profile as a compiler-proven import (`EXTRACTED`).
 *   **Allowing Generative Edge Injection:** Do not allow agents to write manual edges into Graphenium's index based on file proximity or naming assumptions alone. Manual writes must be reserved for documented, human-verified design decisions.
-*   **Operating on Stale Indexes:** If `graph_info` warns that **"Graph may be stale"**, the loaded index predates recent source edits. Operating on a stale index means the agent is planning against obsolete structural context. Always execute `gm run . --no-semantic --no-viz` and `reload_graph` to hot-swap the server state before planning.
+*   **Operating on Stale Indexes:** If `get_graph_info` warns that **"Graph may be stale"**, the loaded index predates recent source edits. Operating on a stale index means the agent is planning against obsolete structural context. Always execute `gm run . --no-semantic --no-viz` and `reload_graph` to hot-swap the server state before planning.

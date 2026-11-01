@@ -10,10 +10,10 @@ Graphenium is the **topological, architectural, and epistemic integrity layer** 
 
 | Layer | Tooling | What It Proves |
 |---|---|---|
-| **1 — Lexical & Syntactic** | `rustc`, `tsc`, parsers | Syntactic validity. |
-| **2 — Type & Memory Safety** | Type and borrow checkers | Local signatures and lifetimes align. |
-| **3 — Behavioral Correctness** | `cargo test`, `pytest` | Inputs produce expected outputs. |
-| **4 — Topological, Architectural & Epistemic Integrity** | **Graphenium** | Transitive invariants hold, ΔQ does not decay, proof gaps do not taint verified theorems, and diffs match the approved Virtual AST. |
+| **1 - Lexical & Syntactic** | `rustc`, `tsc`, parsers | Syntactic validity. |
+| **2 - Type & Memory Safety** | Type and borrow checkers | Local signatures and lifetimes align. |
+| **3 - Behavioral Correctness** | `cargo test`, `pytest` | Inputs produce expected outputs. |
+| **4 - Topological, Architectural & Epistemic Integrity** | **Graphenium** | Transitive invariants hold, ΔQ does not decay, proof gaps do not taint verified theorems, and diffs match the approved Virtual AST. |
 
 ---
 
@@ -104,7 +104,7 @@ Enterprise C# codebases often have complex build boundaries that do not align wi
 *   Assembly output names and Root Namespace definitions.
 *   Inheritance chains and interface contracts (`inherits`, `implements`) from AST `base_list` structures.
 
-This ensures that AI agents can reason about C# assemblies and namespace scopes, preventing them from introducing invalid cross-project dependencies in Visual Studio solutions — including projects nested under paths like `src/Services/Billing/Billing.Api.csproj`.
+This ensures that AI agents can reason about C# assemblies and namespace scopes, preventing them from introducing invalid cross-project dependencies in Visual Studio solutions - including projects nested under paths like `src/Services/Billing/Billing.Api.csproj`.
 
 ---
 
@@ -173,13 +173,13 @@ After clustering `G_virtual`, Graphenium scores all edges via `surprising_connec
 2. For each candidate, check `edges_between(source, target)` for an edge with `plan_id == target_plan`.
 3. Retain edges where `score ≥ surprise_threshold` (default: `5.0`).
 
-Surprise factors include confidence tier, cross-file-type, cross-repo directory, `cross-community`, semantic similarity, and `peripheral→hub` coupling. Only edges introduced by the planning workspace are reported — existing physical shortcuts are accepted as baseline complexity.
+Surprise factors include confidence tier, cross-file-type, cross-repo directory, `cross-community`, semantic similarity, and `peripheral→hub` coupling. Only edges introduced by the planning workspace are reported - existing physical shortcuts are accepted as baseline complexity.
 
 ### Drift Detection
 
 `detect_drift(G_baseline, G_virtual)` (`src/cluster/drift.rs`) compares community assignments and cross-boundary edge counts. Events are filtered to plan-attributed nodes plus aggregate `cross-boundary` and `community-structure` markers.
 
-**Entry points:** `evaluate_delta_gate` (MCP), `validate_plan` (orchestrator fallback), `gm check --delta --plan <id>` (CLI).
+**Entry points:** `validate_plan` with `skip_policy_rules = true` (MCP delta gate), `validate_plan` (orchestrator and full policy gate), `gm check --delta --plan <id>` (CLI).
 
 ---
 
@@ -206,10 +206,10 @@ The solver uses goal-directed rule selection, first-column hash indexes for boun
 
 Beyond architectural policy helpers, `stdlib.dl` includes:
 
-*   `contains_transitive(X, Y)` — recursive containment closure.
-*   `aliased_container_call(Caller, Target, Container, Member)` — detects calls that depend on both a container and a member transitively contained inside it.
-*   `unreachable_from(Entry, Node)` — finds symbols not transitively reachable from an entry point.
-*   `has_proof_gap(X)` / `tainted_by_proof_gap(X)` — detects Lean `sorry`/`admit` gaps and propagates taint through dependency chains.
+*   `contains_transitive(X, Y)` - recursive containment closure.
+*   `aliased_container_call(Caller, Target, Container, Member)` - detects calls that depend on both a container and a member transitively contained inside it.
+*   `unreachable_from(Entry, Node)` - finds symbols not transitively reachable from an entry point.
+*   `has_proof_gap(X)` / `tainted_by_proof_gap(X)` - detects Lean `sorry`/`admit` gaps and propagates taint through dependency chains.
 
 ---
 

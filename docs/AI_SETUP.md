@@ -211,7 +211,7 @@ args = ["serve", "--graph", "$INDEX_PATH", "--watch"]
 Once Graphenium is configured, ask your agentic interface to run a pre-flight handshake:
 
 ```text
-Use Graphenium. Call graph_info first and tell me which codebase index is loaded.
+Use Graphenium. Call get_graph_info first and tell me which codebase index is loaded.
 ```
 
 The agent's handshake response must successfully report:
@@ -221,7 +221,7 @@ The agent's handshake response must successfully report:
 *   Languages detected.
 *   Symbol and dependency counts.
 *   The path of the loaded `graph.json` index.
-*   **Policy gates active** — e.g., `Policy Gates Active: Dynamic Delta Gating (Zero-Config Modularity Protection)` when no `.graphenium/policy.json` is configured, or `N explicit policy rule(s) + Dynamic Delta Gating` when rules exist.
+*   **Policy gates active** - e.g., `Policy Gates Active: Dynamic Delta Gating (Zero-Config Modularity Protection)` when no `.graphenium/policy.json` is configured, or `N explicit policy rule(s) + Dynamic Delta Gating` when rules exist.
 
 **Expected handshake response shape:**
 
@@ -234,7 +234,7 @@ Policy Gates Active: Dynamic Delta Gating (Zero-Config Modularity Protection)
 ```
 
 ### Stale Index Warning Mitigation
-If `graph_info` warns that **"Graph may be stale"**, it means physical source files have changed since Graphenium last compiled its structural index. Rebuild and hot-swap the index locally without restarting the background MCP server process:
+If `get_graph_info` warns that **"Graph may be stale"**, it means physical source files have changed since Graphenium last compiled its structural index. Rebuild and hot-swap the index locally without restarting the background MCP server process:
 
 ```sh
 gm run . --no-semantic --no-viz
@@ -246,11 +246,11 @@ Then instruct the agent: `reload_graph` (this updates Graphenium's in-memory ind
 ## Advanced Playbook Capabilities
 
 ### 1. Zero-Config Topological Delta Gating
-Graphenium blocks agent plans that degrade modularity — no `policy.json` required. After declaring a virtual plan:
+Graphenium blocks agent plans that degrade modularity - no `policy.json` required. After declaring a virtual plan:
 
 1.  Call `create_planning_workspace` to initialize a draft workspace.
 2.  Call `add_planned_symbol` for each intended class, method, or dependency.
-3.  Call `evaluate_delta_gate` with the `plan_id`. Inspect ΔQ, high-surprise edges, and drift warnings.
+3.  Call `validate_plan` with `skip_policy_rules = true` and the `plan_id`. Inspect Delta Q, high-surprise edges, and drift warnings.
 4.  If status is `❌ FAILED`, re-plan through existing domain services and re-evaluate before editing files.
 
 ### 2. Pre-Flight Architecture Gating (Explicit Policy Rules)
@@ -261,7 +261,7 @@ For repositories with `.graphenium/policy.json`, Graphenium also enforces declar
 3.  `add_planned_symbol` automatically runs policy checks when rules are configured.
 
 ### 3. Datalog Transitive Closure Queries
-Graphenium's Datalog engine automatically includes a standard library of structural predicates (`stdlib.dl`). Instruct the agent to run declarative transitive queries rather than writing recursive prompts. Base EDB relations (up to 10 million facts) load on real-size codebases; inference is bounded by a 1,000-step solver budget — bind seed arguments on transitive predicates to keep queries goal-directed.
+Graphenium's Datalog engine automatically includes a standard library of structural predicates (`stdlib.dl`). Instruct the agent to run declarative transitive queries rather than writing recursive prompts. Base EDB relations (up to 10 million facts) load on real-size codebases; inference is bounded by a 1,000-step solver budget - bind seed arguments on transitive predicates to keep queries goal-directed.
 
 ```sh
 # Detect transitive dependency paths
@@ -283,7 +283,7 @@ gm query "bypass" --datalog "?- bypasses_layer('auth_controller', 'auth_service'
 | `cargo install` compilation fails | C compiler toolchain missing | Install Xcode Command Line Tools (`xcode-select --install`) on macOS or `build-essential` on Linux. |
 | `gm run` reports 0 files | Unsupported language or directory mismatch | Verify Graphenium is run from the target project root, and check Graphenium's supported extensions. |
 | MCP tool initialization fails | Target tool needs restart | Fully quit and relaunch the agent's parent IDE or terminal session. |
-| `graph_info` reports stale index | Code modifications occurred post-build | Execute `gm run . --no-semantic --no-viz` and instruct the agent to run `reload_graph`. |
+| `get_graph_info` reports stale index | Code modifications occurred post-build | Execute `gm run . --no-semantic --no-viz` and instruct the agent to run `reload_graph`. |
 | Datalog queries return no results | Old server binary is running, or step budget exhausted on transitive closure | Verify that `GM_BIN` points to the updated compilation of `gm` and restart the agent workspace. For `*_transitive` predicates, bind the seed (`?- calls_transitive('seed', X).`) so goal-directed evaluation reaches the target closure within the 1,000-step budget. |
 | Too much architectural noise | Build artifacts or library vendors included | Restructure `.grapheniumignore` to exclude build, target, or third-party folders. |
 
@@ -297,7 +297,7 @@ Once the setup is complete, provide the user with a concise architectural summar
 Graphenium Containment Engine Active: <gm path>
 Base Codebase Index Generated: <index path>
 Current Index Scale: <nodes> symbols, <edges> boundaries
-Pre-Flight Policies Configured: <yes / no — zero-config delta gating active>
+Pre-Flight Policies Configured: <yes / no - zero-config delta gating active>
 Policy Gates Active: <Dynamic Delta Gating / N rules + Dynamic Delta Gating>
 Workspace Guardrails Active: Yes (agent must query codebase structure before editing)
 ```

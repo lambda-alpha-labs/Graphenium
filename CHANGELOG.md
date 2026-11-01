@@ -4,7 +4,29 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
-## v0.22.0 — 2026-11-01
+## v0.23.0 - 2026-11-01
+
+### Summary
+MCP tool surface consolidation from 37 tools to 12 cohesive verb_noun tools, with complete JSON schema parameter documentation and updated documentation and website references.
+
+### Changed
+*   **Consolidated MCP Surface (`src/serve/handlers.rs`):** Reduced the exposed `#[tool]` endpoints from 37 to 12. Orientation and health now use `get_graph_info`, `get_architecture_summary`, and `reload_graph`; search and tracing use `query_graph`, `inspect_symbol`, `trace_path`, and `run_datalog`; planning and containment use `create_planning_workspace`, `add_planned_symbol`, `validate_plan`, and `verify_changes`; manual mutations use `mutate_graph`.
+*   **Preserved Backends:** Moved former tool implementations into plain backend methods so no analysis, traversal, planning, verification, or mutation capability was removed.
+*   **Extra Legacy Diagnostics:** Folded `resolution_report` and `ambiguous_symbols` into `get_graph_info`, and `next_files_to_read`, `review_plan`, `what_changed`, and `diff_graph` into `verify_changes`.
+*   **Parameter Schemas:** Documented every parameter of the 12 tools with `#[schemars(description = "...")]` so the generated MCP JSON schema has a description for every property.
+
+### Tests
+*   Updated handler unit tests to exercise the consolidated tools.
+*   Added tests that assert exactly 12 tools are exposed and that every tool parameter has a schema description.
+
+### Documentation
+*   Rewrote `docs/MCP_TOOLS.md` around the 12-tool surface and added a migration map.
+*   Updated `skills/graphenium/SKILL.md`, `README.md`, `README_improved.md`, `AI_SETUP.md`, and related `docs/` guides.
+*   Updated the `graphenium.dev` website content and rebuilt the site with `12 MCP tools`.
+
+---
+
+## v0.22.0 - 2026-11-01
 
 ### Summary
 Lean 4 proof-gap case study release: deterministic clustering, stable anonymous-instance IDs, import-stub source attribution, and a faster goal-directed taint query.
@@ -24,7 +46,7 @@ Lean 4 proof-gap case study release: deterministic clustering, stable anonymous-
 
 ---
 
-## v0.21.0 — 2026-10-31
+## v0.21.0 - 2026-10-31
 
 ### Summary
 Minor release closing post-v0.20.0 compliance, MCP audit, feature-gating, and adapter gaps.
@@ -42,7 +64,7 @@ Minor release closing post-v0.20.0 compliance, MCP audit, feature-gating, and ad
 
 ---
 
-## v0.20.0 — 2026-10-31
+## v0.20.0 - 2026-10-31
 
 ### Summary
 This release delivers foundational compiler, Datalog, C# discovery, CLI, and formal-verification upgrades, including first-class Lean 4 indexing and proof-gap auditing.
@@ -68,17 +90,17 @@ This release delivers foundational compiler, Datalog, C# discovery, CLI, and for
 
 ---
 
-## v0.19.3 — 2026-07-13
+## v0.19.3 - 2026-07-13
 
 ### Summary
 Patch release restoring Datalog stdlib usability on real-size codebases.
 
 ### Fixed
-*   **Datalog EDB fact-cap rejection (`src/analyze/query.rs`):** Raised the base-relation backstop in `run_datalog_query` from 100,000 to 10,000,000 facts. The previous cap fired at EDB load time — before goal-directed evaluation could narrow anything — and rejected every stdlib query on graphs with >100k edges (e.g. `?- is_hub(X).` on a ~225k-edge codebase). Evaluation remains bounded by `step_budget`; the backstop is a sanity limit on materialized EDB size only.
+*   **Datalog EDB fact-cap rejection (`src/analyze/query.rs`):** Raised the base-relation backstop in `run_datalog_query` from 100,000 to 10,000,000 facts. The previous cap fired at EDB load time - before goal-directed evaluation could narrow anything - and rejected every stdlib query on graphs with >100k edges (e.g. `?- is_hub(X).` on a ~225k-edge codebase). Evaluation remains bounded by `step_budget`; the backstop is a sanity limit on materialized EDB size only.
 
 ---
 
-## v0.19.2 — 2026-07-12
+## v0.19.2 - 2026-07-12
 
 ### Summary
 Patch release fixing MCP tool schema compatibility with Google Gemini / Vertex AI function calling ([#37](https://github.com/lambda-alpha-labs/Graphenium/issues/37)).
@@ -89,10 +111,10 @@ Patch release fixing MCP tool schema compatibility with Google Gemini / Vertex A
 
 ---
 
-## v0.19.1 — 2026-07-12
+## v0.19.1 - 2026-07-12
 
 ### Summary
-This release introduces **Zero-Drift Gating (Topological Entropy Guardrails)** — a configuration-free invariant gate that rejects agent plans which mathematically degrade repository modularity.
+This release introduces **Zero-Drift Gating (Topological Entropy Guardrails)** - a configuration-free invariant gate that rejects agent plans which mathematically degrade repository modularity.
 
 ### Added
 *   **Topological Delta Core (`src/analyze/delta.rs`):** Partitions physical and virtual subgraphs, computes Louvain modularity deltas (ΔQ), profiles surprise edges, and detects community drift for planning workspaces.
@@ -109,7 +131,7 @@ This release introduces **Zero-Drift Gating (Topological Entropy Guardrails)** �
 
 ---
 
-## v0.19.0 — 2026-07-11
+## v0.19.0 - 2026-07-11
 
 ### Summary
 This release introduces the pre-loaded Datalog Standard Library, pre-flight architectural policy validation, and deployment hardening for agent containment.
@@ -138,7 +160,7 @@ This release introduces the pre-loaded Datalog Standard Library, pre-flight arch
 
 ---
 
-## v0.18.0 — 2026-07-03
+## v0.18.0 - 2026-07-03
 
 ### Summary
 This release hardens cross-file symbol resolution across the compilation pipeline, focusing heavily on enterprise C# codebase structures.
@@ -155,7 +177,7 @@ This release hardens cross-file symbol resolution across the compilation pipelin
 
 ---
 
-## v0.17.0 — 2026-07-03
+## v0.17.0 - 2026-07-03
 
 ### Summary
 This release reorganizes documentation around external governance gating and introduces incremental AST index patching.
@@ -168,7 +190,7 @@ This release reorganizes documentation around external governance gating and int
 
 ---
 
-## v0.16.x — 2026-07-02
+## v0.16.x - 2026-07-02
 
 ### Summary
 Introduced local Stack Graphs, runtime telemetry overlays, and initial C# project reference boundaries.
@@ -180,7 +202,7 @@ Introduced local Stack Graphs, runtime telemetry overlays, and initial C# projec
 
 ---
 
-## v0.15.x — 2026-07-01 to 2026-07-02
+## v0.15.x - 2026-07-01 to 2026-07-02
 
 ### Summary
 Introduced virtual planning workspaces and post-edit verification.
@@ -192,7 +214,7 @@ Introduced virtual planning workspaces and post-edit verification.
 
 ---
 
-## v0.14.0 — 2026-07-01
+## v0.14.0 - 2026-07-01
 
 ### Summary
 Initial C# integration and persistent design plans.
@@ -203,7 +225,7 @@ Initial C# integration and persistent design plans.
 
 ---
 
-## v0.13.0 — 2026-06-30
+## v0.13.0 - 2026-06-30
 
 ### Summary
 Introduced telemetry data structures, transaction-safe caches, and traversal metrics.
@@ -214,7 +236,7 @@ Introduced telemetry data structures, transaction-safe caches, and traversal met
 
 ---
 
-## v0.12.0 — 2026-06-30
+## v0.12.0 - 2026-06-30
 
 ### Summary
 Introduced incremental watch-mode file updates and content-hashed caching.
@@ -225,7 +247,7 @@ Introduced incremental watch-mode file updates and content-hashed caching.
 
 ---
 
-## v0.11.0 — 2026-06-30
+## v0.11.0 - 2026-06-30
 
 ### Summary
 Optimized Graphenium for larger repositories and added pre-scan planning.
@@ -236,7 +258,7 @@ Optimized Graphenium for larger repositories and added pre-scan planning.
 
 ---
 
-## v0.10.0 — 2026-06-30
+## v0.10.0 - 2026-06-30
 
 ### Summary
 Hardened deployment on Windows environments and added setup scripts.

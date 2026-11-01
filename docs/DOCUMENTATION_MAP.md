@@ -55,8 +55,8 @@ Our documentation refactoring enforces a strict paradigm shift in terminology an
 | Helping agents search and navigate the codebase. | **Compressing structure for context savings *and* stopping agents from violating boundaries.** |
 | Passive visualization diagrams (HTML outputs). | **Automated pre-commit hooks, Datalog proofs, and CI gates.** |
 | Fictional "knowledge graph RAG" similarity guesses. | **Compiler-backed facts (`EXTRACTED`) vs. exploratory hypotheses (`INFERRED`) vs. collisions/proof gaps (`AMBIGUOUS`).** |
-| AI prompts (`AGENTS.md`, `CLAUDE.md`) | **External, mechanical constraints (`policy.json` / `validate_plan` / `evaluate_delta_gate` / `gm check --delta`).** |
-| Static folder-regex linters | **Virtual AST pre-flight + Zero-Drift Delta Gating — relative Louvain modularity (ΔQ), Datalog fixed points, and surprise edge profiling.** |
+| AI prompts (`AGENTS.md`, `CLAUDE.md`) | **External, mechanical constraints (`policy.json` / `validate_plan` / `verify_changes` / `gm check --delta`).** |
+| Static folder-regex linters | **Virtual AST pre-flight + Zero-Drift Delta Gating - relative Louvain modularity (ΔQ), Datalog fixed points, and surprise edge profiling.** |
 
 ---
 

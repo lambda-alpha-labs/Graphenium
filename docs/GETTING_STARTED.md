@@ -55,7 +55,7 @@ graphenium-out/
 
 ## 4. Compile the Baseline Relational Index
 
-Compile your first codebase index. We recommend starting with a local AST-only run. This runs 100% offline, requires no API keys, and establishes your baseline compiler-proven truth — the same index that powers fast structural queries and all containment gates:
+Compile your first codebase index. We recommend starting with a local AST-only run. This runs 100% offline, requires no API keys, and establishes your baseline compiler-proven truth - the same index that powers fast structural queries and all containment gates:
 
 ```sh
 gm run . --no-semantic --no-viz
@@ -126,7 +126,7 @@ gm serve --graph graphenium-out/graph.json --watch
 ### The Verification Handshake:
 Once MCP is active, instruct your agent to run an initial hand-off check:
 ```text
-Use Graphenium. Call graph_info first and tell me which codebase index is loaded.
+Use Graphenium. Call get_graph_info first and tell me which codebase index is loaded.
 ```
 
 If Graphenium warns that the **"Graph may be stale"**, the compiled index is older than your physical files. Recompile the index (`gm run . --no-semantic --no-viz`) and instruct the agent to run `reload_graph`.
@@ -137,21 +137,21 @@ If Graphenium warns that the **"Graph may be stale"**, the compiled index is old
 
 Protect your repository from architectural drift. Graphenium provides two complementary layers:
 
-1. **Zero-config delta gating** (always on) — automatic modularity and surprise analysis on every plan.
-2. **Explicit policies** (optional) — declare additional boundaries in `.graphenium/policy.json`.
+1. **Zero-config delta gating** (always on) - automatic modularity and surprise analysis on every plan.
+2. **Explicit policies** (optional) - declare additional boundaries in `.graphenium/policy.json`.
 
-**You can skip creating `.graphenium/policy.json` entirely.** Graphenium's Dynamic Delta Gating protects your codebase from *new* topological decay using Louvain modularity analysis — no configuration files required.
+**You can skip creating `.graphenium/policy.json` entirely.** Graphenium's Dynamic Delta Gating protects your codebase from *new* topological decay using Louvain modularity analysis - no configuration files required.
 
 ### Fast-Track: Zero-Config Protection (MCP)
 
 After starting the MCP server (`gm serve`), instruct your agent:
 
 ```text
-1. Call graph_info — confirm "Policy Gates Active: Dynamic Delta Gating"
+1. Call get_graph_info - confirm "Policy Gates Active: Dynamic Delta Gating"
 2. Call create_planning_workspace with plan_id "my-feature"
 3. Call add_planned_symbol for each class, method, or dependency you intend to write
-4. Call evaluate_delta_gate with plan_id "my-feature"
-5. If PASSED, implement. If FAILED, inspect ΔQ and high-surprise edges, re-plan, and re-evaluate.
+4. Call validate_plan with plan_id "my-feature" (it always runs the delta gate)
+5. If PASSED, implement. If FAILED, inspect Delta Q and high-surprise edges, re-plan, and re-evaluate.
 ```
 
 ### Fast-Track: Zero-Config Protection (CLI)
@@ -173,7 +173,7 @@ When `--diff` is omitted, `gm gate` runs the standard trust check against `graph
 
 ### Optional: Explicit Policy Rules
 
-When you need declarative folder-level constraints beyond modularity invariants, write a `.graphenium/policy.json` at your repository root. Example — forbid direct database imports from API controllers:
+When you need declarative folder-level constraints beyond modularity invariants, write a `.graphenium/policy.json` at your repository root. Example - forbid direct database imports from API controllers:
 
 ```json
 {
@@ -191,7 +191,7 @@ When you need declarative folder-level constraints beyond modularity invariants,
 Now, instruct your agent to execute a **Design-then-Verify** loop:
 1.  **Initialize Planning Workspace:** The agent calls `create_planning_workspace` to establish a virtual design.
 2.  **Declare Intent:** The agent registers its planned class and import additions (`add_planned_symbol`). Graphenium's Datalog engine automatically evaluates these additions.
-3.  **Validate Pre-Flight:** Call `validate_plan`. If the agent tries to import a database module directly into a controller, Graphenium returns `PRE_FLIGHT_VIOLATION`. If the design degrades modularity, Dynamic Delta Gating rejects it — call `evaluate_delta_gate` to inspect ΔQ and surprise edges.
+3.  **Validate Pre-Flight:** Call `validate_plan`. If the agent tries to import a database module directly into a controller, Graphenium returns `PRE_FLIGHT_VIOLATION`. If the design degrades modularity, Dynamic Delta Gating rejects it - call `validate_plan` with `skip_policy_rules = true` to inspect Delta Q and surprise edges.
 4.  **Audit Scope Creep:** After implementing the code, run `gm check --plan <id> --strict` in CI. If the agent modified files outside the declared plan, the build fails.
 5.  **Topological Delta Gate (optional CI):** Run `gm check --delta --plan <id>` to enforce modularity invariants independently of explicit policy rules.
 
@@ -212,9 +212,9 @@ Now, instruct your agent to execute a **Design-then-Verify** loop:
 
 You have successfully established workspace containment when:
 1.  `gm doctor` reports a clean codebase index with high resolution ratios.
-2.  Your AI coding assistant calls `graph_info` successfully during handshake runs.
+2.  Your AI coding assistant calls `get_graph_info` successfully during handshake runs.
 3.  The assistant explicitly separates AST-proven dependencies (`EXTRACTED`) from hypotheses (`INFERRED`).
-4.  `graph_info` reports active policy gates (Dynamic Delta Gating, with or without explicit rules).
-5.  Agent plans that degrade modularity are blocked by `evaluate_delta_gate` or `gm check --delta`.
+4.  `get_graph_info` reports active policy gates (Dynamic Delta Gating, with or without explicit rules).
+5.  Agent plans that degrade modularity are blocked by `validate_plan` or `gm check --delta`.
 6.  *(Optional)* Agent design plans violating `.graphenium/policy.json` are blocked pre-flight.
 7.  *(Optional)* PR-level `gm gate --diff` comparisons fail on critical architectural drift.

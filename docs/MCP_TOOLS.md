@@ -1,6 +1,8 @@
 # MCP Tool Catalog and Containment Protocol
 
-Graphenium exposes a Model Context Protocol (MCP) interface with 24 tools, turning its background server into both a **high-speed relational codebase compiler** and an active **spec-driven containment gate** for AI agents. Rather than allowing agents to grep blindly or read raw codebase files, Graphenium provides compact, compiler-proven structural metadata for context-efficient orientation, then uses the same index to govern write-time designs through Virtual AST validation, Datalog invariants, ΔQ gating, and post-edit realization audits.
+Graphenium exposes a Model Context Protocol (MCP) interface with 12 consolidated tools. The surface is deliberately small and cohesive: each tool combines related read, trace, planning, verification, or mutation operations behind explicit parameters and modes. This keeps tool selection unambiguous for agents while preserving every backend capability.
+
+Every parameter is documented with a JSON schema description generated from Rust source. No exposed tool parameter is left undocumented.
 
 ---
 
@@ -9,236 +11,368 @@ Graphenium exposes a Model Context Protocol (MCP) interface with 24 tools, turni
 Before modifying code, agents must follow this strict tool sequence:
 
 ```text
-Handshake (graph_info) ──► Pathfinding (analyse_symbol / safest_path)
-                             │
-                             ▼
-Pre-Flight Spec        ──► Declare design (create_planning_workspace)
-                             │
-                             ▼
-Policy Verification    ──► Prove design safety (validate_plan / evaluate_delta_gate)
-                             │
-                             ▼ (Passes)
-Implementation         ──► Edit files locally
-                             │
-                             ▼
-Compliance Audit       ──► Verify no scope creep occurred (agent_change_gate)
+Handshake and health   -> get_graph_info
+                             |
+                             v
+Orientation            -> get_architecture_summary
+                             |
+                             v
+Symbol inspection      -> inspect_symbol / query_graph / trace_path
+                             |
+                             v
+Pre-flight design      -> create_planning_workspace
+                             |
+                             v
+Declare intent         -> add_planned_symbol
+                             |
+                             v
+Policy and delta gate  -> validate_plan
+                             |
+                             v (passes)
+Implementation         -> edit files locally
+                             |
+                             v
+Compliance audit       -> verify_changes
 ```
 
 ---
 
-## 2. Read and Inspection Tools
+## 2. Group A: Orientation and Health
 
-These tools allow assistants to retrieve local structural metadata without executing remote API calls or bloating context windows with raw source files.
+### `get_graph_info`
 
-### `graph_info`
-*   **Purpose:** Handshakes and returns baseline index metadata (project root, schema version, build timestamp, compilation modes, source languages, symbol counts, index file location, and active policy gates).
-*   **Policy Gates Banner:** Reports which containment layers are active — explicit `.graphenium/policy.json` rules (if any) plus **Dynamic Delta Gating** (zero-config modularity protection). When no policy file is configured, delta gating still runs as the default invariant gate.
-*   **Staleness Guard:** Automatically warns the agent if physical source files or Graphenium's binary are newer than the cached index. If a stale warning is returned, the agent is instructed to run `gm run` and trigger `reload_graph`.
-*   **When to Use:** At the start of every chat session or after any major branch checkout.
+Combines `graph_info`, `graph_stats`, `unresolved_references`, `resolution_report`, and `ambiguous_symbols`.
 
-### `graph_stats`
-*   **Purpose:** Returns total symbol counts, compiler-proven (`EXTRACTED`) vs. semantic (`INFERRED`) ratios, and boundary counts.
-*   **When to Use:** To evaluate the general health, scale, and resolution status of Graphenium's index.
+**Purpose:** Handshake and health check. Always returns project root, schema version, build timestamp, extraction modes, source languages, node/edge/hyperedge/community counts, active policy gates, graph trust mode, and the index path when known.
 
-### `query_graph`
-*   **Purpose:** Executes structural queries radiating outward from matched keyword search nodes.
-*   **Parameters:** `keywords`, `depth` (hop limit), `budget` (token threshold), `path_prefix` (directory scoping), `exclude_path` (noisy folder exclusion), `node_types` (file, class, method, function), `include_tests` (bool), and `ast_only_tuning` (bool).
-*   **When to Use:** To locate code symbols related to a specific feature, folder, or API surface.
+**Optional flags:**
 
-### `get_node`
-*   **Purpose:** Resolves a single symbol precisely by its canonical ID. Returns label, file type, source file, line boundaries, and degree (coupling score).
-*   **When to Use:** To disambiguate identifier collisions or identify where a class or function is physically implemented.
+| Parameter | Description |
+|---|---|
+| `include_stats` | Append scoped statistics: node and edge counts, node-type breakdown, edge confidence distribution, and extractor provenance. |
+| `include_unresolved` | Append imports whose targets are missing from the graph. |
+| `include_resolution` | Append import, call, and method resolution rates plus ambiguous edge counts. |
+| `include_ambiguous` | Append ambiguous edges and cross-file label collisions. |
+| `path_prefix` | Optional path prefix or fragment to include in statistics. |
+| `exclude_path` | Optional path prefix or fragment to exclude from statistics. |
+| `node_types` | Optional file types to include in statistics. |
+| `generated_code_mode` | Generated-like code filter: `include`, `exclude`, or `only`. |
+| `ast_only_tuning` | AST-only noise suppression override. Omitted means automatic. |
 
-### `get_neighbors`
-*   **Purpose:** Returns direct, AST-proven connections (incoming callers and outgoing dependencies) for a target symbol. The `extracted_only` parameter isolates compiler-proven (`EXTRACTED`) edges.
-*   **When to Use:** Before proposing changes to a public API, to identify all dependents.
+**Staleness guard:** Automatically warns when physical source files or the Graphenium binary are newer than the cached index. If stale, run `gm run` and then `reload_graph`.
 
-### `summarize_file`
-*   **Purpose:** Returns all extracted symbols from a single file.
-*   **When to Use:** When you need an inventory of what a file contains without reading the entire raw source.
+**When to use:** At the start of every session, or after a branch checkout.
 
-### `references_to`
-*   **Purpose:** Locates all direct imports, calls, and inheritances pointing toward a target symbol.
-*   **When to Use:** To audit who currently depends on a module before modifying its public surface.
+### `get_architecture_summary`
 
-### `unresolved_references`
-*   **Purpose:** Lists all imports whose targets are missing from the AST index.
-*   **When to Use:** To detect missing dependencies or incorrectly configured project paths.
+Combines `architecture_summary`, `get_community`, and `god_nodes`.
 
----
-
-## 3. Path and Transitive Closure Tools
-
-These tools link structural pathfinding with first-order logic proofs, enabling agents to mathematically verify dependency chains.
-
-### `query_transitive`
-*   **Purpose:** Explores a target symbol's full multi-hop dependency closure.
-*   **Direction Control:** Set `direction` to `"forward"` (outgoing calls), `"reverse"` (incoming callers), or `"both"`.
-*   **When to Use:** To map the full blast radius of a symbol before modifying it.
-
-### `shortest_path`
-*   **Purpose:** Finds the minimal or highest-provenance structural route between two symbols. Semantic mode prefers `calls` and `uses` relationships; strict mode uses exact hop count.
-*   **When to Use:** To verify that two classes are genuinely connected through deterministic compiler-proven paths.
-
-### `safest_path`
-*   **Purpose:** Finds the path with the highest aggregate confidence profile (prioritizing `EXTRACTED` edges over `INFERRED` or `AMBIGUOUS`).
-*   **When to Use:** When identifying a maximally safe execution path through your architecture.
-
-### `module_dependencies`
-*   **Purpose:** Cross-references all dependency edges between two module paths.
-*   **When to Use:** To map the full dependency contract between two system domains or folders.
-
-### `run_datalog`
-*   **Purpose:** Executes a declarative, first-order logic program over Graphenium's compiled EDB.
-*   **Standard Library:** Automatically includes `stdlib.dl` predicates (`calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, etc.) without requiring manual rule definitions.
-*   **Evaluation:** Goal-directed rule selection with first-column hash indexing, semi-naive delta relations, and early stopping for fully-ground existence goals.
-*   **Evaluation Bounds:** Derived-relation blow-up during inference is capped by the `budget` parameter (default: 1,000 solver steps). Base EDB relations (e.g. `edge`, `calls`) are accepted up to 10 million facts — large enough for real codebases; narrow bound queries (`calls(seed, X)`) rather than unbounded scans (`is_hub(X)`) on dense graphs.
-*   **When to Use:** To mathematically prove transitive boundary violations, circular dependencies, or identify orphaned nodes.
-
----
-
-## 4. Verification and Gating Tools
-
-These are Graphenium's containment and compliance enforcement tools.
-
-### `analyse_symbol`
-*   **Purpose:** A composite query returning callers, dependencies, transitive closures, domain placement, and structural risks for a single target symbol.
-*   **When to Use:** As a first orientation step before modifying a symbol.
-
-### `architecture_summary`
-*   **Purpose:** Returns the top-level structural layout of the repository, including domain clusters and cross-domain connections.
-*   **When to Use:** When the agent needs a global structural orientation of the system.
-
-### `god_nodes`
-*   **Purpose:** Returns the most highly coupled symbols (hubs) with the highest degree scores.
-*   **When to Use:** To identify high-risk refactoring targets.
-
-### `explain_change`
-*   **Purpose:** Pre-edit orientation summary including hierarchy, community context, entry points, must-read files, and test scaffolding for a symbol.
-*   **When to Use:** Before modifying any public interface.
-
-### `verification_plan`
-*   **Purpose:** Generates a risk-sorted checklist of verification steps for modified files (e.g., must-read files, dependent interfaces, and covering test files).
-*   **When to Use:** Prior to committing code or opening a PR to determine what local tests must be run.
-
-### `blast_radius`
-*   **Purpose:** Measures the downstream transitive impact of modifying a symbol. It identifies affected files, compromised module domains, and the trust confidence levels of those connections.
-*   **When to Use:** Before writing any modifications to estimate the risk of the change.
-
-### `agent_change_gate`
-*   **Purpose:** Executes an automated structural verification audit against current index properties.
-*   **Optional Parameter `plan_id`:** When provided, Graphenium runs the pre-flight architectural policy check, then performs a post-edit compliance audit of implemented/missing nodes, planned dependency edges, and unplanned modified files.
-*   **When to Use:** In CI/CD pipelines, git pre-commit hooks, or pre-review agent workflows.
-
----
-
-## 5. Planning Workspace Tools
-
-These tools support Graphenium's write-time containment loop, allowing agents to declare their designs and verify compliance before implementing them.
-
-### `create_planning_workspace`
-*   **Purpose:** Initializes a virtual, in-memory workspace and returns a unique `plan_id`.
-*   **When to Use:** When starting any multi-file task or refactoring ticket.
-
-### `add_planned_symbol`
-*   **Purpose:** Registers an intended symbol declaration or dependency edge in the virtual workspace.
-*   **Automated Gating:** If a `.graphenium/policy.json` file is present, this tool automatically runs a pre-flight policy solver on the proposed design. If a violation is detected (e.g., a forbidden dependency), Graphenium returns `PRE_FLIGHT_VIOLATION` and blocks the registration.
-*   **When to Use:** To declare the architectural design the agent intends to write.
-
-### `validate_plan`
-*   **Purpose:** Evaluates the virtual plan before code is implemented. Runs explicit `.graphenium/policy.json` rules when configured (forbidden dependencies, strict layering bypasses, banned symbols), then applies **Dynamic Delta Gating** as a zero-config fallback — even when no policy file exists.
-*   **When to Use:** After the agent completes its virtual plan and before it edits any source files.
-
-### `get_plan_details`
-*   **Purpose:** Retrieves the virtual design spec, highlights currently implemented symbols and planned edges, and flags missing declarations, missing planned dependencies, or unplanned modified files.
-*   **When to Use:** Prior to generating a PR or requesting human review.
-
----
-
-## 6. Topological Delta Tools
-
-These tools evaluate proposed plans against Graphenium's mathematical modularity invariants. They operate entirely in memory on the loaded index — no physical files are modified.
-
-### `evaluate_delta_gate`
-
-Performs an in-memory **Topological Delta Gate** on a planning workspace.
-
-**Input Schema:**
-
-```json
-{
-  "name": "evaluate_delta_gate",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "plan_id": {
-        "type": "string",
-        "description": "The unique identifier of the target planning workspace."
-      },
-      "modularity_tolerance": {
-        "type": "number",
-        "description": "Optional maximum allowed modularity drop. Defaults to -0.02."
-      },
-      "surprise_threshold": {
-        "type": "number",
-        "description": "Optional surprise threshold to flag structural violations. Defaults to 5.0."
-      }
-    },
-    "required": ["plan_id"]
-  }
-}
-```
+**Purpose:** Repository-level architectural orientation. Returns major communities, cross-community connectors, boundary-heavy communities, and architectural hotspots.
 
 **Parameters:**
-*   `plan_id` (required) — Planning workspace identifier.
-*   `modularity_tolerance` (optional, default: `-0.02`) — Maximum allowed modularity decay (ΔQ floor).
-*   `surprise_threshold` (optional, default: `5.0`) — Minimum surprise score to flag a planned edge.
 
-**Pass Criteria:** ΔQ ≥ `modularity_tolerance` and no planned edges exceed `surprise_threshold`.
+| Parameter | Description |
+|---|---|
+| `community_id` | Optional community ID. When set, the response focuses on that community instead of the repository overview. |
+| `include_community_members` | Append the full member list for the focused community. |
+| `include_god_nodes` | Append the top hub nodes after the summary. |
+| `god_node_limit` | Number of hub nodes to return. Default 10, maximum 50. |
+| `path_prefix` | Optional path prefix or fragment to include. |
+| `exclude_path` | Optional path prefix or fragment to exclude. |
+| `node_types` | Optional file types to include. |
+| `generated_code_mode` | Generated-like code filter: `include`, `exclude`, or `only`. |
+| `ast_only_tuning` | AST-only noise suppression override. |
+| `max_communities` | Maximum number of communities in the overview. Default 5, maximum 10. |
 
-**Response Format (Markdown):**
+**When to use:** When the agent needs a global structural map before drilling into files.
+
+### `reload_graph`
+
+Hot-swaps the in-memory index from a local `graph.json` file without restarting the MCP server.
+
+**Parameters:**
+
+| Parameter | Description |
+|---|---|
+| `graph_path` | Optional filesystem path to a `graph.json` file. If omitted, reloads from the path the server was launched with. |
+
+**When to use:** After running `gm run` locally to sync the server with physical file edits.
+
+---
+
+## 3. Group B: Search, Inspect, and Trace
+
+### `query_graph`
+
+Executes structural queries radiating outward from keyword-matched seed nodes.
+
+**Parameters:**
+
+| Parameter | Description |
+|---|---|
+| `keywords` | Keywords or phrase to search for. |
+| `depth` | Traversal depth, 1 to 6. Default 3. |
+| `budget` | Approximate output token budget. Default 2000. |
+| `dfs` | Use depth-first search instead of BFS. |
+| `path_prefix` | Optional path prefix or fragment to include. |
+| `exclude_path` | Optional path prefix or fragment to exclude. |
+| `node_types` | Optional file types to include. |
+| `include_relations` | Optional relation filters to include during traversal. |
+| `exclude_relations` | Optional relation filters to exclude during traversal. |
+| `generated_code_mode` | Generated-like code filter: `include`, `exclude`, or `only`. |
+| `ast_only_tuning` | AST-only noise suppression override. |
+| `include_tests` | Include test and spec nodes. Default false. |
+| `min_degree` | Minimum node degree to include. |
+
+**When to use:** To locate code symbols related to a feature, folder, or API surface.
+
+### `inspect_symbol`
+
+Combines `get_node`, `get_neighbors`, `references_to`, `analyse_symbol`, `explain_change`, and `summarize_file`.
+
+**Purpose:** Single-call symbol inspection. Always returns canonical node details, then appends the requested sections.
+
+**Parameters:**
+
+| Parameter | Description |
+|---|---|
+| `target` | Node ID or label to inspect. When `include_file_summary` is set, a file path or filename suffix is also accepted. |
+| `include_neighbors` | Append direct neighbors with relation types, confidence, and scores. |
+| `include_callers` | Append structural references: containers, imports, inheritance, and implementations. |
+| `include_analysis` | Append behavioral and structural dependency analysis with a confidence summary. |
+| `include_file_summary` | Append every symbol extracted from the target's source file. |
+| `include_explanation` | Append hierarchy, community context, entry points, must-read files, and test scaffolding. |
+| `relation` | Optional substring used to filter neighbors by relation type. |
+| `max_neighbors` | Maximum number of neighbors to return. Default 50. |
+| `extracted_only` | Show only EXTRACTED confidence neighbors. |
+| `group_by` | File summary grouping: `kind` or `community`. |
+| `show_leaves` | Include low-degree leaf symbols of degree 5 or less. |
+
+**When to use:** Before modifying a public API, or when disambiguating identifier collisions.
+
+### `trace_path`
+
+Combines `shortest_path`, `safest_path`, `query_transitive`, and `module_dependencies`.
+
+**Purpose:** Unified connectivity tracing. The `mode` parameter selects the backend behavior while shared filters remain available.
+
+**Parameters:**
+
+| Parameter | Description |
+|---|---|
+| `source` | Starting node ID or label. For `module_dependencies`, the source module or directory fragment. |
+| `target` | Destination node ID or label. Required for `shortest`, `safest`, and `module_dependencies`. |
+| `mode` | Routing mode: `shortest` (default), `safest`, `transitive_forward`, `transitive_reverse`, or `module_dependencies`. |
+| `depth` | Maximum traversal depth for transitive modes. Default 3, maximum 6. |
+| `direction` | Optional transitive direction override: `forward`, `reverse`, or `both`. |
+| `budget` | Approximate output character budget for transitive modes. Default 2000. |
+| `path_prefix` | Optional path prefix or fragment to include for shortest paths. |
+| `exclude_path` | Optional path prefix or fragment to exclude for shortest paths. |
+| `node_types` | Optional file types to include for shortest paths. |
+| `include_relations` | Optional relation filters to include for shortest paths. |
+| `exclude_relations` | Optional relation filters to exclude for shortest paths. |
+| `path_mode` | Shortest path strategy: `semantic` (default) or `strict`. |
+| `exclude_framework_noise` | Exclude framework and import-noise bridge nodes. |
+| `generated_code_mode` | Generated-like code filter for shortest paths. |
+| `ast_only_tuning` | AST-only noise suppression override for shortest paths. |
+
+**Mode behavior:**
+
+- `shortest`: semantic or strict path between `source` and `target`.
+- `safest`: path with the highest aggregate confidence profile.
+- `transitive_forward`: outgoing reachability closure from `source`.
+- `transitive_reverse`: incoming reachability closure from `source`.
+- `module_dependencies`: dependency edges between two module path fragments.
+
+**When to use:** To verify dependency chains, map blast radius, or audit cross-module contracts.
+
+### `run_datalog`
+
+Executes a declarative first-order logic program over the compiled EDB.
+
+**Standard library predicates:** `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, and `tainted_by_proof_gap`.
+
+**Parameters:**
+
+| Parameter | Description |
+|---|---|
+| `query` | Datalog program text. Supports goals (`?-`), user rules (`:-`), facts, and negation (`not`). |
+| `step_budget` | Maximum solver steps. Default 1000, clamped to 100 through 10000. |
+
+**When to use:** To mathematically prove transitive boundary violations, circular dependencies, or orphan nodes.
+
+---
+
+## 4. Group C: Spec-Driven Planning and Containment
+
+### `create_planning_workspace`
+
+Initializes a virtual in-memory planning workspace.
+
+**Parameters:**
+
+| Parameter | Description |
+|---|---|
+| `plan_id` | Unique identifier for the planning workspace. |
+| `description` | Human-readable description of the plan's purpose. |
+
+**When to use:** When starting any multi-file task or refactoring ticket.
+
+### `add_planned_symbol`
+
+Registers an intended symbol and links it to an existing node in the workspace.
+
+**Parameters:**
+
+| Parameter | Description |
+|---|---|
+| `plan_id` | Planning workspace ID. |
+| `label` | Label for the new planned symbol. |
+| `file_path` | File path where the symbol will be added. |
+| `relation` | Relation type such as `calls`, `depends_on`, or `implements`. |
+| `target_symbol` | ID or label of the existing node to link to. |
+
+**Automated gating:** If `.graphenium/policy.json` is present, this tool runs a pre-flight policy solve. A violation returns `PRE_FLIGHT_VIOLATION` and blocks registration.
+
+**When to use:** To declare the architectural design the agent intends to write.
+
+### `validate_plan`
+
+Combines `validate_plan` and `evaluate_delta_gate`.
+
+**Purpose:** Pre-flight design validation. Always runs the Louvain modularity delta gate and surprise analysis. Unless `skip_policy_rules` is true, it also applies explicit `.graphenium/policy.json` rules.
+
+**Parameters:**
+
+| Parameter | Description |
+|---|---|
+| `plan_id` | Planning workspace identifier. |
+| `skip_policy_rules` | Skip explicit policy rules and run only the delta gate. Default false. |
+| `modularity_tolerance` | Maximum allowed modularity drop. Default -0.02. |
+| `surprise_threshold` | Surprise score threshold for planned edges. Default 5.0. |
+
+**Pass criteria:** Delta Q is at or above `modularity_tolerance`, no planned edge exceeds `surprise_threshold`, and explicit policy rules pass when enabled.
+
+**Response format:**
 
 ```markdown
 ### Topological Delta Report for Plan: `refactor-session-handling`
 
-- **Status:** ❌ FAILED
-- **Modularity Delta (ΔQ):** -0.0341 (Baseline: 0.3841 → Virtual: 0.3500)
+- **Status:** FAILED
+- **Modularity Delta (Delta Q):** -0.0341 (Baseline: 0.3841 -> Virtual: 0.3500)
 
 #### High-Surprise Edges Proposed:
-- `plan:UserView` ──► `src/db/helper` (Confidence: 6.5)
-  *Reason:* cross-community, peripheral→hub
+- `plan:UserView` -> `src/db/helper` (Confidence: 6.5)
+  *Reason:* cross-community, peripheral-to-hub
 
 #### Structural Drift Warnings:
-- **Cross-boundary edges**: cross-boundary edges increased: 42 → 45
+- **Cross-boundary edges**: cross-boundary edges increased: 42 -> 45
 ```
 
-**How assistants should interpret responses:**
-*   **`✅ PASSED`** — The plan preserves modularity and introduces no high-surprise planned edges. Proceed to implementation.
-*   **`❌ FAILED` with negative ΔQ** — The plan degrades community cohesion. Re-route dependencies through existing domain services before editing files.
-*   **`❌ FAILED` with `High-Surprise Edges`** — Inspect the listed `plan_surprise_edges`. Each entry names the source, target, score, and contributing factors (`cross-community`, `peripheral→hub`, etc.). Refactor the virtual plan to decouple across community boundaries.
-*   **Drift warnings** — Informational; highlight community boundary shifts triggered by the plan. Review alongside surprise edges.
+**Interpretation:**
 
-**When to Use:** To iteratively refine a design before implementation, or when `validate_plan` reports a topological entropy rejection.
+- `PASSED`: The plan preserves modularity and introduces no high-surprise edges. Proceed.
+- `FAILED` with negative Delta Q: The plan degrades community cohesion. Re-route dependencies through existing domain services.
+- `FAILED` with high-surprise edges: Inspect each entry and decouple the planned edge across community boundaries.
+- Drift warnings: Informational. Review alongside surprise edges.
+
+**When to use:** After completing the virtual plan and before editing source files.
+
+### `verify_changes`
+
+Combines `agent_change_gate`, `get_plan_details`, `verification_plan`, `blast_radius`, `next_files_to_read`, `review_plan`, `what_changed`, and `diff_graph`.
+
+**Purpose:** Unified post-edit verification report. Returns the scope creep audit, blast radius, verification checklist, and must-read files in one response.
+
+**Parameters:**
+
+| Parameter | Description |
+|---|---|
+| `plan_id` | Optional planning workspace ID. Adds pre-flight policy checks, post-edit compliance, and the full planned subgraph. |
+| `target_symbols` | Optional list of changed node IDs or labels. Entries may be exact IDs or case-insensitive labels. |
+| `min_resolution` | Optional minimum import resolution percentage for the change gate. Default 80.0. |
+| `max_ambiguous` | Optional maximum allowed ambiguous edges for the change gate. Default 10. |
+| `snapshot_name` | Optional snapshot name. Appends a risk-sorted what-changed report. |
+| `before_graph_path` | Optional path to a before `graph.json` file. |
+| `after_graph_path` | Optional path to an after `graph.json` file. |
+
+**Included sections:**
+
+- Agent change gate with policy gate pass/fail table.
+- Blast radius with affected files, communities, and edge confidence distribution.
+- Verification plan with must-read files, tests, and risk gates.
+- Next files to read, deduplicated by file.
+- Plan details and post-edit compliance when `plan_id` is set.
+- What-changed, graph diff, and review plan sections when the optional inputs are supplied.
+
+**When to use:** Before committing, opening a PR, or completing an agent session.
 
 ---
 
-## 7. Write and Index Operations
+## 5. Group D: Manual Mutations
 
-These tools should be used sparingly and only after direct, human-verified source inspection.
+### `mutate_graph`
 
-### `add_node`
-*   **Purpose:** Injects a logical concept, design decision rationale, or external API boundary into Graphenium's index.
+Combines `add_node`, `add_edge`, `remove_edge`, and `recluster`.
 
-### `add_edge`
-*   **Purpose:** Injects a verified relationship into Graphenium's index. 
-*   **Safety Rule:** Only write with `Confidence::Extracted` if the connection has been proven by direct file-level code review.
+**Purpose:** Single entry point for manual index mutations. Use sparingly and only after direct source inspection. Successful mutations persist to disk immediately.
 
-### `remove_edge`
-*   **Purpose:** Removes a false positive, obsolete, or incorrect dependency from the index.
+**Parameters:**
 
-### `recluster`
-*   **Purpose:** Re-calculates community cohesive domains after manual overrides have been injected.
+| Parameter | Description |
+|---|---|
+| `action` | Mutation action: `add_node`, `add_edge`, `remove_edge`, or `recluster`. |
+| `id` | Node identifier for `add_node`. |
+| `label` | Display name for `add_node`. |
+| `file_type` | Node type for `add_node`: `code`, `document`, `paper`, `image`, or `rationale`. |
+| `source_file` | Relative source file for `add_node`, or the file where an `add_edge` relationship was observed. |
+| `source_location` | Optional source location hint such as `L42`. |
+| `qualified_label` | Optional qualified scope-prefixed label for `add_node`. |
+| `source` | Source node ID or label for `add_edge` and `remove_edge`. |
+| `target` | Target node ID or label for `add_edge` and `remove_edge`. |
+| `relation` | Relation type for `add_edge`, or optional relation filter for `remove_edge`. |
+| `confidence` | Edge confidence for `add_edge`: `EXTRACTED`, `INFERRED`, or `AMBIGUOUS`. |
+| `weight` | Optional traversal weight override for `add_edge`, clamped to 0.0 through 1.0. |
 
-### `reload_graph`
-*   **Purpose:** Hot-swaps Graphenium's in-memory index from a local file without requiring an MCP server restart.
-*   **When to Use:** After running `gm run` locally to sync the background server with physical file edits.
+**Safety rule:** Only write with `EXTRACTED` confidence when the connection has been proven by direct file-level code review.
+
+**When to use:** To register verified concepts, record confirmed relationships, remove false positives, or recluster after manual overrides.
+
+---
+
+## 6. Migration Map
+
+| Previous tool | Consolidated tool | Routing |
+|---|---|---|
+| `graph_info` | `get_graph_info` | Always included |
+| `graph_stats` | `get_graph_info` | `include_stats=true` |
+| `unresolved_references` | `get_graph_info` | `include_unresolved=true` |
+| `resolution_report` | `get_graph_info` | `include_resolution=true` |
+| `ambiguous_symbols` | `get_graph_info` | `include_ambiguous=true` |
+| `architecture_summary` | `get_architecture_summary` | Omit `community_id` |
+| `get_community` | `get_architecture_summary` | Set `community_id` |
+| `god_nodes` | `get_architecture_summary` | `include_god_nodes=true` |
+| `get_node` | `inspect_symbol` | Always included |
+| `get_neighbors` | `inspect_symbol` | `include_neighbors=true` |
+| `references_to` | `inspect_symbol` | `include_callers=true` |
+| `analyse_symbol` | `inspect_symbol` | `include_analysis=true` |
+| `explain_change` | `inspect_symbol` | `include_explanation=true` |
+| `summarize_file` | `inspect_symbol` | `include_file_summary=true` |
+| `shortest_path` | `trace_path` | `mode=shortest` |
+| `safest_path` | `trace_path` | `mode=safest` |
+| `query_transitive` | `trace_path` | `mode=transitive_forward` or `transitive_reverse` |
+| `module_dependencies` | `trace_path` | `mode=module_dependencies` |
+| `validate_plan` | `validate_plan` | Always runs the delta gate |
+| `evaluate_delta_gate` | `validate_plan` | `skip_policy_rules=true` |
+| `agent_change_gate` | `verify_changes` | Always included |
+| `blast_radius` | `verify_changes` | When `target_symbols` is set |
+| `verification_plan` | `verify_changes` | When `target_symbols` is set |
+| `next_files_to_read` | `verify_changes` | When `target_symbols` is set |
+| `get_plan_details` | `verify_changes` | When `plan_id` is set |
+| `what_changed` | `verify_changes` | When `snapshot_name` is set |
+| `diff_graph` | `verify_changes` | When both graph paths are set |
+| `review_plan` | `verify_changes` | When a graph path is set |
+| `add_node` | `mutate_graph` | `action=add_node` |
+| `add_edge` | `mutate_graph` | `action=add_edge` |
+| `remove_edge` | `mutate_graph` | `action=remove_edge` |
+| `recluster` | `mutate_graph` | `action=recluster` |

@@ -5,7 +5,7 @@ Traditional continuous integration (CI) environments verify syntax, type safety,
 *   *Did tests pass?*
 *   *Did code formatters and style linters succeed?*
 
-For AI-generated changes, these checks are necessary but fundamentally insufficient. Agents can write code that passes tests while quietly eroding your architecture—bypassing module boundaries, introducing transitive circular dependencies, or modifying unplanned files. 
+For AI-generated changes, these checks are necessary but fundamentally insufficient. Agents can write code that passes tests while quietly eroding your architecture - bypassing module boundaries, introducing transitive circular dependencies, or modifying unplanned files.
 
 Graphenium compiles the codebase into a provenance-tagged relational index and integrates into your CI/CD pipeline and git hooks as an **external structural gate**, mechanically verifying the architectural integrity of agent-authored PRs before they reach a human reviewer.
 
@@ -35,7 +35,7 @@ To prevent vibe-coding in active repositories, Graphenium enforces a structured,
 
 Architectural constraints can be declared in `.graphenium/policy.json` at the root of the repository. When present, Graphenium's pre-flight engine runs these rules against the agent's proposed plan *before* any physical files are modified.
 
-**Zero-config fallback:** Repositories without a policy file still receive protection. Graphenium automatically applies **Dynamic Delta Gating** (Topological Entropy Guardrails) — an in-memory modularity and surprise analysis that rejects plans which mathematically degrade community structure, even when no explicit rules are configured.
+**Zero-config fallback:** Repositories without a policy file still receive protection. Graphenium automatically applies **Dynamic Delta Gating** (Topological Entropy Guardrails) - an in-memory modularity and surprise analysis that rejects plans which mathematically degrade community structure, even when no explicit rules are configured.
 
 ### Policy Configuration Schema (`.graphenium/policy.json`):
 ```json
@@ -82,13 +82,13 @@ Dynamic Delta Gating (`src/analyze/delta.rs`) is Graphenium's configuration-free
 2. **Virtual subgraph:** Overlay physical graph + the target planning workspace.
 3. **Louvain clustering:** Run community detection on both subgraphs.
 4. **Modularity delta (ΔQ):** Compare modularity scores; reject if decay exceeds tolerance (default: `-0.02`).
-5. **Surprise profiling:** Flag planned edges with high structural surprise (default threshold: `5.0`) — especially `cross-community` and `peripheral→hub` connections.
+5. **Surprise profiling:** Flag planned edges with high structural surprise (default threshold: `5.0`) - especially `cross-community` and `peripheral→hub` connections.
 
 ### Entry Points
 | Entry Point | Context |
 |---|---|
-| `evaluate_delta_gate` (MCP) | Real-time design validation inside agent sessions |
-| `validate_plan` (MCP) | Runs after explicit policy rules; applies delta gating as fallback |
+| `validate_plan` with `skip_policy_rules = true` (MCP) | Real-time design validation inside agent sessions |
+| `validate_plan` (MCP) | Runs explicit policy rules when configured, then applies the delta gate |
 | `gm check --delta --plan <id>` | CI / pre-commit topological gate |
 
 ```sh
@@ -102,7 +102,7 @@ Unlike static `policy.json` rules (which require manual glob patterns), the delt
 
 ## 4. Zero-Configuration CI Gates
 
-You do not need a `.graphenium/policy.json` file to enforce commit-time gatekeeping. Graphenium's delta gate uses Louvain community structure and surprise scoring to reject agent plans that degrade modularity — without hardcoded folder regexes.
+You do not need a `.graphenium/policy.json` file to enforce commit-time gatekeeping. Graphenium's delta gate uses Louvain community structure and surprise scoring to reject agent plans that degrade modularity - without hardcoded folder regexes.
 
 ### Pre-Commit Hook
 
@@ -130,7 +130,7 @@ Set `GRAPHENIUM_PLAN_ID` in your agent session to the active planning workspace 
           if [ -n "$PLAN_ID" ]; then
             gm check --graph graphenium-out/graph.json --delta --plan "$PLAN_ID"
           else
-            echo "No PLAN_ID set — skipping delta gate"
+            echo "No PLAN_ID set - skipping delta gate"
           fi
 ```
 
@@ -160,14 +160,14 @@ Graphenium enforces these policies at multiple checkpoints in the development li
 
 | Gate Entry Point | Execution Context | Gating Behavior |
 |---|---|---|
-| **`validate_plan` (MCP)** | Pre-Flight (Agent Session) | Runs explicit policy rules when configured, then Dynamic Delta Gating as invariant fallback. |
-| **`evaluate_delta_gate` (MCP)** | Pre-Flight (Agent Session) | In-memory modularity delta check and surprise analysis on a proposed plan. |
+| **`validate_plan` (MCP)** | Pre-Flight (Agent Session) | Runs explicit policy rules when configured, then always runs the Dynamic Delta Gate as an invariant check. |
+| **`validate_plan` with `skip_policy_rules = true` (MCP)** | Pre-Flight (Agent Session) | In-memory modularity delta check and surprise analysis on a proposed plan. |
 | **`add_planned_symbol`** | Pre-Flight (Agent Session) | Automatic pre-flight hook. If the proposed class/method violates policy, Graphenium returns `PRE_FLIGHT_VIOLATION` and blocks the plan. |
 | **`gm check --delta --plan <id>`** | CI / Pre-Commit Hook | Topological entropy gate: modularity delta + surprise edge profiling. |
 | **`gm check --plan <id>`** | CI / Pre-Commit Hook | Double Gate: Evaluates pre-flight design compliance first, then performs a post-facto scope-creep and planned-edge audit. |
 | **`gm gate --diff <before> <after>`** | CI / PR Pipeline | Compares two compiled indexes and exits non-zero on any `Critical` architectural drift event. |
 | **`gm gate`** | CI / Pre-Commit Hook | Runs the default trust gate against `graphenium-out/graph.json`. |
-| **`agent_change_gate`** | CI / PR Pipeline | Evaluates global trust quality metrics (import resolution ratio, maximum allowed ambiguity). |
+| **`verify_changes`** | CI / PR Pipeline | Evaluates global trust quality metrics (import resolution ratio, maximum allowed ambiguity) plus blast radius and verification plans. |
 
 ---
 

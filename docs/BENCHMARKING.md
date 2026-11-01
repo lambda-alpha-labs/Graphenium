@@ -52,9 +52,9 @@ The following table documents execution latencies and payload weights for common
 | Query Type | Command / Tool | Payload Weight (chars) | Approx. Tokens | Latency (ms) |
 | :--- | :--- | ---: | ---: | ---: |
 | **Transitive Impact Analysis** | `gm query "replace_file_extraction" --mode hybrid` | 8,674 | 2,170 | 27 ms |
-| **Structural Domain Context** | `get_community(id: 1)` | 6,690 | 1,670 | 18 ms |
-| **Module Dependency Mapping** | `module_dependencies("serve", "model")` | 8,395 | 2,100 | 22 ms |
-| **Symbol Neighborhood Scope** | `analyse_symbol("node_data")` | 8,570 | 2,140 | 20 ms |
+| **Structural Domain Context** | `get_architecture_summary(community_id: 1)` | 6,690 | 1,670 | 18 ms |
+| **Module Dependency Mapping** | `trace_path(source: "serve", target: "model", mode: "module_dependencies")` | 8,395 | 2,100 | 22 ms |
+| **Symbol Neighborhood Scope** | `inspect_symbol(target: "node_data", include_analysis: true)` | 8,570 | 2,140 | 20 ms |
 | **Declarative Transitive Check** | `gm query --datalog "?- calls_transitive('a', X)."` | 4,200 | 1,050 | 12 ms |
 | **Datalog Layer Bypass Proof** | `gm query --datalog "?- bypasses_layer('a', 'b', 'c')."` | 1,200 | 300 | 8 ms |
 

@@ -10,13 +10,13 @@ Graphenium is a local relational codebase compiler and spec-driven containment e
 Use it for two jobs:
 
 1. **High-speed structural index:** Replace blind directory sweeps, raw file reads, and unbounded `grep` loops with compact topological queries. Use it to find AST-proven callers, blast radius, centrality hotspots, shortest/safest paths, and transitive closures while preserving context budget.
-2. **Mandatory containment contract:** For multi-file or cross-boundary work, follow the full loop: Virtual AST declaration → Datalog + ΔQ pre-flight validation → physical implementation → `agent_change_gate` post-edit verification of realized nodes, realized edges, and unplanned file scope.
+2. **Mandatory containment contract:** For multi-file or cross-boundary work, follow the full loop: Virtual AST declaration → Datalog + ΔQ pre-flight validation → physical implementation → `verify_changes` post-edit verification of realized nodes, realized edges, and unplanned file scope.
 
 ---
 
 ## 1. Handshake Rule
 
-**You must call `graph_info` as your first action during any session.**
+**You must call `get_graph_info` as your first action during any session.**
 
 Verify the following index properties before planning edits:
 1.  **Project Root:** Confirm you are operating in the correct repository root.
@@ -30,17 +30,18 @@ Verify the following index properties before planning edits:
 
 | Engineering Goal | Target MCP Tool | Behavioral Expectation |
 |---|---|---|
-| **Handshake & Freshness** | `graph_info` | Verify index integrity and check for stale warning flags. |
-| **Codebase Orientation** | `architecture_summary` | Review top-level folder domains and cohesive module boundaries. |
+| **Handshake & Freshness** | `get_graph_info` | Verify index integrity, append stats or diagnostics when needed, and check for stale warning flags. |
+| **Codebase Orientation** | `get_architecture_summary` | Review top-level folder domains and cohesive module boundaries. Focus on one community with `community_id` and add hubs with `include_god_nodes`. |
 | **Verify Design Pre-Flight** | `validate_plan` | Mathematically prove design safety against `.graphenium/policy.json` and dynamic delta gating. |
-| **Topological Delta Gate** | `evaluate_delta_gate` | In-memory modularity delta check and surprise analysis on a proposed plan. |
+| **Topological Delta Gate** | `validate_plan` with `skip_policy_rules = true` | In-memory modularity delta check and surprise analysis on a proposed plan. |
 | **Trace Transitive Paths** | `run_datalog` | Evaluate multi-hop dependency chains using compiled stdlib rules. |
-| **Single Symbol Audit** | `analyse_symbol` | Retrieve AST-proven callers, dependencies, and identifier collisions. |
-| **Check Direct Callers** | `get_neighbors` | View incoming callers and outgoing targets (set `extracted_only = true`). |
-| **Identify Hotspots** | `god_nodes` | Identify highly coupled bottlenecks to target for refactoring risk. |
-| **Disambiguate Collisions** | `get_node` | Disambiguate identically named classes or methods. |
-| **Audit Post-Edit Compliance** | `agent_change_gate` | Run PR gates (optional `plan_id` executes pre-flight + resolution audits). |
-| **PR Verification Plan** | `verification_plan` | Generate a risk-sorted test and review checklist for changed files. |
+| **Trace Connectivity** | `trace_path` | Use `mode` for shortest, safest, transitive forward, transitive reverse, or module dependency tracing. |
+| **Single Symbol Audit** | `inspect_symbol` | Retrieve AST-proven callers, dependencies, analysis, file summary, and explanations in one call. |
+| **Check Direct Callers** | `inspect_symbol` with `include_neighbors = true` | View incoming callers and outgoing targets, optionally with `extracted_only = true`. |
+| **Identify Hotspots** | `get_architecture_summary` with `include_god_nodes = true` | Identify highly coupled bottlenecks to target for refactoring risk. |
+| **Disambiguate Collisions** | `inspect_symbol` | Disambiguate identically named classes or methods. |
+| **Audit Post-Edit Compliance** | `verify_changes` | Run PR gates, blast radius, verification checklist, and plan audits in one report. |
+| **PR Verification Plan** | `verify_changes` with `target_symbols` | Generate a risk-sorted test and review checklist for changed files. |
 | **Index Hot-Swap** | `reload_graph` | Sync the server immediately after running a physical re-indexing pass. |
 
 ---
@@ -74,8 +75,8 @@ Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`). **Nev
 You must explicitly separate AST-proven facts from semantic guesswork when planning edits:
 
 *   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, class boundaries, method calls). Use as the **planning backbone**.
-*   `INFERRED` **(Heuristics):** Semantic similarity or naming guesses. Treat as a **hypothesis**—you are strictly blocked from editing these targets until you read their source files directly.
-*   `AMBIGUOUS` **(Collisions):** Symbol name collisions. **Risk gated**—stop and run `get_node` to resolve the collision before proceeding.
+*   `INFERRED` **(Heuristics):** Semantic similarity or naming guesses. Treat as a **hypothesis** - you are strictly blocked from editing these targets until you read their source files directly.
+*   `AMBIGUOUS` **(Collisions):** Symbol name collisions. **Risk gated** - stop and run `inspect_symbol` to resolve the collision before proceeding.
 
 ---
 
@@ -87,13 +88,14 @@ For all multi-file refactoring tasks, you must execute Graphenium's structural c
 2.  **Declare Design Intent:** Call `add_planned_symbol` for every class, method, or dependency you intend to write. This automatically evaluates your design against `.graphenium/policy.json`.
 3.  **Pre-Flight Solve:** Call `validate_plan` to mathematically verify design compliance before writing code.
 4.  **Write Code:** Implement edits inside your local editor.
-5.  **Audit Scope Creep:** Re-compile the index and run `agent_change_gate` (passing your `plan_id`). If Graphenium detects unplanned file modifications or unapproved dependencies, abort your PR and resolve the scope creep.
+5.  **Audit Scope Creep:** Re-compile the index and call `verify_changes` with your `plan_id` and `target_symbols`. If Graphenium detects unplanned file modifications or unapproved dependencies, abort your PR and resolve the scope creep.
 
 ### Write-Back Protocol (Manual Overrides)
 Only inject manual index overrides after direct, human-verified file-level code reviews:
-*   Use `add_node` to define verified architectural concepts or external system boundaries.
-*   Use `add_edge` with `EXTRACTED` confidence only when a dependency is proven by source code.
-*   Run `recluster` after manual edits to update folder domain boundaries.
+*   Use `mutate_graph` with `action = "add_node"` to define verified architectural concepts or external system boundaries.
+*   Use `mutate_graph` with `action = "add_edge"` and `EXTRACTED` confidence only when a dependency is proven by source code.
+*   Use `mutate_graph` with `action = "remove_edge"` to remove stale or incorrect relationships.
+*   Use `mutate_graph` with `action = "recluster"` after manual edits to update folder domain boundaries.
 
 ---
 
@@ -134,11 +136,11 @@ Post-Edit Verification Plan: [list of covering tests to run after editing]
 
 ## 8. Resolving Topological Delta Failures
 
-If you run `evaluate_delta_gate` (or `validate_plan`) and receive an entropy rejection:
+If you run `validate_plan` (with `skip_policy_rules = true` for the delta gate only) and receive an entropy rejection:
 
 1. **Understand the Warning:** Graphenium did not fail because of a regex; it failed because your proposed dependencies mathematically degrade the modularity of the system.
 2. **Review High-Surprise Edges:** Locate which planned symbols triggered `cross-community` or `peripheral_to_hub` spikes. These represent architectural shortcuts.
 3. **Re-Plan decoupling:**
    - Instead of connecting a new view directly to a database, modify your planning workspace to route the request through the existing intermediate domain services.
    - If the connection is functionally required, expose a generic Interface/Trait within the targets' community, rather than coupling the concrete classes directly.
-4. **Re-Evaluate:** Call `evaluate_delta_gate` again. Once modularity stabilizes (ΔQ ≥ -0.02) and surprise scores are below threshold, proceed with implementation.
+4. **Re-Evaluate:** Call `validate_plan` again. Once modularity stabilizes (Delta Q at or above -0.02) and surprise scores are below threshold, proceed with implementation.
