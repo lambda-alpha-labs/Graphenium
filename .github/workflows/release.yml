@@ -72,7 +72,8 @@ jobs:
           echo "" >> notes.md
           echo "- Planned-edge compliance and MCP post-edit verification" >> notes.md
           echo "- Lightweight harness builds via mcp/watch/semantic feature gates" >> notes.md
-          echo "- MCP server with 37 structural containment, Datalog, and planning tools" >> notes.md
+          echo "- MCP server with 12 cohesive structural containment, Datalog, and planning tools" >> notes.md
+          echo "- Behavioral routing guidance in consolidated MCP tool schemas" >> notes.md
           echo "- AST + Stack Graphs extraction for 9 languages with import-scoped call disambiguation" >> notes.md
           echo "- Embedded goal-directed Datalog engine with first-column hash indexing" >> notes.md
           echo "- Lean 4 proof-gap auditing and formal-verification Datalog predicates" >> notes.md

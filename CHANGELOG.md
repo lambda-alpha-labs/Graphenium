@@ -4,6 +4,20 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.23.1 - 2026-11-02
+
+### Summary
+Documentation-only patch release improving MCP tool definition quality for Glama TDQS scoring.
+
+### Changed
+*   **MCP Tool Descriptions (`src/serve/handlers.rs`):** Expanded the schema descriptions for `create_planning_workspace`, `add_planned_symbol`, `inspect_symbol`, `query_graph`, and `trace_path` with explicit read-only and mutating markers, sibling-tool routing guidance, prerequisites, idempotency, failure modes, and output-size guidance.
+*   **Release Notes Workflow (`.github/workflows/release.yml`):** Updated generated release notes to describe the current 12-tool MCP surface.
+
+### Tests
+*   `cargo check --lib` and `cargo test` pass.
+
+---
+
 ## v0.23.0 - 2026-11-01
 
 ### Summary
