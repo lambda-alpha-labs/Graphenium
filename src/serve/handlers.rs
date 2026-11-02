@@ -3378,7 +3378,17 @@ impl GrapheniumServer {
         }
     }
 
-    /// Consolidated symbol inspection tool.
+    /// Inspect a symbol and retrieve its structural neighborhood and metrics.
+    ///
+    /// Use this read-only tool as your primary orientation step before modifying a specific class,
+    /// function, or module. Use this instead of `query_graph` when you already know the exact
+    /// `target` ID and need its direct callers, neighbors, or a verification plan.
+    ///
+    /// The baseline response returns canonical node details. Use the boolean flags to append
+    /// optional data blocks (for example, `include_callers: true` appends all incoming
+    /// dependencies). Note: setting multiple flags to `true` (such as `include_analysis` and
+    /// `include_file_summary`) can produce large responses; use only the flags needed for your
+    /// immediate task to conserve context budget.
     ///
     /// Parameters:
     /// - `target`: symbol ID or label, or a file path when `include_file_summary` is set.
@@ -3390,11 +3400,14 @@ impl GrapheniumServer {
     /// - `relation`, `max_neighbors`, `extracted_only`: neighbor filters.
     /// - `group_by`, `show_leaves`: file summary filters.
     #[tool(
-        description = "Inspect a symbol in one call. Always returns canonical node details. \
-        Set include_neighbors for direct neighbors, include_callers for structural references, \
-        include_analysis for behavioral and structural dependency analysis, include_file_summary \
-        for every symbol in the target's file, and include_explanation for pre-change orientation \
-        with entry points, must-read files, and test scaffolding."
+        description = "Inspect a symbol and retrieve its structural neighborhood and metrics. \
+        Use this read-only tool as your primary orientation step before modifying a specific class, \
+        function, or module. Use this instead of query_graph when you already know the exact target \
+        ID and need its direct callers, neighbors, or a verification plan. The baseline response \
+        returns canonical node details. Use the boolean flags to append optional data blocks (for \
+        example, include_callers=true appends all incoming dependencies). Setting multiple flags to \
+        true (such as include_analysis and include_file_summary) can produce large responses; use \
+        only the flags needed for your immediate task to conserve context budget."
     )]
     fn inspect_symbol(
         &self,
@@ -3486,7 +3499,18 @@ impl GrapheniumServer {
         sections.join("\n\n---\n\n")
     }
 
-    /// Consolidated path, closure, and module dependency tool.
+    /// Trace connectivity and multi-hop paths across the codebase architecture.
+    ///
+    /// Use this read-only tool to map blast radius, find shortest paths, or verify transitive
+    /// layering. Use this instead of `query_graph` or `inspect_symbol` when you need to prove deep,
+    /// multi-hop relationships between specific components.
+    ///
+    /// The tool operates in five distinct modes: `shortest` (finds semantic or strict AST paths
+    /// between source and target), `safest` (finds the path with highest aggregate confidence),
+    /// `transitive_forward` (downstream reachability), `transitive_reverse` (upstream callers), and
+    /// `module_dependencies` (cross-module edges). Returns a structured Markdown report detailing
+    /// the traced paths, confidence scores, and edge relations. Traversal halts when `depth` is
+    /// reached, and output is truncated to fit the `budget`.
     ///
     /// Parameters:
     /// - `source`: starting node ID or label, or the source module fragment for module_dependencies.
@@ -3501,10 +3525,16 @@ impl GrapheniumServer {
     /// - `exclude_framework_noise`: exclude framework and import-noise bridge nodes.
     /// - `generated_code_mode`, `ast_only_tuning`: optional generated-code and AST tuning filters.
     #[tool(
-        description = "Trace connectivity in one call. Use mode='shortest' for a semantic or strict \
-        path between source and target, mode='safest' for the path with the highest aggregate \
-        confidence, mode='transitive_forward' or mode='transitive_reverse' for reachability \
-        closures, and mode='module_dependencies' for cross-module dependency edges."
+        description = "Trace connectivity and multi-hop paths across the codebase architecture. \
+        Use this read-only tool to map blast radius, find shortest paths, or verify transitive \
+        layering. Use this instead of query_graph or inspect_symbol when you need to prove deep, \
+        multi-hop relationships between specific components. The tool operates in five distinct \
+        modes: shortest (finds semantic or strict AST paths between source and target), safest \
+        (finds the path with highest aggregate confidence), transitive_forward (downstream \
+        reachability), transitive_reverse (upstream callers), and module_dependencies (cross-module \
+        edges). Returns a structured Markdown report detailing the traced paths, confidence scores, \
+        and edge relations. Traversal halts when depth is reached, and output is truncated to fit \
+        the budget."
     )]
     fn trace_path(
         &self,
@@ -3898,10 +3928,25 @@ impl GrapheniumServer {
         }
     }
 
-    /// Query the relational index with keywords via BFS or DFS traversal.
-    #[tool(description = "Query the relational index with keywords. \
-        Scores nodes by keyword match and traverses the graph via BFS (default) or DFS. \
-        Returns matching nodes and their connections formatted as Markdown.")]
+    /// Query the relational index with keywords to find relevant nodes and explore their topology.
+    ///
+    /// Use this read-only tool for initial discovery when you do not yet know the exact node IDs.
+    /// If you already know the target ID, use `inspect_symbol` instead. To trace deep multi-hop
+    /// paths, use `trace_path` instead.
+    ///
+    /// The query mechanism scores nodes by keyword match and traverses their neighborhood (BFS by
+    /// default, or DFS if `dfs=true`). Results are rendered as a structured Markdown report. To
+    /// prevent context bloat, the output is strictly truncated to fit within the provided `budget`
+    /// (default 2000).
+    #[tool(
+        description = "Query the relational index with keywords to find relevant nodes and \
+        explore their topology. Use this read-only tool for initial discovery when you do not yet \
+        know the exact node IDs. If you already know the target ID, use inspect_symbol instead. To \
+        trace deep multi-hop paths, use trace_path instead. The query mechanism scores nodes by \
+        keyword match and traverses their neighborhood (BFS by default, or DFS if dfs=true). \
+        Results are rendered as a structured Markdown report. To prevent context bloat, the output \
+        is strictly truncated to fit within the provided budget (default 2000)."
+    )]
     fn query_graph(
         &self,
         #[tool(param)]
@@ -4191,7 +4236,27 @@ impl GrapheniumServer {
         msg
     }
 
-    #[tool(description = "Creates a new virtual planning workspace to group intended changes.")]
+    /// Create a new virtual planning workspace.
+    ///
+    /// Use this tool *first* when starting any multi-file feature or refactoring task, before
+    /// calling `add_planned_symbol` or `validate_plan`. Do not use this tool if a plan already
+    /// exists for your current task.
+    ///
+    /// This is a mutating operation that initializes an empty Virtual AST associated with the
+    /// provided `plan_id`. The workspace is stored in the server's graph state and persisted to
+    /// disk immediately, so it remains available for the duration of the server session. If the
+    /// `plan_id` already exists, this operation is idempotent and returns the existing workspace.
+    /// Returns the initialized workspace ID on success.
+    #[tool(
+        description = "Create a new virtual planning workspace. Use this tool first when \
+        starting any multi-file feature or refactoring task, before calling add_planned_symbol or \
+        validate_plan. Do not use this tool if a plan already exists for your current task. This is \
+        a mutating operation that initializes an empty Virtual AST associated with the provided \
+        plan_id. The workspace is stored in the server's graph state and persisted to disk \
+        immediately, so it remains available for the duration of the server session. If the plan_id \
+        already exists, this operation is idempotent and returns the existing workspace. Returns \
+        the initialized workspace ID on success."
+    )]
     fn create_planning_workspace(
         &self,
         #[tool(param)]
@@ -4217,8 +4282,32 @@ impl GrapheniumServer {
         format!("Planning workspace '{}' successfully created.", plan_id)
     }
 
+    /// Register an intended new or modified symbol and its dependency edges in a virtual planning
+    /// workspace.
+    ///
+    /// Use this tool to declare your architectural design *before* writing code. Do NOT use
+    /// `mutate_graph` (which modifies the physical index) for planned changes.
+    ///
+    /// Prerequisites: You must first call `create_planning_workspace` to obtain a valid `plan_id`.
+    /// Side effects: This is an in-memory mutation that adds a virtual node to the specified
+    /// workspace. It automatically runs pre-flight policy checks; if the proposed symbol or its
+    /// dependencies violate `.graphenium/policy.json` rules (for example, forbidden dependencies),
+    /// the tool returns a `PRE_FLIGHT_VIOLATION` error and blocks the registration. If the
+    /// `target_symbol` does not exist, the tool returns an error and records nothing. Duplicate
+    /// calls for the same symbol are idempotent. Returns a success confirmation or a structural
+    /// violation error.
     #[tool(
-        description = "Registers an intended new or modified symbol and links it to an existing node."
+        description = "Register an intended new or modified symbol and its dependency edges in a \
+        virtual planning workspace. Use this tool to declare your architectural design before \
+        writing code. Do NOT use mutate_graph (which modifies the physical index) for planned \
+        changes. Prerequisites: You must first call create_planning_workspace to obtain a valid \
+        plan_id. Side effects: This is an in-memory mutation that adds a virtual node to the \
+        specified workspace. It automatically runs pre-flight policy checks; if the proposed symbol \
+        or its dependencies violate .graphenium/policy.json rules (for example, forbidden \
+        dependencies), the tool returns a PRE_FLIGHT_VIOLATION error and blocks the registration. \
+        If the target_symbol does not exist, the tool returns an error and records nothing. \
+        Duplicate calls for the same symbol are idempotent. Returns a success confirmation or a \
+        structural violation error."
     )]
     fn add_planned_symbol(
         &self,
