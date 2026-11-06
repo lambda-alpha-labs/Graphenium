@@ -9,6 +9,7 @@
 /// Top-level functions and structs are delegated to the generic walker after
 /// the custom pass collects method information.
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use tree_sitter::{Node, Parser};
 
@@ -16,17 +17,29 @@ use crate::model::{make_id, Edge, ExtractionResult, FileType, Node as GNode};
 
 use super::import_handlers::go_import;
 use super::walker::{located_node, source_span};
+use super::{register_symbol_label, unique_symbol_id};
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
 pub fn extract(source: &[u8], file_path: &str) -> ExtractionResult {
+    extract_with_root(source, file_path, None)
+}
+
+/// Like [`extract`], but qualifies structural module filenames (`main.go`,
+/// `lib.go`, …) using `project_root` so same-named files in different packages
+/// no longer collapse into one graph node.
+pub fn extract_with_root(
+    source: &[u8],
+    file_path: &str,
+    project_root: Option<&Path>,
+) -> ExtractionResult {
     #[cfg(feature = "lang-go")]
     {
-        extract_inner(source, file_path)
+        extract_inner(source, file_path, project_root)
     }
     #[cfg(not(feature = "lang-go"))]
     {
-        let _ = (source, file_path);
+        let _ = (source, file_path, project_root);
         ExtractionResult::new()
     }
 }
@@ -34,7 +47,7 @@ pub fn extract(source: &[u8], file_path: &str) -> ExtractionResult {
 // ── Implementation ─────────────────────────────────────────────────────────────
 
 #[cfg(feature = "lang-go")]
-fn extract_inner(source: &[u8], file_path: &str) -> ExtractionResult {
+fn extract_inner(source: &[u8], file_path: &str, project_root: Option<&Path>) -> ExtractionResult {
     let mut parser = Parser::new();
     if let Err(e) = parser.set_language(&tree_sitter_go::LANGUAGE.into()) {
         eprintln!(
@@ -55,8 +68,9 @@ fn extract_inner(source: &[u8], file_path: &str) -> ExtractionResult {
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or(file_path);
+    let file_prefix = super::module_stem_from_path(file_path, project_root);
 
-    let file_node_id = make_id(&[file_stem]);
+    let file_node_id = make_id(&[&file_prefix]);
     let mut result = ExtractionResult::new();
 
     // Module node
@@ -65,8 +79,9 @@ fn extract_inner(source: &[u8], file_path: &str) -> ExtractionResult {
             .with_source_location(source_span(tree.root_node())),
     );
 
-    let mut label_to_nid: HashMap<String, String> = HashMap::new();
-    label_to_nid.insert(file_stem.to_string(), file_node_id.clone());
+    let mut label_to_nid: HashMap<String, Vec<String>> = HashMap::new();
+    register_symbol_label(&mut label_to_nid, file_stem, &file_node_id);
+    register_symbol_label(&mut label_to_nid, &file_prefix, &file_node_id);
 
     let mut fn_bodies: Vec<(String, Node<'_>)> = Vec::new();
     let pkg = extract_package_name(tree.root_node(), source);
@@ -75,7 +90,7 @@ fn extract_inner(source: &[u8], file_path: &str) -> ExtractionResult {
         tree.root_node(),
         source,
         file_path,
-        file_stem,
+        &file_prefix,
         &file_node_id,
         &mut result,
         &mut label_to_nid,
@@ -110,7 +125,7 @@ fn walk_node<'tree>(
     file_stem: &str,
     file_node_id: &str,
     result: &mut ExtractionResult,
-    label_to_nid: &mut HashMap<String, String>,
+    label_to_nid: &mut HashMap<String, Vec<String>>,
     fn_bodies: &mut Vec<(String, Node<'tree>)>,
     pkg: Option<&str>,
 ) {
@@ -137,7 +152,7 @@ fn walk_node<'tree>(
                 None => gnode,
             };
             result.nodes.push(gnode);
-            label_to_nid.insert(name, node_id.clone());
+            register_symbol_label(label_to_nid, &name, &node_id);
             result.edges.push(Edge::extracted(
                 file_node_id,
                 &node_id,
@@ -161,22 +176,29 @@ fn walk_node<'tree>(
 
             // Ensure the receiver type node exists (it may have been created
             // earlier as a struct; if not, create a placeholder).
-            let parent_id = label_to_nid.get(parent_label).cloned().unwrap_or_else(|| {
-                let pid = make_id(&[file_stem, parent_label]);
-                if !result.nodes.iter().any(|n| n.id == pid) {
-                    let gnode = located_node(&pid, parent_label, FileType::Code, file_path, node);
-                    let gnode = match qualify(pkg, None, parent_label) {
-                        Some(q) => gnode.with_qualified_label(q),
-                        None => gnode,
-                    };
-                    result.nodes.push(gnode);
-                    result
-                        .edges
-                        .push(Edge::extracted(file_node_id, &pid, "contains", file_path));
-                }
-                label_to_nid.insert(parent_label.to_string(), pid.clone());
-                pid
-            });
+            let parent_id = label_to_nid
+                .get(parent_label)
+                .and_then(|ids| ids.first().cloned())
+                .unwrap_or_else(|| {
+                    let pid = make_id(&[file_stem, parent_label]);
+                    if !result.nodes.iter().any(|n| n.id == pid) {
+                        let gnode =
+                            located_node(&pid, parent_label, FileType::Code, file_path, node);
+                        let gnode = match qualify(pkg, None, parent_label) {
+                            Some(q) => gnode.with_qualified_label(q),
+                            None => gnode,
+                        };
+                        result.nodes.push(gnode);
+                        result.edges.push(Edge::extracted(
+                            file_node_id,
+                            &pid,
+                            "contains",
+                            file_path,
+                        ));
+                    }
+                    register_symbol_label(label_to_nid, parent_label, &pid);
+                    pid
+                });
 
             let node_id = make_id(&[&parent_id, &name]);
             let gnode = located_node(&node_id, &name, FileType::Code, file_path, node);
@@ -185,7 +207,7 @@ fn walk_node<'tree>(
                 None => gnode,
             };
             result.nodes.push(gnode);
-            label_to_nid.insert(name, node_id.clone());
+            register_symbol_label(label_to_nid, &name, &node_id);
             result
                 .edges
                 .push(Edge::extracted(&parent_id, &node_id, "method", file_path));
@@ -210,7 +232,7 @@ fn walk_node<'tree>(
                                 None => gnode,
                             };
                             result.nodes.push(gnode);
-                            label_to_nid.insert(name, node_id.clone());
+                            register_symbol_label(label_to_nid, &name, &node_id);
                             result.edges.push(Edge::extracted(
                                 file_node_id,
                                 &node_id,
@@ -253,7 +275,7 @@ fn descend<'tree>(
     file_stem: &str,
     file_node_id: &str,
     result: &mut ExtractionResult,
-    label_to_nid: &mut HashMap<String, String>,
+    label_to_nid: &mut HashMap<String, Vec<String>>,
     fn_bodies: &mut Vec<(String, Node<'tree>)>,
     pkg: Option<&str>,
 ) {
@@ -352,19 +374,20 @@ fn collect_calls<'tree>(
     node: Node<'tree>,
     owner_id: &str,
     source: &[u8],
-    label_to_nid: &HashMap<String, String>,
+    label_to_nid: &HashMap<String, Vec<String>>,
     seen: &mut HashSet<(String, String)>,
     out: &mut Vec<Edge>,
 ) {
     if node.kind() == "call_expression" {
         if let Some(callee) = super::walker::get_call_target(node, source) {
-            if let Some(callee_id) = label_to_nid.get(&callee) {
-                let pair = (owner_id.to_string(), callee_id.clone());
+            if let Some(callee_id) = unique_symbol_id(label_to_nid, &callee) {
+                let pair = (owner_id.to_string(), callee_id.to_string());
                 if seen.insert(pair) {
                     out.push(Edge::inferred_call(owner_id, callee_id, ""));
                 }
-            } else {
-                // Emit unresolvable edge for cross-file call
+            } else if !label_to_nid.contains_key(&callee) {
+                // Emit unresolvable edge for cross-file call. Ambiguous in-file
+                // labels are skipped instead of guessing a definition.
                 let mut edge = Edge::new(
                     owner_id.to_string(),
                     callee,
@@ -413,6 +436,24 @@ mod tests {
         assert!(
             r.edges.iter().any(|e| e.relation == "method"),
             "missing method edge"
+        );
+    }
+
+    #[cfg(feature = "lang-go")]
+    #[test]
+    fn duplicate_method_names_across_types_are_not_guessed() {
+        let src = b"package main\n\
+            type A struct{}\n\
+            type B struct{}\n\
+            func (a *A) New() {}\n\
+            func (b *B) New() {}\n\
+            func Run() { var x A; x.New() }\n";
+        let r = extract(src, "main.go");
+
+        let calls: Vec<_> = r.edges.iter().filter(|e| e.relation == "calls").collect();
+        assert!(
+            calls.is_empty(),
+            "ambiguous `New` calls should not bind to an arbitrary receiver: {calls:?}"
         );
     }
 

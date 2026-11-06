@@ -148,11 +148,22 @@ pub fn salsa_extract_all(
     use rayon::prelude::*;
 
     let root = project_root.map(std::path::Path::to_path_buf);
-    let results: Vec<ExtractionResult> = files
+    let mut results: Vec<ExtractionResult> = files
         .par_iter()
         .filter(|f| f.file_type == FileType::Code)
         .map(|f| salsa_extract_file(&f.path, f.file_type.clone(), root.clone()))
         .collect();
+
+    // Resolve cross-file calls before merging, matching `extract_all()`. Without
+    // this, watch-mode full rebuilds would silently drop cross-file call edges
+    // while incremental patches (which do resolve) would add them back.
+    let resolved_count = crate::resolver::resolve_cross_file_calls(&mut results, None);
+    if resolved_count > 0 {
+        eprintln!(
+            "[graphenium] Stack Graphs: resolved {} cross-file references",
+            resolved_count
+        );
+    }
 
     let mut merged = ExtractionResult::new();
     for r in results {

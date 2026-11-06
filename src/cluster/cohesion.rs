@@ -7,7 +7,7 @@
 /// the number of edges in a complete undirected graph with `n` nodes.
 /// A score of 1.0 = all nodes fully connected (clique).
 /// A score of 0.0 = no internal edges.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::cluster::focus;
 use crate::model::GrapheniumGraph;
@@ -55,14 +55,21 @@ pub fn community_stats(
         .filter_map(|(i, id)| assignments.get(i).map(|&c| (id.as_str(), c)))
         .collect();
 
-    // Count internal edges per community.
-    let mut internal_counts: HashMap<usize, usize> = HashMap::new();
+    // Count unique undirected node pairs per community. The graph permits
+    // parallel edges (same endpoints, different relation/confidence), so
+    // counting raw edges can exceed the simple-graph clique denominator and
+    // push cohesion above 1.0. Self-loops are ignored for the same reason.
+    let mut internal_pairs: HashMap<usize, HashSet<(&str, &str)>> = HashMap::new();
     for (src, tgt, _edge) in graph.edges_with_endpoints() {
+        if src == tgt {
+            continue;
+        }
         let cs = member_set.get(src).copied();
         let ct = member_set.get(tgt).copied();
         if let (Some(a), Some(b)) = (cs, ct) {
             if a == b {
-                *internal_counts.entry(a).or_insert(0) += 1;
+                let pair = if src < tgt { (src, tgt) } else { (tgt, src) };
+                internal_pairs.entry(a).or_default().insert(pair);
             }
         }
     }
@@ -73,7 +80,7 @@ pub fn community_stats(
         .map(|(id, mut members)| {
             members.sort();
             let n = members.len();
-            let ie = internal_counts.get(&id).copied().unwrap_or(0);
+            let ie = internal_pairs.get(&id).map_or(0, HashSet::len);
             let max_edges = if n >= 2 { n * (n - 1) / 2 } else { 0 };
             let cohesion = if max_edges > 0 {
                 ie as f64 / max_edges as f64
@@ -181,6 +188,25 @@ mod tests {
 
         let stats = community_stats(&g, &assignments, &node_ids);
         assert_eq!(stats[0].cohesion, 0.0);
+    }
+
+    #[test]
+    fn parallel_edges_do_not_exceed_cohesion_one() {
+        // Two nodes connected by two logically distinct edges (different
+        // confidence): the simple-graph maximum is still one pair, so cohesion
+        // must be 1.0 rather than 2.0.
+        let mut g = GrapheniumGraph::new();
+        g.upsert_node(Node::new("a", "a", FileType::Code, "f.rs"));
+        g.upsert_node(Node::new("b", "b", FileType::Code, "f.rs"));
+        g.add_edge(Edge::extracted("a", "b", "calls", "f.rs"));
+        g.add_edge(Edge::inferred_call("a", "b", "f.rs"));
+
+        let node_ids = vec!["a".to_string(), "b".to_string()];
+        let assignments = vec![0, 0];
+
+        let stats = community_stats(&g, &assignments, &node_ids);
+        assert_eq!(stats[0].internal_edges, 1);
+        assert!((stats[0].cohesion - 1.0).abs() < 1e-9);
     }
 
     #[test]

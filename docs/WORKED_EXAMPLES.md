@@ -80,7 +80,7 @@ Graphenium's repository includes a fully compiled, AST-proven case study of its 
 *   **Automated Audit Output:** `worked/graphenium-self-analysis/GRAPH_REPORT.md`
 *   **Sample Queries:** `worked/graphenium-self-analysis/sample-queries.md`
 
-This case study illustrates how Graphenium resolved **927 cross-file references** using local Stack Graphs, achieving a 100% import resolution ratio and mathematically proving the decoupling of its model tier from its background MCP server layer.
+This case study illustrates how Graphenium resolved **1,030 cross-file references** using local Stack Graphs, achieved a 100% import resolution ratio, and enforces model/serve layer constraints through pre-flight policy gates and post-edit physical edge re-checks.
 
 A second, language-specific case study covers Buzzard's Lean 4 formalization of Fermat's Last Theorem:
 

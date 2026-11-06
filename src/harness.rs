@@ -140,6 +140,8 @@ pub struct PlanVerificationReport {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub missing_edges: Vec<String>,
     pub unplanned_modified_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub policy_violations: Vec<String>,
     pub passes_compliance: bool,
 }
 
@@ -237,10 +239,18 @@ pub fn verify_plan_with_modified_files(
         .collect();
 
     for p_node in &planned_nodes {
-        planned_files.insert(normalize_plan_path(&p_node.source_file, project_root));
+        let planned_file = normalize_plan_path(&p_node.source_file, project_root);
+        planned_files.insert(planned_file.clone());
 
+        // Require the physical implementation to live in the planned file. A
+        // same-named symbol elsewhere in the repository must not satisfy the
+        // plan, otherwise unrelated pre-existing code bypasses the check.
         let has_real_impl = graph.nodes().any(|n| {
-            n.plan_id.is_none() && n.id != p_node.id && n.label.eq_ignore_ascii_case(&p_node.label)
+            n.plan_id.is_none()
+                && n.id != p_node.id
+                && n.label.eq_ignore_ascii_case(&p_node.label)
+                && (p_node.source_file.is_empty()
+                    || normalize_plan_path(&n.source_file, project_root) == planned_file)
         });
 
         if has_real_impl {
@@ -285,13 +295,14 @@ pub fn verify_plan_with_modified_files(
             .collect();
 
         if !src_real_ids.is_empty() && !tgt_real_ids.is_empty() {
+            // Direction matters: a reversed dependency is not an implementation
+            // of the planned edge. The underlying graph is undirected, but each
+            // Edge keeps its logical source/target.
             let has_real_edge = graph.edges_iter().any(|e| {
                 e.plan_id.is_none()
                     && e.relation.eq_ignore_ascii_case(&p_edge.relation)
-                    && ((src_real_ids.contains(&e.source.as_str())
-                        && tgt_real_ids.contains(&e.target.as_str()))
-                        || (src_real_ids.contains(&e.target.as_str())
-                            && tgt_real_ids.contains(&e.source.as_str())))
+                    && src_real_ids.contains(&e.source.as_str())
+                    && tgt_real_ids.contains(&e.target.as_str())
             });
             if has_real_edge {
                 implemented_edges.push(edge_desc);
@@ -328,8 +339,12 @@ pub fn verify_plan_with_modified_files(
     unplanned_modified_files.sort();
     unplanned_modified_files.truncate(20);
 
-    let passes_compliance =
-        missing_nodes.is_empty() && missing_edges.is_empty() && unplanned_modified_files.is_empty();
+    let policy_violations = collect_physical_policy_violations(graph, &planned_files, project_root);
+
+    let passes_compliance = missing_nodes.is_empty()
+        && missing_edges.is_empty()
+        && unplanned_modified_files.is_empty()
+        && policy_violations.is_empty();
 
     PlanVerificationReport {
         plan_id: plan_id.to_string(),
@@ -338,6 +353,7 @@ pub fn verify_plan_with_modified_files(
         implemented_edges,
         missing_edges,
         unplanned_modified_files,
+        policy_violations,
         passes_compliance,
     }
 }
@@ -479,6 +495,19 @@ pub fn validate_plan(
         if let Ok(delta_report) = evaluate_delta_gate(graph, plan_id, -0.02, 5.0) {
             if !delta_report.passes {
                 passes = false;
+
+                // A plan can fail purely on modularity decay with no single
+                // edge above the surprise threshold. Report that reason
+                // explicitly instead of returning an empty violation list.
+                if delta_report.modularity_delta < -0.02 {
+                    violations.push(format!(
+                        "Topological Modularity Decay: Plan degrades Louvain modularity by ΔQ = {:.4} (baseline {:.4} -> virtual {:.4}, tolerance -0.0200).",
+                        delta_report.modularity_delta,
+                        delta_report.modularity_baseline,
+                        delta_report.modularity_virtual
+                    ));
+                }
+
                 for edge in delta_report.plan_surprise_edges {
                     violations.push(format!(
                         "Topological Entropy Violation: Planned relationship {} -> {} exceeds surprise threshold ({:.1}). Reason: {}",
@@ -501,6 +530,136 @@ fn resolve_edge_source_file(graph: &GrapheniumGraph, edge: &Edge) -> String {
         .node_data(&edge.source)
         .map(|n| n.source_file.clone())
         .unwrap_or_else(|| edge.source_file.clone())
+}
+
+/// Re-run architecture policy rules against physical edges originating from the
+/// plan's approved files. Pre-flight only sees virtual edges, so without this a
+/// plan can pass validation and then add a forbidden physical edge inside an
+/// otherwise-approved file.
+fn collect_physical_policy_violations(
+    graph: &GrapheniumGraph,
+    planned_files: &std::collections::HashSet<String>,
+    project_root: Option<&str>,
+) -> Vec<String> {
+    if planned_files.is_empty() {
+        return Vec::new();
+    }
+    let Some(root) = project_root else {
+        return Vec::new();
+    };
+    let Ok(config) = ArchPolicyConfig::load_for_project(Path::new(root)) else {
+        return Vec::new();
+    };
+    if config.rules.is_empty() {
+        return Vec::new();
+    }
+
+    let mut violations = Vec::new();
+
+    for rule in &config.rules {
+        match rule {
+            ArchRule::ForbiddenDependency {
+                from_pattern,
+                to_pattern,
+                reason,
+            } => {
+                let (Ok(from_glob), Ok(to_glob)) =
+                    (compile_glob(from_pattern), compile_glob(to_pattern))
+                else {
+                    continue;
+                };
+                for edge in graph.edges_iter().filter(|e| e.plan_id.is_none()) {
+                    let src_file =
+                        normalize_plan_path(&resolve_edge_source_file(graph, edge), project_root);
+                    if !planned_files.contains(&src_file) {
+                        continue;
+                    }
+                    let Some(target_node) = graph.node_data(&edge.target) else {
+                        continue;
+                    };
+                    let tgt_file = normalize_plan_path(&target_node.source_file, project_root);
+                    if from_glob.is_match(&src_file) && to_glob.is_match(&tgt_file) {
+                        violations.push(format!(
+                            "Post-edit physical edge {} -> {} violates forbidden dependency rule: {from_pattern} -> {to_pattern} (Reason: {reason})",
+                            edge.source, edge.target
+                        ));
+                    }
+                }
+            }
+            ArchRule::StrictLayering { layers, reason } => {
+                if layers.len() < 2 {
+                    continue;
+                }
+                let matchers: Vec<Result<GlobMatcher, String>> =
+                    layers.iter().map(|l| compile_glob(l)).collect();
+                for (i, from_matcher) in matchers.iter().enumerate() {
+                    let Ok(from_glob) = from_matcher else {
+                        continue;
+                    };
+                    for (j, to_matcher) in matchers.iter().enumerate().take(i) {
+                        let Ok(to_glob) = to_matcher else {
+                            continue;
+                        };
+                        for edge in graph.edges_iter().filter(|e| e.plan_id.is_none()) {
+                            let src_file = normalize_plan_path(
+                                &resolve_edge_source_file(graph, edge),
+                                project_root,
+                            );
+                            if !planned_files.contains(&src_file) {
+                                continue;
+                            }
+                            let Some(target_node) = graph.node_data(&edge.target) else {
+                                continue;
+                            };
+                            let tgt_file =
+                                normalize_plan_path(&target_node.source_file, project_root);
+                            if from_glob.is_match(&src_file) && to_glob.is_match(&tgt_file) {
+                                violations.push(format!(
+                                    "Post-edit physical edge {} -> {} violates strict layering: {} must not depend on {} (Reason: {reason})",
+                                    edge.source, edge.target, layers[i], layers[j]
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            ArchRule::BannedSymbol {
+                symbol_label,
+                reason,
+            } => {
+                let banned = symbol_label.trim();
+                for node in graph.nodes().filter(|n| n.plan_id.is_none()) {
+                    let file = normalize_plan_path(&node.source_file, project_root);
+                    if planned_files.contains(&file) && (node.label == banned || node.id == banned)
+                    {
+                        violations.push(format!(
+                            "Post-edit physical symbol '{banned}' is banned (Reason: {reason})"
+                        ));
+                    }
+                }
+                for edge in graph.edges_iter().filter(|e| e.plan_id.is_none()) {
+                    let src_file =
+                        normalize_plan_path(&resolve_edge_source_file(graph, edge), project_root);
+                    if !planned_files.contains(&src_file) {
+                        continue;
+                    }
+                    if edge.target == banned
+                        || graph
+                            .node_data(&edge.target)
+                            .is_some_and(|n| n.label == banned)
+                    {
+                        violations.push(format!(
+                            "Post-edit physical call/dependency target '{banned}' is banned (Reason: {reason})"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    violations.sort();
+    violations.dedup();
+    violations
 }
 
 fn check_strict_layering_violations(
@@ -850,5 +1009,130 @@ mod tests {
         assert!(!report.passes);
         assert_eq!(report.violations.len(), 1);
         assert!(report.violations[0].contains("violates forbidden dependency"));
+    }
+
+    #[test]
+    fn verify_plan_requires_implementation_in_the_planned_file() {
+        use crate::model::FileType;
+
+        let mut graph = GrapheniumGraph::new();
+        let mut planned = Node::new(
+            "plan_validate",
+            "validate",
+            FileType::Code,
+            "src/auth/new_validator.rs",
+        );
+        planned.plan_id = Some("plan-file".to_string());
+        graph.upsert_node(planned);
+
+        // Same-named function exists, but in an unrelated file.
+        graph.upsert_node(Node::new(
+            "other_validate",
+            "validate",
+            FileType::Code,
+            "src/validate.rs",
+        ));
+
+        let report = verify_plan(&graph, "plan-file");
+        assert_eq!(report.missing_nodes, vec!["validate".to_string()]);
+        assert!(!report.passes_compliance);
+    }
+
+    #[test]
+    fn verify_plan_requires_correct_edge_direction() {
+        use crate::model::{Confidence, FileType};
+
+        let mut graph = GrapheniumGraph::new();
+        let mut plan_alpha = Node::new("plan_alpha", "Alpha", FileType::Code, "src/a.rs");
+        plan_alpha.plan_id = Some("plan-direction".to_string());
+        graph.upsert_node(plan_alpha);
+        let mut plan_beta = Node::new("plan_beta", "Beta", FileType::Code, "src/b.rs");
+        plan_beta.plan_id = Some("plan-direction".to_string());
+        graph.upsert_node(plan_beta);
+
+        graph.upsert_node(Node::new("real_alpha", "Alpha", FileType::Code, "src/a.rs"));
+        graph.upsert_node(Node::new("real_beta", "Beta", FileType::Code, "src/b.rs"));
+
+        // Reversed physical dependency: Beta -> Alpha instead of Alpha -> Beta.
+        graph.add_edge(Edge::extracted(
+            "real_beta",
+            "real_alpha",
+            "calls",
+            "src/b.rs",
+        ));
+
+        let mut planned_edge = Edge::new(
+            "plan_alpha",
+            "plan_beta",
+            "calls",
+            Confidence::Extracted,
+            "src/a.rs",
+        );
+        planned_edge.plan_id = Some("plan-direction".to_string());
+        graph.add_edge(planned_edge);
+
+        let report = verify_plan(&graph, "plan-direction");
+        assert_eq!(report.missing_edges.len(), 1);
+        assert!(!report.passes_compliance);
+    }
+
+    #[test]
+    fn verify_plan_flags_physical_policy_violations_in_approved_files() {
+        use crate::model::FileType;
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".graphenium")).unwrap();
+        std::fs::write(
+            tmp.path().join(".graphenium/policy.json"),
+            r#"{
+                "rules": [{
+                    "type": "forbidden_dependency",
+                    "from_pattern": "src/controllers/**",
+                    "to_pattern": "src/db/**",
+                    "reason": "Controllers must use services, not access DB directly"
+                }]
+            }"#,
+        )
+        .unwrap();
+
+        let mut graph = GrapheniumGraph::new();
+        graph.metadata.project_root = Some(tmp.path().to_string_lossy().to_string());
+
+        let mut planned_controller = Node::new(
+            "plan_ctrl",
+            "AuthController",
+            FileType::Code,
+            "src/controllers/auth.rs",
+        );
+        planned_controller.plan_id = Some("plan-physical".to_string());
+        graph.upsert_node(planned_controller);
+
+        graph.upsert_node(Node::new(
+            "real_ctrl",
+            "AuthController",
+            FileType::Code,
+            "src/controllers/auth.rs",
+        ));
+        graph.upsert_node(Node::new(
+            "real_db",
+            "DbConnection",
+            FileType::Code,
+            "src/db/connection.rs",
+        ));
+
+        // Physical edge inside the approved file that bypasses pre-flight.
+        graph.add_edge(Edge::extracted(
+            "real_ctrl",
+            "real_db",
+            "calls",
+            "src/controllers/auth.rs",
+        ));
+
+        let report = verify_plan(&graph, "plan-physical");
+        assert!(
+            !report.policy_violations.is_empty(),
+            "post-edit physical policy violation must be reported"
+        );
+        assert!(!report.passes_compliance);
     }
 }

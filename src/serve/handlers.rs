@@ -612,6 +612,12 @@ fn format_plan_verification(report: &crate::harness::PlanVerificationReport) -> 
             report.unplanned_modified_files.join(", ")
         ));
     }
+    if !report.policy_violations.is_empty() {
+        out.push_str(&format!(
+            "- Physical policy violations: {}\n",
+            report.policy_violations.join("; ")
+        ));
+    }
     out
 }
 

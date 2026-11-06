@@ -34,12 +34,12 @@ Graphenium is evaluated against its own repository structure as a standard basel
 
 | Metric | Baseline Value |
 | :--- | :--- |
-| **Files Indexed** | 41 source files |
-| **AST Symbols (Nodes)** | 1,211 |
-| **Structural Boundaries (Edges)** | 3,083 |
+| **Files Indexed** | 91 code files |
+| **AST Symbols (Nodes)** | 1,410 |
+| **Structural Boundaries (Edges)** | 3,606 |
 | **Cohesive Domains (Communities)** | 19 |
-| **AST-Proven (`EXTRACTED`) Connections** | 1,328 (43%) |
-| **Semantic (`INFERRED`) Connections** | 1,755 (57%) |
+| **AST-Proven (`EXTRACTED`) Connections** | 1,562 (43%) |
+| **Semantic (`INFERRED`) Connections** | 2,044 (57%) |
 | **Average Query Payload Size** | 6,600 to 8,700 characters |
 | **Approximate Query Token Cost** | 1,650 to 2,200 tokens |
 

@@ -4,6 +4,31 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.24.0 - 2026-11-06
+
+### Summary
+Structural precision and containment-hardening release. This milestone removes major graph-topology artifacts, fixes cohesion scoring, closes post-edit policy loopholes, and makes watch-mode resolution consistent with full builds.
+
+### Fixed
+*   **Stdlib Method False Bindings (`src/resolver.rs`):** Bare ubiquitous method names (`len`, `new`, `clone`, `write`, `read`, …) no longer bind cross-file to unrelated project symbols. The `Manifest::len` god-node artifact is eliminated.
+*   **Same-Named Module Collapse (`src/extract/{mod,rust_lang,walker,go}.rs`):** `mod.rs`, `lib.rs`, `main.rs`, `index.ts`, `__init__.py`, and `__main__` now use root-relative ID prefixes, so same-named files in different directories remain distinct. The AST cache format version was bumped so stale caches cannot keep serving collapsed IDs.
+*   **Community Cohesion Above 1.0 (`src/cluster/cohesion.rs`):** Cohesion now counts unique undirected node pairs and ignores self-loops, keeping reported cohesion inside `[0.0, 1.0]` even with parallel edges.
+*   **Missing ΔQ Violation (`src/harness.rs`):** `validate_plan` now emits an explicit modularity-decay violation when a plan fails on ΔQ alone.
+*   **Post-Edit Verification Loopholes (`src/harness.rs`):** Planned nodes must be implemented in the planned file; planned edges require the correct direction; and physical edges originating from approved files are re-checked against `.graphenium/policy.json`. `PlanVerificationReport` gained `policy_violations`.
+*   **Intra-File Label Collisions (`src/extract/{rust_lang,walker,go}.rs`):** Duplicate short names such as multiple `fn new()` definitions are treated as ambiguous instead of binding calls to an arbitrary implementation.
+*   **Watch-Mode Resolution (`src/watch.rs`, `src/cache/query.rs`):** Incremental patches now run import and cross-file call resolution against the existing graph index, and watch-mode full rebuilds use the same cross-file resolver as `gm run`.
+*   **Worked Case Study (`worked/graphenium-self-analysis/`):** Regenerated the self-analysis report, sample queries, and case-study summary against v0.24.0. The report no longer contains `Manifest::len` or `mod` god nodes, and all community cohesion values are `≤ 1.000`.
+
+### Changed
+*   **CLI and MCP Output:** `gm check --plan` and `verify_changes` now surface physical policy violations alongside missing nodes, missing edges, and scope creep.
+*   **Version:** Bumped to `0.24.0`.
+
+### Tests
+*   Added regression tests for stdlib method denylisting, structural module IDs, parallel-edge cohesion, planned-file implementation checks, directed edge verification, physical policy violations, and ambiguous intra-file method names.
+*   `cargo test --tests`: 438 tests pass (423 library, 10 Datalog, 4 planning, 1 trust benchmark).
+
+---
+
 ## v0.23.1 - 2026-11-02
 
 ### Summary

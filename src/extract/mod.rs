@@ -19,6 +19,82 @@ use crate::cache::CacheManager;
 use crate::detect::DetectedFile;
 use crate::model::{ExtractionResult, FileType};
 
+/// File stems that are not unique on their own and therefore must be qualified
+/// with their project-relative directory when used as an ID prefix. Without
+/// this, every `mod.rs` / `index.ts` / `__init__.py` in a repository collapses
+/// into a single graph node.
+const STRUCTURAL_MODULE_STEMS: &[&str] = &["mod", "lib", "main", "index", "__init__", "__main__"];
+
+/// Bump when extractor output semantics change so stale on-disk AST caches
+/// cannot keep serving old node IDs (e.g. collapsed `mod.rs` file nodes).
+const AST_CACHE_FORMAT_VERSION: &str = "2";
+
+fn ast_cache_key(content_hash: &str) -> String {
+    format!("{AST_CACHE_FORMAT_VERSION}-{content_hash}")
+}
+
+/// Derive a stable ID prefix from a file path.
+///
+/// Ordinary files keep their bare stem (e.g. `src/parser.rs` -> `parser`), which
+/// preserves existing IDs. Structural module filenames are qualified with the
+/// root-relative path (e.g. `src/extract/mod.rs` -> `src_extract_mod`) so that
+/// same-named files in different directories remain distinct.
+pub(crate) fn module_stem_from_path(file_path: &str, project_root: Option<&Path>) -> String {
+    let path = Path::new(file_path);
+    let file_stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(file_path);
+
+    if !STRUCTURAL_MODULE_STEMS
+        .iter()
+        .any(|s| s.eq_ignore_ascii_case(file_stem))
+    {
+        return file_stem.to_string();
+    }
+
+    let relative = project_root
+        .and_then(|root| path.strip_prefix(root).ok())
+        .unwrap_or(path);
+    let without_ext = relative.with_extension("");
+    let normalized = without_ext
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_start_matches("./")
+        .trim_matches('/')
+        .to_string();
+
+    if normalized.is_empty() {
+        file_stem.to_string()
+    } else {
+        crate::model::make_id(&[&normalized])
+    }
+}
+
+/// Record a short label -> node ID association without overwriting earlier
+/// definitions. Duplicate labels become ambiguous and are ignored by the
+/// intra-file call resolver instead of binding to an arbitrary definition.
+pub(crate) fn register_symbol_label(
+    map: &mut std::collections::HashMap<String, Vec<String>>,
+    label: &str,
+    id: &str,
+) {
+    let ids = map.entry(label.to_string()).or_default();
+    if !ids.iter().any(|existing| existing == id) {
+        ids.push(id.to_string());
+    }
+}
+
+/// Return the node ID for `label` only when it is unambiguous within the file.
+pub(crate) fn unique_symbol_id<'a>(
+    map: &'a std::collections::HashMap<String, Vec<String>>,
+    label: &str,
+) -> Option<&'a str> {
+    map.get(label)
+        .filter(|ids| ids.len() == 1)
+        .map(|ids| ids[0].as_str())
+}
+
 /// Controls how aggressively the AST extractor infers relationships.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ExtractMode {
@@ -99,7 +175,7 @@ pub fn extract_file(file: &DetectedFile, opts: &ExtractOptions) -> ExtractionRes
     // Try AST cache when a cache manager is available
     if let Some(ref cache) = opts.cache_manager {
         if let Ok(hash) = crate::cache::file_hash(&file.path) {
-            if let Some(cached) = cache.load_ast(&hash) {
+            if let Some(cached) = cache.load_ast(&ast_cache_key(&hash)) {
                 return cached;
             }
         }
@@ -119,7 +195,7 @@ pub fn extract_file(file: &DetectedFile, opts: &ExtractOptions) -> ExtractionRes
     if let Some(ref cache) = opts.cache_manager {
         if !result.is_empty() {
             if let Ok(hash) = crate::cache::file_hash(&file.path) {
-                let _ = cache.save_ast(&hash, &result);
+                let _ = cache.save_ast(&ast_cache_key(&hash), &result);
             }
         }
     }
@@ -142,15 +218,15 @@ pub fn dispatch_with_root(
     match ext {
         // Rust, Go, and Lean 4 have dedicated extractors.
         #[cfg(feature = "lang-rust")]
-        "rs" => rust_lang::extract(source, file_path),
+        "rs" => rust_lang::extract_with_root(source, file_path, project_root),
         #[cfg(feature = "lang-go")]
-        "go" => go::extract(source, file_path),
+        "go" => go::extract_with_root(source, file_path, project_root),
         "lean" => lean::extract_with_root(source, file_path, project_root),
 
         // All other supported languages use the generic walker.
         _ => {
             if let Some(cfg) = config::config_for_extension(ext) {
-                walker::walk_file(source, &cfg, file_path)
+                walker::walk_file_with_root(source, &cfg, file_path, project_root)
             } else {
                 ExtractionResult::new()
             }
@@ -165,6 +241,36 @@ mod tests {
     use std::io::Write;
     #[cfg(feature = "lang-python")]
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn structural_module_stems_are_qualified_by_directory() {
+        let root = Path::new("/project");
+        assert_eq!(
+            module_stem_from_path("/project/src/a/mod.rs", Some(root)),
+            "src_a_mod"
+        );
+        assert_eq!(
+            module_stem_from_path("/project/src/b/mod.rs", Some(root)),
+            "src_b_mod"
+        );
+        assert_eq!(
+            module_stem_from_path("/project/web/index.ts", Some(root)),
+            "web_index"
+        );
+        assert_eq!(
+            module_stem_from_path("/project/pkg/__init__.py", Some(root)),
+            "pkg_init"
+        );
+    }
+
+    #[test]
+    fn ordinary_files_keep_bare_stem() {
+        let root = Path::new("/project");
+        assert_eq!(
+            module_stem_from_path("/project/src/parser.rs", Some(root)),
+            "parser"
+        );
+    }
 
     #[cfg(feature = "lang-python")]
     #[test]

@@ -237,6 +237,12 @@ fn try_incremental(
         changed_paths.iter().map(|p| p.to_path_buf()).collect();
     let paths_to_extract = manifest.invalidation_set(&changed_bufs);
 
+    // Re-extract the whole invalidation batch first, then run the same
+    // cross-file resolvers used by the full pipeline before patching the graph.
+    // Without this, call edges from edited files lose their cross-file targets
+    // and raw unresolved stubs are dropped as dangling edges.
+    let mut patched_paths: Vec<String> = Vec::new();
+    let mut reextracted: Vec<crate::model::ExtractionResult> = Vec::new();
     for path_str in &paths_to_extract {
         let file_path = std::path::Path::new(path_str);
         let result = crate::cache::query::salsa_extract_file(
@@ -247,9 +253,20 @@ fn try_incremental(
         if result.is_empty() {
             continue; // unrecognised or empty file — skip
         }
+        patched_paths.push(path_str.clone());
+        reextracted.push(result);
+    }
 
+    if !reextracted.is_empty() {
+        let symbol_index = crate::resolver::build_symbol_index_from_graph(&graph, &reextracted);
+        crate::resolver::resolve_imports_with_graph(&graph, &mut reextracted);
+        crate::resolver::resolve_cross_file_calls(&mut reextracted, Some(&symbol_index));
+    }
+
+    for (path_str, result) in patched_paths.iter().zip(reextracted.iter()) {
+        let file_path = std::path::Path::new(path_str);
         let source_file = path_str.to_string();
-        let stats = graph.replace_file_extraction(&source_file, &result);
+        let stats = graph.replace_file_extraction(&source_file, result);
         total_nodes_removed += stats.nodes_removed;
         total_nodes_inserted += stats.nodes_inserted;
         total_edges_inserted += stats.edges_inserted;

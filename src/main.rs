@@ -1260,6 +1260,12 @@ fn cmd_check(
         if !report.unplanned_modified_files.is_empty() {
             println!("Unplanned changes: {:?}", report.unplanned_modified_files);
         }
+        if !report.policy_violations.is_empty() {
+            println!("\nPhysical policy violations:");
+            for violation in &report.policy_violations {
+                println!("  - {violation}");
+            }
+        }
         if !report.passes_compliance {
             plan_failed = true;
         }

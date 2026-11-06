@@ -8,12 +8,14 @@
 /// the `label_to_nid` map built in Pass 1 and emit INFERRED `calls` edges
 /// (weight = 0.8).  Deduplicated via a `HashSet<(String, String)>`.
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use tree_sitter::{Node, Parser, Tree};
 
 use crate::model::{make_id, Confidence, Edge, ExtractionResult, FileType, Node as GNode};
 
 use super::config::LanguageConfig;
+use super::{register_symbol_label, unique_symbol_id};
 
 pub fn source_span(node: Node<'_>) -> String {
     let start = node.start_position();
@@ -42,6 +44,18 @@ pub fn located_node(
 /// Parse `source` with `config.language`, run the two-pass walk, and return
 /// the populated `ExtractionResult`.
 pub fn walk_file(source: &[u8], config: &LanguageConfig, file_path: &str) -> ExtractionResult {
+    walk_file_with_root(source, config, file_path, None)
+}
+
+/// Like [`walk_file`], but qualifies structural module filenames (`index.ts`,
+/// `__init__.py`, `main.go`, …) using `project_root` so same-named files in
+/// different directories no longer collapse into one graph node.
+pub fn walk_file_with_root(
+    source: &[u8],
+    config: &LanguageConfig,
+    file_path: &str,
+    project_root: Option<&Path>,
+) -> ExtractionResult {
     let mut parser = Parser::new();
     if let Err(e) = parser.set_language(&config.language) {
         eprintln!(
@@ -59,7 +73,7 @@ pub fn walk_file(source: &[u8], config: &LanguageConfig, file_path: &str) -> Ext
         return ExtractionResult::new();
     };
 
-    walk_tree(source, &tree, config, file_path)
+    walk_tree_with_root(source, &tree, config, file_path, project_root)
 }
 
 /// Walk an already-parsed `tree`.  Called by `walk_file` and may be reused by
@@ -70,18 +84,30 @@ pub fn walk_tree<'tree>(
     config: &LanguageConfig,
     file_path: &str,
 ) -> ExtractionResult {
+    walk_tree_with_root(source, tree, config, file_path, None)
+}
+
+/// Like [`walk_tree`], with an optional project root for unique module IDs.
+pub fn walk_tree_with_root<'tree>(
+    source: &[u8],
+    tree: &'tree Tree,
+    config: &LanguageConfig,
+    file_path: &str,
+    project_root: Option<&Path>,
+) -> ExtractionResult {
     let file_stem = std::path::Path::new(file_path)
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or(file_path);
+    let file_prefix = super::module_stem_from_path(file_path, project_root);
 
-    let file_node_id = make_id(&[file_stem]);
+    let file_node_id = make_id(&[&file_prefix]);
 
     let mut state = WalkState {
         source,
         config,
         file_path,
-        file_stem,
+        file_stem: &file_prefix,
         file_node_id: file_node_id.clone(),
         label_to_nid: HashMap::new(),
         fn_bodies: Vec::new(),
@@ -93,9 +119,8 @@ pub fn walk_tree<'tree>(
         GNode::new(&file_node_id, file_stem, FileType::Code, file_path)
             .with_source_location(source_span(tree.root_node())),
     );
-    state
-        .label_to_nid
-        .insert(file_stem.to_string(), file_node_id);
+    register_symbol_label(&mut state.label_to_nid, file_stem, &file_node_id);
+    register_symbol_label(&mut state.label_to_nid, &file_prefix, &file_node_id);
 
     // Pass 1: structure
     structure_walk(tree.root_node(), None, &mut state);
@@ -132,8 +157,9 @@ struct WalkState<'src, 'tree> {
     file_path: &'src str,
     file_stem: &'src str,
     file_node_id: String,
-    /// Maps short label (class/function name) to its canonical node ID.
-    label_to_nid: HashMap<String, String>,
+    /// Maps short label (class/function name) to every node ID defined with
+    /// that name in this file. Multiple entries mean the label is ambiguous.
+    label_to_nid: HashMap<String, Vec<String>>,
     /// Function body nodes collected during Pass 1 for the call-graph pass.
     fn_bodies: Vec<(String, Node<'tree>)>,
     result: ExtractionResult,
@@ -184,7 +210,7 @@ fn handle_class<'src, 'tree>(
                 state.file_path,
                 node,
             ));
-            state.label_to_nid.insert(name, id.clone());
+            register_symbol_label(&mut state.label_to_nid, &name, &id);
             state.result.edges.push(Edge::extracted(
                 &effective_parent,
                 &id,
@@ -287,7 +313,7 @@ fn handle_function<'src, 'tree>(
                 state.file_path,
                 node,
             ));
-            state.label_to_nid.insert(name, id.clone());
+            register_symbol_label(&mut state.label_to_nid, &name, &id);
             state.result.edges.push(Edge::extracted(
                 &effective_parent,
                 &id,
@@ -339,13 +365,16 @@ fn callgraph_walk<'tree>(
 ) {
     if state.config.call_kinds.contains(&node.kind()) {
         if let Some(callee_label) = get_call_target(node, state.source) {
-            if let Some(callee_id) = state.label_to_nid.get(&callee_label) {
-                let pair = (owner_id.to_string(), callee_id.clone());
+            if let Some(callee_id) = unique_symbol_id(&state.label_to_nid, &callee_label) {
+                let pair = (owner_id.to_string(), callee_id.to_string());
                 if seen.insert(pair) {
                     out.push(Edge::inferred_call(owner_id, callee_id, state.file_path));
                 }
-            } else if seen.insert((owner_id.to_string(), callee_label.clone())) {
-                // Phase 1A: Emit unresolved cross-file call-site
+            } else if !state.label_to_nid.contains_key(&callee_label)
+                && seen.insert((owner_id.to_string(), callee_label.clone()))
+            {
+                // Phase 1A: Emit unresolved cross-file call-site. Ambiguous
+                // in-file labels are skipped instead of guessing a definition.
                 let mut edge = Edge::new(
                     owner_id.to_string(),
                     callee_label.clone(),
@@ -502,6 +531,29 @@ mod tests {
             assert!(
                 r.edges.iter().any(|e| e.relation == "calls"),
                 "expected a calls edge from run -> greet"
+            );
+        }
+
+        #[test]
+        fn duplicate_method_names_are_not_guessed() {
+            let cfg = cfg();
+            let src = b"class A:\n    def new(self):\n        pass\n\nclass B:\n    def new(self):\n        pass\n\ndef run():\n    A().new()\n";
+            let r = walk_file(src, &cfg, "test.py");
+
+            let new_ids: Vec<&str> = r
+                .nodes
+                .iter()
+                .filter(|n| n.label == "new")
+                .map(|n| n.id.as_str())
+                .collect();
+            let calls: Vec<_> = r
+                .edges
+                .iter()
+                .filter(|e| e.relation == "calls" && new_ids.contains(&e.target.as_str()))
+                .collect();
+            assert!(
+                calls.is_empty(),
+                "ambiguous `new` calls should not bind to an arbitrary class: {calls:?}"
             );
         }
 

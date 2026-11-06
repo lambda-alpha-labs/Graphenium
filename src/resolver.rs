@@ -14,7 +14,100 @@
 
 use std::collections::HashMap;
 
-use crate::model::ExtractionResult;
+use crate::model::{ExtractionResult, GrapheniumGraph};
+
+/// Bare method names that are overwhelmingly likely to refer to stdlib
+/// collection/iterator APIs rather than a project-defined symbol with the same
+/// short name. Binding these across files produces god-node artifacts such as
+/// every `.len()` call in the repository pointing at the sole user-defined
+/// `fn len`. Qualification (`Type::method`) is preserved by the extractors as a
+/// different key, so only truly bare calls are affected.
+const UBIQUITOUS_STDLIB_METHODS: &[&str] = &[
+    "len",
+    "is_empty",
+    "new",
+    "default",
+    "clone",
+    "iter",
+    "into_iter",
+    "unwrap",
+    "expect",
+    "ok",
+    "err",
+    "from",
+    "into",
+    "as_ref",
+    "as_str",
+    "to_string",
+    "push",
+    "insert",
+    "get",
+    "contains",
+    "map",
+    "filter",
+    "collect",
+    "fmt",
+    "write",
+    "write_all",
+    "flush",
+    "read",
+    "read_to_string",
+    "read_line",
+];
+
+fn is_ubiquitous_bare_method(name: &str) -> bool {
+    let normalized = crate::model::id::normalize_id(name);
+    UBIQUITOUS_STDLIB_METHODS.contains(&normalized.as_str())
+}
+
+fn add_export(exports: &mut HashMap<String, String>, key: &str, id: &str) {
+    exports
+        .entry(key.to_string())
+        .or_insert_with(|| id.to_string());
+}
+
+/// Build an export index from extraction results, keyed by node ID, label, and
+/// qualified label.
+fn build_export_index(results: &[ExtractionResult]) -> HashMap<String, String> {
+    let mut exports = HashMap::new();
+    for result in results {
+        for node in &result.nodes {
+            add_export(&mut exports, &node.id, &node.id);
+            add_export(&mut exports, &node.label, &node.id);
+            if let Some(ref ql) = node.qualified_label {
+                add_export(&mut exports, ql, &node.id);
+            }
+        }
+    }
+    exports
+}
+
+/// Build an export index that also includes physical nodes already present in
+/// the graph. Used by incremental watch patching, where only a subset of files
+/// is re-extracted but imports may target unchanged files.
+fn build_export_index_with_graph(
+    graph: &GrapheniumGraph,
+    results: &[ExtractionResult],
+) -> HashMap<String, String> {
+    let mut exports = HashMap::new();
+    for node in graph.nodes().filter(|n| n.plan_id.is_none()) {
+        add_export(&mut exports, &node.id, &node.id);
+        add_export(&mut exports, &node.label, &node.id);
+        if let Some(ref ql) = node.qualified_label {
+            add_export(&mut exports, ql, &node.id);
+        }
+    }
+    for result in results {
+        for node in &result.nodes {
+            add_export(&mut exports, &node.id, &node.id);
+            add_export(&mut exports, &node.label, &node.id);
+            if let Some(ref ql) = node.qualified_label {
+                add_export(&mut exports, ql, &node.id);
+            }
+        }
+    }
+    exports
+}
 
 /// Post-process extraction results to mark import resolution status.
 /// Builds an export index from all results, then walks every edge:
@@ -23,20 +116,21 @@ use crate::model::ExtractionResult;
 /// - Import edges whose target is absent get `unresolved` status.
 /// - Non-import edges are left untouched.
 pub fn resolve_imports(results: &mut [ExtractionResult]) {
-    let mut exports: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    for result in results.iter() {
-        for node in &result.nodes {
-            exports
-                .entry(node.id.clone())
-                .or_insert_with(|| node.id.clone());
-            exports
-                .entry(node.label.clone())
-                .or_insert_with(|| node.id.clone());
-            if let Some(ref ql) = node.qualified_label {
-                exports.entry(ql.clone()).or_insert_with(|| node.id.clone());
-            }
-        }
-    }
+    let exports = build_export_index(results);
+    resolve_imports_with_exports(results, &exports);
+}
+
+/// Like [`resolve_imports`], but resolves imports against an export index that
+/// may include symbols from the existing graph.
+pub fn resolve_imports_with_graph(graph: &GrapheniumGraph, results: &mut [ExtractionResult]) {
+    let exports = build_export_index_with_graph(graph, results);
+    resolve_imports_with_exports(results, &exports);
+}
+
+fn resolve_imports_with_exports(
+    results: &mut [ExtractionResult],
+    exports: &HashMap<String, String>,
+) {
     for result in results.iter_mut() {
         for edge in result.edges.iter_mut() {
             if edge.relation != "imports" {
@@ -118,6 +212,19 @@ pub struct CrossFileReference {
     pub resolved: bool,
 }
 
+fn index_symbol(
+    index: &mut HashMap<String, Vec<(String, String)>>,
+    label: &str,
+    source_file: &str,
+    node_id: &str,
+) {
+    let entries = index.entry(label.to_string()).or_default();
+    let entry = (source_file.to_string(), node_id.to_string());
+    if !entries.iter().any(|existing| existing == &entry) {
+        entries.push(entry);
+    }
+}
+
 /// Build a cross-file symbol index from extraction results.
 /// Returns: label → set of (file_path, node_id).
 fn build_symbol_index(results: &[ExtractionResult]) -> HashMap<String, Vec<(String, String)>> {
@@ -125,22 +232,40 @@ fn build_symbol_index(results: &[ExtractionResult]) -> HashMap<String, Vec<(Stri
     for result in results {
         for node in &result.nodes {
             // Index by label
-            index
-                .entry(node.label.clone())
-                .or_default()
-                .push((node.source_file.clone(), node.id.clone()));
+            index_symbol(&mut index, &node.label, &node.source_file, &node.id);
             // Also index by qualified label when available (e.g. for C#/Rust namespaces)
             if let Some(ref ql) = node.qualified_label {
-                index
-                    .entry(ql.clone())
-                    .or_default()
-                    .push((node.source_file.clone(), node.id.clone()));
+                index_symbol(&mut index, ql, &node.source_file, &node.id);
             }
             // Index by the normalized ID too (catches cross-file references by ID)
-            index
-                .entry(node.id.clone())
-                .or_default()
-                .push((node.source_file.clone(), node.id.clone()));
+            index_symbol(&mut index, &node.id, &node.source_file, &node.id);
+        }
+    }
+    index
+}
+
+/// Build a cross-file symbol index from physical graph nodes plus a batch of
+/// freshly extracted results. Used by incremental watch patching so calls from
+/// changed files can bind to symbols in unchanged files.
+pub fn build_symbol_index_from_graph(
+    graph: &GrapheniumGraph,
+    extra_results: &[ExtractionResult],
+) -> HashMap<String, Vec<(String, String)>> {
+    let mut index: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    for node in graph.nodes().filter(|n| n.plan_id.is_none()) {
+        index_symbol(&mut index, &node.label, &node.source_file, &node.id);
+        if let Some(ref ql) = node.qualified_label {
+            index_symbol(&mut index, ql, &node.source_file, &node.id);
+        }
+        index_symbol(&mut index, &node.id, &node.source_file, &node.id);
+    }
+    for result in extra_results {
+        for node in &result.nodes {
+            index_symbol(&mut index, &node.label, &node.source_file, &node.id);
+            if let Some(ref ql) = node.qualified_label {
+                index_symbol(&mut index, ql, &node.source_file, &node.id);
+            }
+            index_symbol(&mut index, &node.id, &node.source_file, &node.id);
         }
     }
     index
@@ -278,6 +403,15 @@ pub fn resolve_cross_file_calls(
             } else {
                 edge.target.as_str()
             };
+
+            // A bare ubiquitous stdlib method name is not enough evidence to
+            // bind to a project symbol with the same short name. The edge stays
+            // unresolved and is dropped below, instead of creating god nodes
+            // such as every `.len()` -> `Manifest::len`.
+            if edge.relation == "calls" && is_ubiquitous_bare_method(key) {
+                edge.resolution_status = Some("unresolved".to_string());
+                continue;
+            }
 
             let caller_node = result.nodes.iter().find(|n| n.id == edge.source);
             let caller_file = caller_node
@@ -507,6 +641,54 @@ mod tests {
         assert_eq!(report.len(), 1);
         assert_eq!(report[0].relation, "calls");
         assert!(report[0].resolved);
+    }
+
+    #[test]
+    fn ubiquitous_stdlib_methods_do_not_bind_cross_file() {
+        // The only project-defined `len` lives in manifest.rs. A `.len()` call
+        // in an unrelated file must not bind to it.
+        let mut r_manifest = ExtractionResult::new();
+        r_manifest.nodes.push(make_file(
+            "manifest_len",
+            "len",
+            "src/cache/manifest.rs",
+            true,
+        ));
+
+        let mut r_caller = ExtractionResult::new();
+        r_caller.nodes.push(make_file(
+            "diff_node_count",
+            "node_count",
+            "src/analyze/diff.rs",
+            true,
+        ));
+        let mut call_edge = make_edge("diff_node_count", "len", "calls", "src/analyze/diff.rs");
+        call_edge.tgt_original = "len".to_string();
+        r_caller.edges.push(call_edge);
+
+        let mut results = vec![r_manifest, r_caller];
+        let count = resolve_cross_file_calls(&mut results, None);
+
+        assert_eq!(count, 0, "bare `.len()` must stay unresolved");
+        assert!(
+            results[1].edges.iter().all(|e| e.relation != "calls"),
+            "unresolved ubiquitous call stub should be dropped"
+        );
+    }
+
+    #[test]
+    fn build_symbol_index_from_graph_includes_physical_nodes() {
+        let mut graph = crate::model::GrapheniumGraph::new();
+        graph.upsert_node(make_file(
+            "manifest_len",
+            "len",
+            "src/cache/manifest.rs",
+            true,
+        ));
+
+        let index = build_symbol_index_from_graph(&graph, &[]);
+        assert!(index.contains_key("len"));
+        assert_eq!(index["len"][0].1, "manifest_len");
     }
 
     #[test]

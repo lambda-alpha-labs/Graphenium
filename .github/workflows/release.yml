@@ -71,6 +71,7 @@ jobs:
           echo "## Graphenium $(echo $GITHUB_REF | sed 's|refs/tags/v||')" > notes.md
           echo "" >> notes.md
           echo "- Planned-edge compliance and MCP post-edit verification" >> notes.md
+          echo "- Cross-file call disambiguation, unique module IDs, and physical policy re-checks" >> notes.md
           echo "- Lightweight harness builds via mcp/watch/semantic feature gates" >> notes.md
           echo "- MCP server with 12 cohesive structural containment, Datalog, and planning tools" >> notes.md
           echo "- Behavioral routing guidance in consolidated MCP tool schemas" >> notes.md
