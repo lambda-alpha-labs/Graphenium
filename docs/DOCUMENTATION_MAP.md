@@ -40,7 +40,9 @@ skills/
 worked/
   ├── README.md                 # Overview of structural containment case studies
   ├── TEMPLATE.md               # Standard report template for new codebase studies
-  └── graphenium-self-analysis/  # Base study: Graphenium analyzed by its own engine
+  ├── graphenium-self-analysis/  # Base study: Graphenium analyzed by its own engine
+  ├── flt-lean4-proof-gaps/      # Lean 4 proof-gap taint mapping and verified sorry
+  └── mub6-dimension-six/        # Exact MUB-6 obstructions via Lean + embedded Datalog
 ```
 
 ---

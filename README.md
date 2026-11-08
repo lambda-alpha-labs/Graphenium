@@ -299,6 +299,7 @@ Add to `~/.cursor/mcp.json`:
 | [`worked/graphenium-self-analysis/README.md`](worked/graphenium-self-analysis/README.md) | Graphenium self-analysis: applying the containment engine to itself. |
 | [`worked/graphenium-self-analysis/sample-queries.md`](worked/graphenium-self-analysis/sample-queries.md) | Sample query output on Graphenium's own codebase. |
 | [`worked/flt-lean4-proof-gaps/README.md`](worked/flt-lean4-proof-gaps/README.md) | Lean 4 proof-gap taint mapping and a verified `sorry` proof in Buzzard's Fermat's Last Theorem repository. |
+| [`worked/mub6-dimension-six/README.md`](worked/mub6-dimension-six/README.md) | Exact dimension-six MUB obstructions: 16 bases with no MUB pair, plus a 90-vector set with no orthogonal pair, checked by exact arithmetic, Lean, and Graphenium's embedded Datalog. |
 
 ---
 

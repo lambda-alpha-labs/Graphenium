@@ -88,3 +88,11 @@ A second, language-specific case study covers Buzzard's Lean 4 formalization of 
 *   **Summary Report:** `worked/flt-lean4-proof-gaps/README.md`
 
 It documents the Lean 4 extractor upgrades required for a real proof repository (`public import`, anonymous `instance` declarations, module-qualified IDs, and FNV-1a name disambiguation), the deterministic Louvain and import-stub merge fixes, and the difference between module/import-propagated proof-gap taint (11.8%) and strict declaration-level taint (1.93%). It also includes a verified proof of the four `sorry`s in `WeierstrassCurve.galoisRepresentation` and the resulting graph diff.
+
+A third case study covers exact graph obstructions in the dimension-six MUB problem:
+
+*   **Case Study Directory:** `worked/mub6-dimension-six/`
+*   **Summary Report:** `worked/mub6-dimension-six/README.md`
+*   **Showcase Repository:** [`lambda-alpha-labs/MUB-6`](https://github.com/lambda-alpha-labs/MUB-6)
+
+It verifies that the Fourier pair has 16 unbiased bases with no MUB pair, and that Tao's \(S_6\) has 90 unbiased vectors with no orthogonal pair. The showcase uses exact arithmetic, a Mathlib-free Lean 4 kernel certificate, a C exhaustive search for the 48 Björck codes, and Graphenium's embedded Datalog engine — no Soufflé dependency. `make verify` runs the full stack in CI.
