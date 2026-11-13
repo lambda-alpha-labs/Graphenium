@@ -71,12 +71,12 @@ jobs:
           echo "## Graphenium $(echo $GITHUB_REF | sed 's|refs/tags/v||')" > notes.md
           echo "" >> notes.md
           echo "### Highlights" >> notes.md
-          echo "- Lean trust hardening: canonical axiom labels (no duplicate \`Quot.sound\` / \`quot_sound\`) and clean, valid \`--json\` stdout with \`failure_reasons\`" >> notes.md
-          echo "- Automatic hypothesis detection for multi-line signatures, active \`section\`/\`namespace\` \`variable\` declarations, cross-file certificate types, and elaborated \`forallE\` binders" >> notes.md
-          echo "- Guardrails keep \`[CommRing R]\` typeclass constraints and \`(n : Nat)\` data parameters from producing false \`CONDITIONAL\` statuses" >> notes.md
-          echo "- Datalog output is goal-only by default; new \`--show-derived\` flag exposes all materialized IDB relations" >> notes.md
-          echo "- Bound-mask negation indexes eliminate non-leading-column scans; the 200k-edge \`not\` regression completes under 1 second in release builds" >> notes.md
-          echo "- Documentation updated across the command reference, architecture, trust model, CI guide, and MUB-6 worked example" >> notes.md
+          echo "- AST cache keys now include the crate version, so upgrading gm can no longer replay stale extraction results (the stale-cache path that reported conditional Lean theorems as \`UNCONDITIONAL\`)" >> notes.md
+          echo "- \`gm run\` prunes AST cache entries from other gm/extractor versions instead of letting them accumulate on every upgrade" >> notes.md
+          echo "- Transparent type aliases (\`def\`/\`abbrev\`) are no longer treated as hypotheses, so arithmetic definitions and theorems using data aliases stop reporting false \`CONDITIONAL\` statuses" >> notes.md
+          echo "- Explicit \`--hypothesis\` flags are reported as \`direct_or_transitive: \"direct\"\`, matching auto-detected binders" >> notes.md
+          echo "- Bound-mask hash indexes now accelerate positive Datalog joins too: a 80k-edge join drops from >300s to ~4s, and the 84k-edge atlas transfer graph completes a one-hop join in ~7s" >> notes.md
+          echo "- Relative \`--out-dir\`/\`--cache-dir\` for \`run\`/\`watch\` resolve against the working directory, matching read commands" >> notes.md
           echo "" >> notes.md
           echo "### Platform" >> notes.md
           echo "- AST + Stack Graphs extraction for 9 languages with import-scoped call disambiguation" >> notes.md
