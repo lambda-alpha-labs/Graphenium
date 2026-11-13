@@ -24,6 +24,25 @@ use crate::model::ExtractionResult;
 
 // ── Low-level primitives ───────────────────────────────────────────────────────
 
+/// Version tag for the AST extraction cache layout and semantics. Bump when
+/// extractor output changes shape (node IDs, edge relations, ...).
+pub const AST_CACHE_FORMAT_VERSION: &str = "4";
+
+/// Prefix shared by every live AST cache entry. Includes the crate version so
+/// an upgraded binary never replays entries written by an older extractor.
+pub fn ast_cache_prefix() -> String {
+    format!(
+        "{}-{}-",
+        env!("CARGO_PKG_VERSION"),
+        AST_CACHE_FORMAT_VERSION
+    )
+}
+
+/// Cache key for one file's AST extraction result.
+pub fn ast_cache_key(content_hash: &str) -> String {
+    format!("{}{}", ast_cache_prefix(), content_hash)
+}
+
 /// Compute the SHA256 hex digest of the bytes in `path`.
 pub fn file_hash(path: &Path) -> crate::Result<String> {
     let bytes = std::fs::read(path)?;

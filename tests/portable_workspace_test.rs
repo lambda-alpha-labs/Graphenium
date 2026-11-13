@@ -209,3 +209,48 @@ fn read_only_verification_commands_do_not_write() {
     restore(&cache, 0o755);
     restore(&out, 0o755);
 }
+
+#[test]
+fn explicit_relative_out_dir_is_cwd_relative_not_root_relative() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("project");
+    let cwd = tmp.path().join("work");
+    std::fs::create_dir_all(&cwd).unwrap();
+    write_source(&root);
+
+    let output = gm()
+        .arg("run")
+        .arg(&root)
+        .args(["--no-semantic", "--no-viz", "--out-dir", "artifacts"])
+        .current_dir(&cwd)
+        .output()
+        .expect("run gm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        cwd.join("artifacts/graph.json").exists(),
+        "explicit relative --out-dir must resolve against the cwd"
+    );
+    assert!(
+        !root.join("artifacts").exists(),
+        "explicit relative --out-dir must not be re-based onto the scanned root"
+    );
+
+    // The default stays inside the scanned project.
+    let output = gm()
+        .arg("run")
+        .arg(&root)
+        .args(["--no-semantic", "--no-viz"])
+        .current_dir(&cwd)
+        .output()
+        .expect("run gm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(root.join("graphenium-out/graph.json").exists());
+}

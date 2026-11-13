@@ -686,16 +686,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cache_dir,
         } => {
             let root = path.canonicalize().unwrap_or_else(|_| path.clone());
-            let out_dir = if out_dir.is_absolute() {
-                out_dir
-            } else {
-                root.join(out_dir)
-            };
-            let cache_dir = match cache_dir {
-                Some(dir) if dir.is_absolute() => dir,
-                Some(dir) => root.join(dir),
-                None => out_dir.join("cache"),
-            };
+            let out_dir = resolve_out_dir(out_dir, &root);
+            let cache_dir = resolve_cache_dir(cache_dir, &out_dir, &root);
             match tokio::task::spawn_blocking(move || {
                 graphenium::watch::watch_with_dirs(
                     &root,
@@ -861,6 +853,36 @@ fn verify_fresh_manifest(graph_path: &Path, out_dir: &Path) -> graphenium::Resul
 
 // ── `run` command ──────────────────────────────────────────────────────────────
 
+/// Resolve the output directory for `run`/`watch`.
+///
+/// The default (`graphenium-out`) stays inside the scanned project. An
+/// explicitly supplied relative path is resolved against the current working
+/// directory, matching `--graph` on read commands (`gm query`, `gm trust`,
+/// `gm check`). Previously both were resolved against the scanned root, so
+/// `gm run lean --out-dir lean/out` silently wrote `lean/lean/out`.
+fn resolve_out_dir(out_dir: PathBuf, root: &Path) -> PathBuf {
+    if out_dir.is_absolute() {
+        out_dir
+    } else if out_dir == Path::new("graphenium-out") {
+        root.join(out_dir)
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(&out_dir))
+            .unwrap_or_else(|_| root.join(&out_dir))
+    }
+}
+
+/// Resolve `--cache-dir` with the same base rule as [`resolve_out_dir`].
+fn resolve_cache_dir(cache_dir: Option<PathBuf>, out_dir: &Path, root: &Path) -> PathBuf {
+    match cache_dir {
+        Some(dir) if dir.is_absolute() => dir,
+        Some(dir) => std::env::current_dir()
+            .map(|cwd| cwd.join(&dir))
+            .unwrap_or_else(|_| root.join(dir)),
+        None => out_dir.join("cache"),
+    }
+}
+
 async fn cmd_run(
     path: PathBuf,
     mode: Option<String>,
@@ -880,16 +902,8 @@ async fn cmd_run(
     run_lean_axioms: Option<PathBuf>,
 ) -> graphenium::Result<()> {
     let root = path.canonicalize().unwrap_or_else(|_| path.clone());
-    let out_dir = if out_dir.is_absolute() {
-        out_dir
-    } else {
-        root.join(out_dir)
-    };
-    let cache_dir = match cache_dir {
-        Some(dir) if dir.is_absolute() => dir,
-        Some(dir) => root.join(dir),
-        None => out_dir.join("cache"),
-    };
+    let out_dir = resolve_out_dir(out_dir, &root);
+    let cache_dir = resolve_cache_dir(cache_dir, &out_dir, &root);
     let manifest_path = out_dir.join("manifest.json");
 
     let title = root
@@ -983,6 +997,19 @@ async fn cmd_run(
         ast_result.nodes.len(),
         ast_result.edges.len()
     );
+
+    // Drop entries written by a different extractor version. They can never be
+    // reused (the key is versioned), and leaving them makes cache size grow on
+    // every upgrade.
+    if !no_cache_write {
+        let cache = graphenium::cache::CacheManager::new(cache_dir.clone());
+        match cache.prune_ast() {
+            Ok(0) => {}
+            Ok(1) => eprintln!("[graphenium] Pruned 1 stale AST cache entry"),
+            Ok(n) => eprintln!("[graphenium] Pruned {n} stale AST cache entries"),
+            Err(error) => eprintln!("[graphenium] warn: could not prune AST cache: {error}"),
+        }
+    }
 
     // ── 4. Semantic extraction ─────────────────────────────────────────────────
     let (semantic_result, ast_only_graph) = if no_semantic {
