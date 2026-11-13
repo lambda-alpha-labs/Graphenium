@@ -4,7 +4,7 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
-## Unreleased
+## v0.26.0 - 2026-11-13
 
 ### Added
 *   **Hypothesis-Aware Lean Trust (`src/extract/lean.rs`, `src/analyze/lean_trust.rs`):** The Lean extractor now emits `depends_on_hypothesis` edges for theorem/lemma/def binder types, so a theorem of the form `theorem T (h : Cert) : Goal` is reported as `CONDITIONAL` instead of passing on kernel axioms alone. `gm trust` gained `--hypothesis`, `--allow-hypothesis`, `--warn-structure-params`, transitive assumption propagation, and explicit `UNCONDITIONAL` / `CONDITIONAL` / `TAINTED` statuses in `lean-trust.v1` JSON. `.graphenium/policy.json` can declare `hypotheses`, `allow_hypotheses`, `allow_axioms`, and `forbid_native_decide` either at the top level or under a `trust` block.
@@ -12,6 +12,7 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 *   **Lazy EDB Materialization:** `run_datalog` now loads only the EDB relations reachable from the query goals, and Datalog values share interned `Arc<str>` allocations.
 
 ### Changed
+*   **Version:** Bumped to `0.26.0`.
 *   **Lean Trust Surfacing:** `gm check`, `verify_changes`, and `get_graph_info` report conditional theorem counts and assumption names when Lean data is loaded. The MCP surface remains exactly 12 tools.
 
 ### Tests

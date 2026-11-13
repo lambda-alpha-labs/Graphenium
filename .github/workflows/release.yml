@@ -71,16 +71,16 @@ jobs:
           echo "## Graphenium $(echo $GITHUB_REF | sed 's|refs/tags/v||')" > notes.md
           echo "" >> notes.md
           echo "### Highlights" >> notes.md
-          echo "- Datalog ergonomics: \`!=\` / \`/=\` inequality, multiple labelled \`?- \` queries, and \`datalog.v1\` JSON output" >> notes.md
-          echo "- Portable workspaces: \`--out-dir\` / \`--cache-dir\` with repo-relative graph, manifest, and cache paths" >> notes.md
-          echo "- CI hardening: content-addressed manifests, \`--verify-fresh\`, and \`--no-cache-write\`" >> notes.md
-          echo "- Semantic Lean 4 trust auditing: \`#print axioms\` ingestion, axiom classification, and \`gm trust\`" >> notes.md
-          echo "- MCP surface remains exactly 12 consolidated tools; \`run_datalog\` gains JSON output" >> notes.md
+          echo "- Hypothesis-aware Lean trust: \`depends_on_hypothesis\` extraction, transitive assumptions, and \`UNCONDITIONAL\` / \`CONDITIONAL\` / \`TAINTED\` statuses" >> notes.md
+          echo "- New \`gm trust\` flags: \`--hypothesis\`, \`--allow-hypothesis\`, and \`--warn-structure-params\`, with \`.graphenium/policy.json\` \`trust\` policy support" >> notes.md
+          echo "- Stratified Datalog negation: SCC-ordered strata, explicit unstratifiable-recursion errors, and frozen full-tuple/per-column indexes" >> notes.md
+          echo "- Faster Datalog joins and lazy EDB materialization; 200k-edge negation benchmark completes in under 1 second in release builds" >> notes.md
+          echo "- Lean trust summaries surfaced in \`gm check\`, \`verify_changes\`, and \`get_graph_info\`; MCP surface remains exactly 12 tools" >> notes.md
           echo "" >> notes.md
           echo "### Platform" >> notes.md
           echo "- AST + Stack Graphs extraction for 9 languages with import-scoped call disambiguation" >> notes.md
-          echo "- Embedded goal-directed Datalog engine with first-column hash indexing" >> notes.md
-          echo "- Lean 4 proof-gap auditing and formal-verification Datalog predicates" >> notes.md
+          echo "- Embedded goal-directed Datalog engine with stratified negation and multi-column hash indexes" >> notes.md
+          echo "- Lean 4 proof-gap, axiom, and hypothesis auditing with formal-verification Datalog predicates" >> notes.md
           echo "- Recursive C# (.sln / .csproj) assembly boundary discovery" >> notes.md
           echo "- Zero-Drift Topological Delta Gating (Louvain ΔQ + surprise edge profiling)" >> notes.md
           echo "- \`gm check\`, \`gm gate\`, and \`gm doctor\` CI governance commands" >> notes.md
