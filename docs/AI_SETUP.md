@@ -280,7 +280,7 @@ gm query "" --datalog "?- [gaps] has_proof_gap(X). ?- [orphans] is_orphan(Y)." -
 gm query "conditional" --datalog "?- inherits_hypothesis(X, H)."
 ```
 
-Bodies also accept `A != B` / `A /= B` (variables must be bound by a positive atom). Negation is stratified and rejects recursive negative cycles; lower strata are frozen and indexed before higher strata negate them. The MCP `run_datalog` tool accepts `format = "json"` for the same `datalog.v1` report.
+Bodies also accept `A != B` / `A /= B` (variables must be bound by a positive atom). Negation is stratified and rejects recursive negative cycles; lower strata are frozen and indexed before higher strata negate them, using full-tuple plus bound-mask hash indexes so non-leading-column negations do not scan large relations. Output is goal-only by default: each `?-` goal produces one result set. The CLI adds `--show-derived` when a caller needs every materialized IDB relation; the MCP `run_datalog` tool returns goal rows and accepts `format = "json"` for the same `datalog.v1` report.
 
 ### 3.1 Lean 4 Trust Auditing
 For Lean 4 repositories, never treat a theorem as verified merely because it has no `sorry` token. Ingest `#print axioms` output and audit the theorem's dependency cone:
@@ -291,7 +291,7 @@ gm run . --no-semantic --no-viz --lean-axioms axioms.json
 gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
 ```
 
-`gm trust` reports standard kernel axioms, `sorryAx`, `native_decide` shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), external axioms, and binder hypotheses. It classifies each theorem as `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED` and exits non-zero on `TAINTED` or an unapproved `CONDITIONAL` theorem. Use `--allow-axiom <name>` only for reviewed external axioms and `--allow-hypothesis <name>` for reviewed structure/class parameters. Policy files can declare the same allowances under `trust` or at the top level:
+`gm trust` reports standard kernel axioms, `sorryAx`, `native_decide` shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), external axioms, and binder hypotheses. It classifies each theorem as `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED` and exits non-zero on `TAINTED` or an unapproved `CONDITIONAL` theorem. Binder detection is automatic for multi-line signatures, active `section`/`namespace` variables, cross-file certificate types, and elaborated `forallE` binders; `[CommRing R]` typeclass constraints and primitive parameters such as `(n : Nat)` are ignored. Kernel axiom labels are canonicalized (`Quot.sound`, not both `Quot.sound` and `quot_sound`), and `--json` writes exactly one `lean-trust.v1` document to stdout with `failure_reasons` on failure while keeping stderr clean. Use `--allow-axiom <name>` only for reviewed external axioms and `--allow-hypothesis <name>` for reviewed structure/class parameters. Policy files can declare the same allowances under `trust` or at the top level:
 
 ```json
 {

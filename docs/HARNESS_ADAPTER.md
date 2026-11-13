@@ -110,7 +110,7 @@ pub fn patch_file(
 -   Use `ExtractOptions.cache_manager = None` for ephemeral harness runs, or point `CacheManager::new` at a dedicated cache directory.
 -   `Manifest` keys are repo-relative when constructed with `Manifest::new().with_root(root)`. `is_changed_fast` tolerates mtime-only changes (fresh checkout), while `is_changed_strict` always re-hashes for CI drift checks.
 -   If you merge extraction results from custom extractors (C#/CI, semantic passes), call `extract::normalize_result_source_paths(&mut result, Some(root))` before inserting them into a graph.
--   For Lean 4 trust auditing, `extract::lean_axioms::{load_report, merge_report_into_graph}` ingest `#print axioms` facts, and `analyze::lean_trust::evaluate_trust` returns a serializable `TrustReport` (including `TrustStatus` and `assumptions`) without invoking a Lean compiler. `TrustOptions` exposes `hypotheses`, `allowed_hypotheses`, and `warn_structure_params`; `summarize` provides the compact status counts used by `gm check` and MCP health output.
+-   For Lean 4 trust auditing, `extract::lean_axioms::{load_report, merge_report_into_graph}` ingest `#print axioms` facts plus optional elaborated `binders[]` / `ConstantInfo.type` (`forallE`) expressions, and `analyze::lean_trust::evaluate_trust` returns a serializable `TrustReport` (including `TrustStatus`, `assumptions`, and `failure_reasons`) without invoking a Lean compiler. Axiom labels are canonicalized so raw and normalized kernel spellings do not duplicate. `TrustOptions` exposes `hypotheses`, `allowed_hypotheses`, and `warn_structure_params`; `summarize` provides the compact status counts used by `gm check` and MCP health output.
 
 ---
 

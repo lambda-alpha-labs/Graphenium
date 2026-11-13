@@ -321,6 +321,8 @@ Each audited theorem receives one of three statuses:
 
 Exits non-zero for `TAINTED`, or for `CONDITIONAL` unless every inherited hypothesis is allowed.
 
+Binder detection is automatic for single- and multi-line signatures, active `section`/`namespace` `variable` declarations, cross-file certificate types, and elaborated `forallE` binders in `lean-axioms.v1` JSON. Square-bracket typeclass constraints (`[CommRing R]`) and primitive data parameters (`(n : Nat)`) are ignored. Kernel axiom labels are canonicalized, so reports never contain both `Quot.sound` and `quot_sound`.
+
 Hypotheses can also be configured in `.graphenium/policy.json`:
 
 ```json

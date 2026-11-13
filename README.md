@@ -125,7 +125,7 @@ For agents, this replaces 30,000-token brute-force `grep`/file-read loops with ~
 Before touching disk, the agent declares its proposed classes, functions, and dependency edges in an in-memory planning workspace (`create_planning_workspace`, `add_planned_symbol`). Graphenium models the future topology of the repository in milliseconds. If the design violates an invariant, the agent receives an exact topological counterexample *in memory* before wasting thousands of tokens rewriting physical files - eliminating the "agent linter deadlock" loop.
 
 ### Pillar 3: Embedded Semi-Naive Datalog Verification Engine
-Graphenium compiles the codebase and Virtual AST into strongly typed EDB relations (`node`, `calls`, `imports`, `inherits`, `implements`, `contains`, `degree`, `hub`) and evaluates first-order rules (`stdlib.dl`) with goal-directed pruning, stratified negation, SCC-ordered strata, semi-naive delta iteration, and full-tuple plus per-column hash indexes (up to 10M EDB facts within a bounded step budget).
+Graphenium compiles the codebase and Virtual AST into strongly typed EDB relations (`node`, `calls`, `imports`, `inherits`, `implements`, `contains`, `degree`, `hub`) and evaluates first-order rules (`stdlib.dl`) with goal-directed pruning, stratified negation, SCC-ordered strata, semi-naive delta iteration, and full-tuple plus bound-mask hash indexes (up to 10M EDB facts within a bounded step budget).
 
 Beyond simple folder rules, `stdlib.dl` proves:
 *   Multi-hop transitive layer bypasses (`bypasses_layer(X, Y, Z)`).
@@ -136,6 +136,8 @@ Beyond simple folder rules, `stdlib.dl` proves:
 *   Lean trust boundaries from semantic `#print axioms` ingestion (`uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, `untrusted_theorem/1`) plus binder-hypothesis propagation (`depends_on_hypothesis/2`, `inherits_hypothesis/2`, `conditional_theorem/1`).
 
 Query bodies support `!=` / `/=` constraints (after positive bindings), stratified `not` with explicit rejection of unstratifiable recursion, and several labelled `?-` blocks that share a single materialized EDB/index. `gm query --datalog ... --json` emits the `datalog.v1` report for CI and tooling.
+
+Output is **goal-only by default** (since 0.26.0): each `?-` goal produces its own result set, and a single conjoined goal no longer prints every derived IDB relation. Emit one labelled goal per output, or pass `--show-derived` to include all materialized IDB relations under `derived[]`.
 
 ### Pillar 4: Zero-Config Topological Entropy Guardrails (Louvain ΔQ + Surprise Profiling)
 Even with **zero configuration files** (no `.graphenium/policy.json`), Graphenium partitions the physical baseline subgraph (`G_baseline`) and the proposed Virtual AST overlay (`G_virtual`) in memory, runs deterministic Louvain community detection on both, computes the modularity delta (`ΔQ = Q(G_virtual) − Q(G_baseline)`), and scores planned edges for structural surprise (`cross-community`, `peripheral→hub`).
@@ -223,7 +225,7 @@ Graphenium supports mixed repositories with Rust, Python, Go, JavaScript, TypeSc
 
 C# projects receive build-boundary awareness through recursive `.sln` and `.csproj` discovery, enabling Graphenium to model assemblies, namespaces, and project references as structural boundaries even in deeply nested enterprise layouts.
 
-Lean 4 support is built in and requires no tree-sitter grammar feature flag. It extracts namespaces, declarations, imports, and proof dependencies, and emits `AMBIGUOUS` `unverified_sorry` edges for `sorry` / `admit` proof gaps so CI can gate incomplete formal verification work. It also emits `depends_on_hypothesis` edges for theorem/lemma/def binder types, so a kernel-clean theorem that takes `(h : Cert)` is reported as `CONDITIONAL` rather than passing silently. For semantic trust boundaries, `gm run --lean-axioms <report>` bakes `#print axioms` facts into the graph (or `--run-lean-axioms <file>` explicitly invokes `lake env lean`), and `gm trust` audits inherited kernel axioms, external axioms, `native_decide` shortcuts, and hypotheses through the full dependency cone.
+Lean 4 support is built in and requires no tree-sitter grammar feature flag. It extracts namespaces, declarations, imports, and proof dependencies, and emits `AMBIGUOUS` `unverified_sorry` edges for `sorry` / `admit` proof gaps so CI can gate incomplete formal verification work. It also emits `depends_on_hypothesis` edges for theorem/lemma/def binder types, including multi-line signatures and active `section`/`namespace` `variable` declarations, so a kernel-clean theorem that takes `(h : Cert)` is reported as `CONDITIONAL` rather than passing silently; `[CommRing R]` constraints and `(n : Nat)` data parameters are ignored. For semantic trust boundaries, `gm run --lean-axioms <report>` bakes `#print axioms` facts (and optional elaborated `forallE` binders) into the graph (or `--run-lean-axioms <file>` explicitly invokes `lake env lean`), and `gm trust` audits inherited kernel axioms, external axioms, `native_decide` shortcuts, and hypotheses through the full dependency cone. Axiom labels are canonicalized, and `gm trust --json` emits one valid document on stdout with clean stderr.
 
 ---
 

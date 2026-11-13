@@ -95,4 +95,4 @@ A third case study covers exact graph obstructions in the dimension-six MUB prob
 *   **Summary Report:** `worked/mub6-dimension-six/README.md`
 *   **Showcase Repository:** [`lambda-alpha-labs/MUB-6`](https://github.com/lambda-alpha-labs/MUB-6)
 
-It verifies that the Fourier pair has 16 unbiased bases with no MUB pair, and that Tao's \(S_6\) has 90 unbiased vectors with no orthogonal pair. The showcase uses exact arithmetic, a Mathlib-free Lean 4 kernel certificate, a C exhaustive search for the 48 Björck codes, and Graphenium's embedded Datalog engine — no Soufflé dependency. `make verify` runs the full stack in CI.
+It verifies that the Fourier pair has 16 unbiased bases with no MUB pair, and that Tao's \(S_6\) has 90 unbiased vectors with no orthogonal pair. The showcase uses exact arithmetic, a Mathlib-free Lean 4 kernel certificate, a C exhaustive search for the 48 Björck codes, and Graphenium's embedded Datalog engine — no Soufflé dependency. Its Datalog program uses two labelled `?-` goals (`bases` and `mub_pairs`) so the `datalog.v1` JSON preserves both result sets under goal-only output. `make verify` runs the full stack in CI.

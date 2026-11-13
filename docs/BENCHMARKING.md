@@ -91,7 +91,7 @@ When evaluating Graphenium's gating pipelines on a new repository, aim for the f
 | :--- | :--- | :--- |
 | **Query Payload Size** | Under 10,000 characters | Ensures metadata fits comfortably within agent context windows without crowding out reasoning space. |
 | **Query Execution Latency** | Under 50 ms | Keeps MCP tool calls interactive, preventing background agent stalls. |
-| **Datalog Solver Execution** | Under 100 ms (Step budget: 1,000) | Ensures transitive layering proofs complete instantly during pre-flight policy evaluations. Bound joins use semi-naive delta relations and stratified negation over SCC-ordered strata; frozen relations maintain full-tuple and per-column hash indexes, base EDB relations up to 10M facts are supported, and evaluation blow-up is bounded by the step budget rather than EDB size. |
+| **Datalog Solver Execution** | Under 100 ms (Step budget: 1,000) | Ensures transitive layering proofs complete instantly during pre-flight policy evaluations. Bound joins use semi-naive delta relations and stratified negation over SCC-ordered strata; frozen relations maintain full-tuple and bound-mask hash indexes, base EDB relations up to 10M facts are supported, and evaluation blow-up is bounded by the step budget rather than EDB size. A 200k-edge `e(A,B), not e(B,A)` regression verifies sub-second release performance. |
 | **AST Import Resolution Ratio** | Over 80% (`gm doctor --resolution`) | Indicates that Graphenium has successfully mapped the project's physical import boundaries. |
 
 ### Concerning Signals to Monitor:
