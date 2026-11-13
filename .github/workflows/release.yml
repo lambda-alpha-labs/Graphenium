@@ -71,15 +71,16 @@ jobs:
           echo "## Graphenium $(echo $GITHUB_REF | sed 's|refs/tags/v||')" > notes.md
           echo "" >> notes.md
           echo "### Highlights" >> notes.md
-          echo "- Hypothesis-aware Lean trust: \`depends_on_hypothesis\` extraction, transitive assumptions, and \`UNCONDITIONAL\` / \`CONDITIONAL\` / \`TAINTED\` statuses" >> notes.md
-          echo "- New \`gm trust\` flags: \`--hypothesis\`, \`--allow-hypothesis\`, and \`--warn-structure-params\`, with \`.graphenium/policy.json\` \`trust\` policy support" >> notes.md
-          echo "- Stratified Datalog negation: SCC-ordered strata, explicit unstratifiable-recursion errors, and frozen full-tuple/per-column indexes" >> notes.md
-          echo "- Faster Datalog joins and lazy EDB materialization; 200k-edge negation benchmark completes in under 1 second in release builds" >> notes.md
-          echo "- Lean trust summaries surfaced in \`gm check\`, \`verify_changes\`, and \`get_graph_info\`; MCP surface remains exactly 12 tools" >> notes.md
+          echo "- Lean trust hardening: canonical axiom labels (no duplicate \`Quot.sound\` / \`quot_sound\`) and clean, valid \`--json\` stdout with \`failure_reasons\`" >> notes.md
+          echo "- Automatic hypothesis detection for multi-line signatures, active \`section\`/\`namespace\` \`variable\` declarations, cross-file certificate types, and elaborated \`forallE\` binders" >> notes.md
+          echo "- Guardrails keep \`[CommRing R]\` typeclass constraints and \`(n : Nat)\` data parameters from producing false \`CONDITIONAL\` statuses" >> notes.md
+          echo "- Datalog output is goal-only by default; new \`--show-derived\` flag exposes all materialized IDB relations" >> notes.md
+          echo "- Bound-mask negation indexes eliminate non-leading-column scans; the 200k-edge \`not\` regression completes under 1 second in release builds" >> notes.md
+          echo "- Documentation updated across the command reference, architecture, trust model, CI guide, and MUB-6 worked example" >> notes.md
           echo "" >> notes.md
           echo "### Platform" >> notes.md
           echo "- AST + Stack Graphs extraction for 9 languages with import-scoped call disambiguation" >> notes.md
-          echo "- Embedded goal-directed Datalog engine with stratified negation and multi-column hash indexes" >> notes.md
+          echo "- Embedded goal-directed Datalog engine with stratified negation and bound-mask hash indexes" >> notes.md
           echo "- Lean 4 proof-gap, axiom, and hypothesis auditing with formal-verification Datalog predicates" >> notes.md
           echo "- Recursive C# (.sln / .csproj) assembly boundary discovery" >> notes.md
           echo "- Zero-Drift Topological Delta Gating (Louvain ΔQ + surprise edge profiling)" >> notes.md
