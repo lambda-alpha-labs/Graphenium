@@ -646,7 +646,10 @@ fn add_flagged_hypotheses(
     if flagged.is_empty() {
         return;
     }
-    for (index, dependency) in dependencies.iter().enumerate() {
+    for dependency in dependencies {
+        if dependency.as_str() == theorem_id {
+            continue;
+        }
         let Some(node) = graph.node_data(dependency) else {
             continue;
         };
@@ -667,7 +670,6 @@ fn add_flagged_hypotheses(
         {
             continue;
         }
-        let direct = index == 0 && dependency == theorem_id;
         let mut aliases = vec![name.clone(), node.id.clone(), node.label.clone()];
         if let Some(qualified) = &node.qualified_label {
             aliases.push(qualified.clone());
@@ -675,7 +677,9 @@ fn add_flagged_hypotheses(
         assumptions.push(Assumption {
             name,
             kind: "hypothesis".to_string(),
-            scope: if direct { "direct" } else { "transitive" }.to_string(),
+            // Explicit `--hypothesis` flags describe the audited theorem, not
+            // an arbitrary node in its dependency cone.
+            scope: "direct".to_string(),
             introduced_by: theorem_name.to_string(),
             source_file: node.source_file.clone(),
             hidden: false,
@@ -724,7 +728,12 @@ fn add_global_flagged_hypothesis(
         assumptions.push(Assumption {
             name,
             kind: "hypothesis".to_string(),
-            scope: "transitive".to_string(),
+            // `--hypothesis` is an explicit assertion about the audited
+            // theorem, so it is a direct assumption of that theorem. The
+            // earlier "transitive" label was inconsistent with auto-detected
+            // direct binders and made machine consumers treat the two paths
+            // differently.
+            scope: "direct".to_string(),
             introduced_by: theorem_name.to_string(),
             source_file: node.source_file.clone(),
             hidden: false,
@@ -890,6 +899,42 @@ mod tests {
         )
         .unwrap();
         assert!(result.passed);
+    }
+
+    #[test]
+    fn explicit_hypothesis_is_reported_as_direct() {
+        let (mut graph, theorem_id) = graph_with_theorem();
+        let cert_id = make_id(&["EdgeAtlasCertificate"]);
+        graph.upsert_node(Node::new(
+            &cert_id,
+            "EdgeAtlasCertificate",
+            FileType::Code,
+            "Proof.lean",
+        ));
+        graph.add_edge(Edge::extracted(
+            &theorem_id,
+            &cert_id,
+            "calls",
+            "Proof.lean",
+        ));
+
+        let result = evaluate_trust(
+            &graph,
+            None,
+            &TrustOptions {
+                theorem: Some("MUB6.no_four_mubs_dim6".to_string()),
+                hypotheses: vec!["EdgeAtlasCertificate".to_string()],
+                ..TrustOptions::default()
+            },
+        )
+        .unwrap();
+        let assumption = result.theorems[0]
+            .assumptions
+            .iter()
+            .find(|assumption| assumption.name == "EdgeAtlasCertificate")
+            .expect("explicit hypothesis must appear in the report");
+        assert_eq!(assumption.scope, "direct");
+        assert_eq!(result.theorems[0].status, TrustStatus::Conditional);
     }
 
     #[test]

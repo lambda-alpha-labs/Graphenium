@@ -28,10 +28,21 @@ const STRUCTURAL_MODULE_STEMS: &[&str] = &["mod", "lib", "main", "index", "__ini
 
 /// Bump when extractor output semantics change so stale on-disk AST caches
 /// cannot keep serving old node IDs (e.g. collapsed `mod.rs` file nodes).
-const AST_CACHE_FORMAT_VERSION: &str = "3";
+const AST_CACHE_FORMAT_VERSION: &str = "4";
 
 fn ast_cache_key(content_hash: &str) -> String {
-    format!("{AST_CACHE_FORMAT_VERSION}-{content_hash}")
+    // The crate version is part of the key as well: extractor semantics change
+    // between releases without the content hash changing, and a cache written
+    // by an older binary must never be replayed by a newer one. Without this,
+    // upgrading gm silently keeps old extraction results (for example, a
+    // 0.25-era entry with no `depends_on_hypothesis` edges makes a conditional
+    // Lean theorem look unconditional).
+    format!(
+        "{}-{}-{}",
+        env!("CARGO_PKG_VERSION"),
+        AST_CACHE_FORMAT_VERSION,
+        content_hash
+    )
 }
 
 /// Derive a stable ID prefix from a file path.
@@ -427,5 +438,16 @@ mod tests {
     fn unsupported_extension_returns_empty() {
         let r = dispatch(b"data", "bin", "data.bin");
         assert!(r.is_empty());
+    }
+
+    #[test]
+    fn ast_cache_key_is_versioned() {
+        let key = ast_cache_key("deadbeef");
+        assert!(key.contains(env!("CARGO_PKG_VERSION")), "key: {key}");
+        assert!(key.contains(AST_CACHE_FORMAT_VERSION), "key: {key}");
+        assert!(key.ends_with("-deadbeef"), "key: {key}");
+        // Regression: the pre-0.26 layout served stale extractor output after
+        // an upgrade because the key was only `"{format}-{hash}"`.
+        assert_ne!(key, "3-deadbeef");
     }
 }

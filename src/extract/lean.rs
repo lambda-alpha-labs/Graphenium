@@ -432,7 +432,19 @@ pub fn extract_with_root(
             };
             let short = type_token.rsplit('.').next().unwrap_or(type_token);
             let (target_raw, resolved_kind) = match type_like.get(short) {
-                Some((id, kind)) => ((*id).to_string(), Some(*kind)),
+                Some((id, kind)) => {
+                    // Only proof-relevant declarations are hypotheses. A binder
+                    // whose type is a transparent `def`/`abbrev` (for example
+                    // `abbrev Q3Q5Int := Int × Int × Int × Int`) is ordinary
+                    // data: the theorem is universally quantified over it, not
+                    // conditional on a certificate. Emitting an edge here makes
+                    // every arithmetic lemma CONDITIONAL and drowns the real
+                    // assumption.
+                    if !is_hidden_structure_kind(kind) {
+                        continue;
+                    }
+                    ((*id).to_string(), Some(*kind))
+                }
                 None => {
                     // Primitive data (`Nat`, `List Nat`) and standard typeclass
                     // names are filtered here; only simple project/certificate
@@ -1176,6 +1188,50 @@ theorem numeric (n : Nat) (xs : List Nat) : Nat := n
                 .iter()
                 .any(|e| e.relation == "depends_on_hypothesis"),
             "Nat/List binders must not create hypothesis edges: {:?}",
+            r.edges
+        );
+    }
+
+    #[test]
+    fn ignores_transparent_alias_binders() {
+        let src = br#"
+abbrev PairInt := Prod Int Int
+
+def shift (p : PairInt) : PairInt := p
+
+structure EdgeAtlasCertificate where
+  witness : Nat
+
+theorem conditional (h : EdgeAtlasCertificate) : 1 = 1 := by
+  exact rfl
+"#;
+        let r = extract(src, "Aliases.lean");
+        let alias = r.nodes.iter().find(|n| n.label == "PairInt").unwrap();
+        let cert = r
+            .nodes
+            .iter()
+            .find(|n| n.label == "EdgeAtlasCertificate")
+            .unwrap();
+        let shift = r.nodes.iter().find(|n| n.label == "shift").unwrap();
+        let conditional = r.nodes.iter().find(|n| n.label == "conditional").unwrap();
+        assert!(
+            !r.edges
+                .iter()
+                .any(|e| e.relation == "depends_on_hypothesis" && e.target == alias.id),
+            "a transparent abbrev binder is data, not a hypothesis: {:?}",
+            r.edges
+        );
+        assert!(
+            !r.edges
+                .iter()
+                .any(|e| e.relation == "depends_on_hypothesis" && e.source == shift.id),
+            "shift must not be conditional on its data alias"
+        );
+        assert!(
+            r.edges.iter().any(|e| e.relation == "depends_on_hypothesis"
+                && e.source == conditional.id
+                && e.target == cert.id),
+            "structure binders must still be hypotheses: {:?}",
             r.edges
         );
     }

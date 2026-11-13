@@ -4,6 +4,18 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.26.2 - 2026-11-13
+
+### Fixed
+*   **AST Cache Invalidation Across Releases (`src/extract/mod.rs`):** The AST cache key now includes the crate version in addition to the extractor format version and the content hash. Previously the key was `"{format}-{sha256}"`, so upgrading gm replayed extraction results written by the previous release whenever a file's bytes were unchanged. A 0.25-era cache entry has no `depends_on_hypothesis` edges, which made `gm trust` report a conditional Lean theorem as `UNCONDITIONAL` even though 0.26 extracted the binder correctly. Bumped `AST_CACHE_FORMAT_VERSION` to `4` and added a regression test for the key layout.
+*   **Transparent Type Aliases Are Not Hypotheses (`src/extract/lean.rs`):** Binder types that resolve to a project `def`/`abbrev` are no longer emitted as `depends_on_hypothesis`. An `abbrev` is ordinary data (`abbrev Q3Q5Int := ...`), not an unconstructed certificate; flagging it made every arithmetic `def` and every theorem using it `CONDITIONAL`. Structure/class/inductive/opaque binders, and unresolved capitalized project types, keep the existing behaviour.
+*   **Explicit `--hypothesis` Scope (`src/analyze/lean_trust.rs`):** An explicitly flagged hypothesis is now reported as `direct_or_transitive: "direct"`, matching auto-detected binders. Previously both explicit paths wrote `"transitive"`, so machine consumers saw two different records for the same assumption on the same theorem. Also stopped the dependency-cone walk from considering the audited theorem itself as a candidate assumption.
+
+### Tests
+*   `ast_cache_key_is_versioned`, `ignores_transparent_alias_binders`, `explicit_hypothesis_is_reported_as_direct`, plus the existing binder/hypothesis and trust fixtures.
+
+---
+
 ## v0.26.1 - 2026-11-13
 
 ### Fixed
