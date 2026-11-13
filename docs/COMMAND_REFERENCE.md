@@ -59,7 +59,7 @@ gm run [path] [flags]
 *   `--api-key <key>` (string) — API key (overrides the provider-specific env var).
 *   `--api-base <url>` (string) — API base URL for `openai-compatible` provider.
 *   `--model <model>` (string) — Model to use (defaults to provider-specific default).
-*   `--out-dir <path>` (string, default: `graphenium-out`) — Output directory for `graph.json`, `manifest.json`, `GRAPH_REPORT.md`, and the default cache. Relative paths resolve against `path`.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Output directory for `graph.json`, `manifest.json`, `GRAPH_REPORT.md`, and the default cache. The default `graphenium-out` is placed inside `path`; an explicitly supplied relative path resolves against the current working directory, matching `--graph` on read commands.
 *   `--cache-dir <path>` (string, default: `<out-dir>/cache`) — Extraction cache directory. Configured output/cache directories are excluded from the corpus walk automatically.
 *   `--no-cache-write` (bool) — Run without writing AST/semantic caches (ephemeral CI).
 *   `--lean-axioms <path>` (string) — Ingest a `#print axioms` report (raw text or `lean-axioms.v1` JSON) and bake `depends_on_axiom`, `unverified_sorry`, and `unverified_native_decide` edges into the graph.
@@ -196,7 +196,7 @@ gm watch <path> [flags]
 *   `--debounce <secs>` (float, default: `3.0`) — Wait time in seconds after the last file modification before compiling changes.
 *   `--incremental` (bool, default: `true`) — Restricts re-extraction to modified files and their direct importers, skipping full repository re-scans.
 *   `--impact` (bool) — Prints the structural blast radius (affected callers, dependent domains) immediately after compiling an update.
-*   `--out-dir <path>` (string, default: `graphenium-out`) — Output directory, resolved against `<path>`.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Output directory. The default `graphenium-out` is placed inside `<path>`; an explicitly supplied relative path resolves against the current working directory, matching `--graph` on read commands.
 *   `--cache-dir <path>` (string, default: `<out-dir>/cache`) — Extraction cache directory.
 
 ---

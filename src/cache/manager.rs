@@ -58,6 +58,37 @@ impl CacheManager {
         Ok(())
     }
 
+    /// Remove AST cache entries written by a different extractor version.
+    ///
+    /// The cache key includes the crate version and format version, so after an
+    /// upgrade every old entry is dead weight. Returns the number of files
+    /// removed. Missing directories are not an error.
+    pub fn prune_ast(&self) -> crate::Result<usize> {
+        let dir = self.ast_dir();
+        let prefix = crate::cache::ast_cache_prefix();
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+            Err(error) => return Err(error.into()),
+        };
+        let mut removed = 0usize;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            if !name.starts_with(&prefix) {
+                std::fs::remove_file(&path)?;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+
     // ── Semantic cache ────────────────────────────────────────────────────────
 
     /// Try to load a cached semantic extraction result by content hash.
@@ -128,5 +159,26 @@ mod tests {
         cm.save_semantic("xyz", &r).unwrap();
         let loaded = cm.load_semantic("xyz").unwrap();
         assert_eq!(loaded.input_tokens, 42);
+    }
+
+    #[test]
+    fn prune_ast_removes_entries_from_other_versions() {
+        let tmp = TempDir::new().unwrap();
+        let manager = CacheManager::new(tmp.path().to_path_buf());
+        let ast = manager.ast_dir();
+        std::fs::create_dir_all(&ast).unwrap();
+
+        let current = crate::cache::ast_cache_prefix();
+        std::fs::write(ast.join(format!("{current}abc.json")), "{}").unwrap();
+        std::fs::write(ast.join("3-old.json"), "{}").unwrap();
+        std::fs::write(ast.join("legacy.json"), "{}").unwrap();
+        std::fs::write(ast.join("keep.txt"), "not a cache entry").unwrap();
+
+        let removed = manager.prune_ast().unwrap();
+        assert_eq!(removed, 2);
+        assert!(ast.join(format!("{current}abc.json")).exists());
+        assert!(!ast.join("3-old.json").exists());
+        assert!(!ast.join("legacy.json").exists());
+        assert!(ast.join("keep.txt").exists());
     }
 }

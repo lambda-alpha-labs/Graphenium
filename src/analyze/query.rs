@@ -923,8 +923,7 @@ impl RelationIndex {
         if mask == 0 || self.arity == 0 {
             return;
         }
-        let full_mask = self.full_mask();
-        if mask == full_mask || self.masks.contains_key(&mask) {
+        if self.masks.contains_key(&mask) {
             return;
         }
         let mut index: HashMap<Vec<Val>, Vec<usize>> = HashMap::new();
@@ -933,14 +932,6 @@ impl RelationIndex {
             index.entry(key).or_default().push(row);
         }
         self.masks.insert(mask, index);
-    }
-
-    fn full_mask(&self) -> usize {
-        if self.arity >= usize::BITS as usize {
-            usize::MAX
-        } else {
-            (1usize << self.arity) - 1
-        }
     }
 
     fn contains_exact(&self, tuple: &[Val]) -> bool {
@@ -1153,13 +1144,62 @@ fn bind_terms(
     true
 }
 
+/// Bound-column mask for each positive atom under the fixed left-to-right
+/// evaluation order. A column is bound when it is a constant or its variable
+/// was introduced by an earlier atom, which is exactly the key used by
+/// [`RelationIndex::ensure_mask`].
+fn positive_bound_masks(positive: &[CompiledAtom<'_>]) -> Vec<usize> {
+    let mut bound: HashSet<usize> = HashSet::new();
+    let mut masks = Vec::with_capacity(positive.len());
+    for atom in positive {
+        let mut mask = 0usize;
+        for (column, term) in atom.terms.iter().enumerate() {
+            if column >= usize::BITS as usize {
+                break;
+            }
+            let is_bound = match term {
+                CompiledTerm::Const(_) => true,
+                CompiledTerm::Var(index) => bound.contains(index),
+            };
+            if is_bound {
+                mask |= 1usize << column;
+            }
+        }
+        masks.push(mask);
+        for term in &atom.terms {
+            if let CompiledTerm::Var(index) = term {
+                bound.insert(*index);
+            }
+        }
+    }
+    masks
+}
+
+/// Key for the currently bound columns of one atom, in column order. Must agree
+/// with [`mask_key`]: unbound variables are skipped and constants are included.
+fn atom_bound_key(terms: &[CompiledTerm<'_>], bindings: &[Option<Val>]) -> Option<Vec<Val>> {
+    let mut key = Vec::new();
+    for term in terms {
+        match term {
+            CompiledTerm::Const(value) => key.push((*value).clone()),
+            CompiledTerm::Var(index) => {
+                if let Some(value) = bindings.get(*index).and_then(Option::as_ref) {
+                    key.push(value.clone());
+                }
+            }
+        }
+    }
+    (!key.is_empty()).then_some(key)
+}
+
 /// Backtracking join over positive atoms, with inequalities and negated atoms
 /// applied only after every positive variable is bound.
 #[allow(clippy::too_many_arguments)]
 fn join_atoms(
     atom_index: usize,
     positive: &[CompiledAtom<'_>],
-    relations: &[&HashSet<Vec<Val>>],
+    indexes: &[RelationIndex],
+    masks: &[usize],
     filters: &[CompiledAtom<'_>],
     filter_indexes: &[&RelationIndex],
     inequalities: &[(CompiledTerm<'_>, CompiledTerm<'_>)],
@@ -1200,13 +1240,28 @@ fn join_atoms(
     }
 
     let atom = &positive[atom_index];
-    for tuple in relations[atom_index].iter() {
+    let index = &indexes[atom_index];
+    let mask = masks[atom_index];
+    let bound_key = atom_bound_key(&atom.terms, bindings);
+    let candidates: Box<dyn Iterator<Item = &Vec<Val>>> = if mask == 0 {
+        Box::new(index.tuples.iter())
+    } else {
+        match bound_key
+            .as_ref()
+            .and_then(|key| index.masks.get(&mask).and_then(|rows| rows.get(key)))
+        {
+            Some(rows) => Box::new(rows.iter().map(move |&row| &index.tuples[row])),
+            None => Box::new(std::iter::empty()),
+        }
+    };
+    for tuple in candidates {
         let mark = undo.len();
         if bind_terms(&atom.terms, tuple, bindings, undo) {
             join_atoms(
                 atom_index + 1,
                 positive,
-                relations,
+                indexes,
+                masks,
                 filters,
                 filter_indexes,
                 inequalities,
@@ -1367,13 +1422,29 @@ impl Interpreter {
             })
             .collect();
 
+        // Index every positive atom by the columns that are already bound when
+        // it is reached. Without this, a two-atom join such as
+        // `p(A,C) :- e(A,B), e(B,C)` scans `e` once per `e` tuple (quadratic),
+        // which makes 40k-edge graphs take minutes.
+        let positive_masks = positive_bound_masks(&compiled.positive);
+        let positive_indexes: Vec<RelationIndex> = relations
+            .iter()
+            .zip(positive_masks.iter())
+            .map(|(relation, &mask)| {
+                let mut index = RelationIndex::new(relation.iter().cloned().collect());
+                index.ensure_mask(mask);
+                index
+            })
+            .collect();
+
         let mut bindings: Vec<Option<Val>> = vec![None; variables.len()];
         let mut undo: Vec<usize> = Vec::new();
         let mut rows = Vec::new();
         join_atoms(
             0,
             &compiled.positive,
-            &relations,
+            &positive_indexes,
+            &positive_masks,
             &compiled.filters,
             &filter_indexes,
             &compiled.inequalities,
@@ -2421,5 +2492,68 @@ mod tests {
             start.elapsed()
         );
         assert!(!result.contains("no results"));
+    }
+
+    #[test]
+    fn test_positive_join_indexes_non_leading_columns() {
+        // 1,000 nodes x 10 outgoing calls. A nested-loop join on the second
+        // column scans ~10k tuples per outer tuple (quadratic) and takes tens
+        // of seconds in a debug build; the bound-column index makes it
+        // linear-ish.
+        let mut graph = crate::model::GrapheniumGraph::new();
+        let n = 1000usize;
+        for i in 0..n {
+            graph.upsert_node(Node::new(
+                &format!("node_{i}"),
+                &format!("Node{i}"),
+                FileType::Code,
+                "src/join.rs",
+            ));
+        }
+        for i in 0..n {
+            for k in 0..10usize {
+                let j = (i * 7 + k * 13 + 1) % n;
+                graph.add_edge(Edge::extracted(
+                    &format!("node_{i}"),
+                    &format!("node_{j}"),
+                    "calls",
+                    "src/join.rs",
+                ));
+            }
+        }
+
+        let start = Instant::now();
+        let one_hop = run_datalog_query(
+            &graph,
+            r#"e(A,B) :- calls(A,B,_).
+               p(A,C) :- e(A,B), e(B,C).
+               ?- [p] p("node_0", C)."#,
+            500,
+        )
+        .unwrap();
+        assert!(
+            start.elapsed().as_secs() < 3,
+            "bound-column join should not be quadratic, took {:?}",
+            start.elapsed()
+        );
+        assert!(!one_hop.contains("no results"));
+
+        // The shared-variable self-join with an inequality uses the index on
+        // the second column for the second atom.
+        let start = Instant::now();
+        let self_join = run_datalog_query(
+            &graph,
+            r#"e(A,B) :- calls(A,B,_).
+               fan_in(R) :- e(F1,R), e(F2,R), F1 != F2.
+               ?- [fan] fan_in("node_5")."#,
+            500,
+        )
+        .unwrap();
+        assert!(
+            start.elapsed().as_secs() < 3,
+            "inequality self-join should not be quadratic, took {:?}",
+            start.elapsed()
+        );
+        assert!(!self_join.contains("no results"));
     }
 }

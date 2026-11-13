@@ -26,13 +26,7 @@ use crate::model::{ExtractionResult, FileType};
 /// into a single graph node.
 const STRUCTURAL_MODULE_STEMS: &[&str] = &["mod", "lib", "main", "index", "__init__", "__main__"];
 
-/// Bump when extractor output semantics change so stale on-disk AST caches
-/// cannot keep serving old node IDs (e.g. collapsed `mod.rs` file nodes).
-const AST_CACHE_FORMAT_VERSION: &str = "3";
-
-fn ast_cache_key(content_hash: &str) -> String {
-    format!("{AST_CACHE_FORMAT_VERSION}-{content_hash}")
-}
+use crate::cache::ast_cache_key;
 
 /// Derive a stable ID prefix from a file path.
 ///
