@@ -70,11 +70,14 @@ jobs:
         run: |
           echo "## Graphenium $(echo $GITHUB_REF | sed 's|refs/tags/v||')" > notes.md
           echo "" >> notes.md
-          echo "- Planned-edge compliance and MCP post-edit verification" >> notes.md
-          echo "- Cross-file call disambiguation, unique module IDs, and physical policy re-checks" >> notes.md
-          echo "- Lightweight harness builds via mcp/watch/semantic feature gates" >> notes.md
-          echo "- MCP server with 12 cohesive structural containment, Datalog, and planning tools" >> notes.md
-          echo "- Behavioral routing guidance in consolidated MCP tool schemas" >> notes.md
+          echo "### Highlights" >> notes.md
+          echo "- Datalog ergonomics: \`!=\` / \`/=\` inequality, multiple labelled \`?- \` queries, and \`datalog.v1\` JSON output" >> notes.md
+          echo "- Portable workspaces: \`--out-dir\` / \`--cache-dir\` with repo-relative graph, manifest, and cache paths" >> notes.md
+          echo "- CI hardening: content-addressed manifests, \`--verify-fresh\`, and \`--no-cache-write\`" >> notes.md
+          echo "- Semantic Lean 4 trust auditing: \`#print axioms\` ingestion, axiom classification, and \`gm trust\`" >> notes.md
+          echo "- MCP surface remains exactly 12 consolidated tools; \`run_datalog\` gains JSON output" >> notes.md
+          echo "" >> notes.md
+          echo "### Platform" >> notes.md
           echo "- AST + Stack Graphs extraction for 9 languages with import-scoped call disambiguation" >> notes.md
           echo "- Embedded goal-directed Datalog engine with first-column hash indexing" >> notes.md
           echo "- Lean 4 proof-gap auditing and formal-verification Datalog predicates" >> notes.md

@@ -4,7 +4,7 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
-## Unreleased
+## v0.25.0 - 2026-11-13
 
 ### Added
 *   **Datalog Ergonomics (`src/analyze/query.rs`):** Added `!=` / `/=` inequality constraints with grounding validation, multiple labelled `?-` queries sharing one EDB/fixpoint, and a machine-readable `datalog.v1` report via `gm query --datalog ... --json` and the `run_datalog` MCP `format = "json"` parameter.
@@ -15,6 +15,7 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ### Changed
 *   **Documentation:** Updated the command reference, architecture guide, trust model, MCP tool reference, getting-started guide, CI governance guide, and agent skill for the new CLI flags, Datalog syntax, portable workspaces, and semantic Lean auditing.
+*   **Version:** Bumped to `0.25.0`.
 
 ### Tests
 *   Added Datalog inequality/multi-query/JSON tests, portable-workspace and read-only CI tests, manifest freshness tests, and end-to-end `gm trust` fixtures.
