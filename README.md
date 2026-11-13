@@ -8,7 +8,7 @@
 
 Graphenium is not a passive search index or a folder-regex linter. It is a local compiler that turns source code into queryable structural facts, then uses those facts to govern what an agent is allowed to write. It replaces blind `grep`/file-read loops with sub-50ms topological queries, and it blocks agents from bypassing service layers, decaying modularity, leaving unproved `sorry` stubs, or editing files outside their declared plan.
 
-**Capability bar:** Tree-sitter + Stack Graphs · Indexed Semi-Naive Datalog · Zero-Config Louvain ΔQ Gating · Virtual AST Workspaces · Lean 4 Proof-Gap Auditing · 12 MCP Tools
+**Capability bar:** Tree-sitter + Stack Graphs · Indexed Semi-Naive Datalog · Zero-Config Louvain ΔQ Gating · Virtual AST Workspaces · Lean 4 Proof-Gap & Axiom Auditing · 12 MCP Tools
 
 Standard developer tools help agents find files. Graphenium compiles the system's structure, compresses it for the agent's context budget, and then enforces it as a mechanical write-time contract.
 
@@ -20,7 +20,7 @@ Dependency truth            Fuzzy vector guesses, hallucinated calls  Provenance
 Design validation           Edits files, hopes tests catch drift      Virtual AST + Datalog + ΔQ pre-flight before disk writes
 Modularity                  Silent community decay                    Zero-config Louvain ΔQ gate rejects new topological entropy
 Scope                       Quiet edits to unrelated files            Post-edit node/edge/git-diff audit blocks scope creep
-Formal verification         Unnoticed sorry/admit stubs               Transitive proof-gap taint gating
+Formal verification         Unnoticed sorry/admit stubs, hidden axioms Transitive proof-gap taint + semantic axiom auditing
 CI                          Checks only that tests pass               Fails on architectural drift and unrealized specs
 ```
 
@@ -92,6 +92,10 @@ gm query "authentication flow" --budget 2000
 gm serve --graph graphenium-out/graph.json --watch
 ```
 
+All commands accept `--out-dir <path>` to relocate `graph.json`, `manifest.json`, and reports. `gm run` and `gm watch` also accept `--cache-dir <path>`; configured output/cache directories are excluded from indexing automatically, and persisted paths stay repo-relative so artifacts are portable across machines.
+
+For Lean 4 repositories, `gm trust --axioms <report>` audits theorem dependency cones for `sorryAx`, `native_decide`, and external axioms without embedding a Lean compiler. See [`docs/COMMAND_REFERENCE.md`](docs/COMMAND_REFERENCE.md#gm-trust).
+
 ---
 
 ## Installation
@@ -115,7 +119,7 @@ Graphenium compiles 10 languages - Rust, Python, Go, TypeScript, JavaScript, Jav
 For agents, this replaces 30,000-token brute-force `grep`/file-read loops with ~1,500-token topological queries (PageRank hotspots, Brandes betweenness bottlenecks, blast radius, and safest paths). Every relationship carries explicit provenance:
 *   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, type inheritance, explicit call signatures). Safe planning backbone.
 *   `INFERRED` **(Heuristics):** Semantic leads that the agent is forced to verify against source.
-*   `AMBIGUOUS` **(Collisions / Proof Gaps):** Identifier collisions that force the agent to halt and inspect source files directly, plus Lean 4 `sorry` / `admit` proof gaps that must be resolved before a theorem is treated as verified.
+*   `AMBIGUOUS` **(Collisions / Proof Gaps):** Identifier collisions that force the agent to halt and inspect source files directly, plus Lean 4 `sorry` / `admit` proof gaps and semantic `#print axioms` findings (`sorryAx`, external axioms, `native_decide` shortcuts) that must be resolved before a theorem is treated as verified.
 
 ### Pillar 2: Intent–Implementation Decoupling via Virtual AST Workspaces
 Before touching disk, the agent declares its proposed classes, functions, and dependency edges in an in-memory planning workspace (`create_planning_workspace`, `add_planned_symbol`). Graphenium models the future topology of the repository in milliseconds. If the design violates an invariant, the agent receives an exact topological counterexample *in memory* before wasting thousands of tokens rewriting physical files - eliminating the "agent linter deadlock" loop.
@@ -129,6 +133,9 @@ Beyond simple folder rules, `stdlib.dl` proves:
 *   Call-site container/member aliasing hazards (`aliased_container_call(Caller, Target, Container, Member)`).
 *   Entry-point dead-code and unreachability (`unreachable_from(Entry, Node)`).
 *   Transitive formal proof-gap taint propagation (`has_proof_gap(X)` and `tainted_by_proof_gap(X)`).
+*   Lean trust boundaries from semantic `#print axioms` ingestion (`uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, `untrusted_theorem/1`).
+
+Query bodies support `!=` / `/=` constraints (after positive bindings), and one program may contain several labelled `?-` blocks that share a single materialized EDB/index. `gm query --datalog ... --json` emits the `datalog.v1` report for CI and tooling.
 
 ### Pillar 4: Zero-Config Topological Entropy Guardrails (Louvain ΔQ + Surprise Profiling)
 Even with **zero configuration files** (no `.graphenium/policy.json`), Graphenium partitions the physical baseline subgraph (`G_baseline`) and the proposed Virtual AST overlay (`G_virtual`) in memory, runs deterministic Louvain community detection on both, computes the modularity delta (`ΔQ = Q(G_virtual) − Q(G_baseline)`), and scores planned edges for structural surprise (`cross-community`, `peripheral→hub`).
@@ -216,7 +223,7 @@ Graphenium supports mixed repositories with Rust, Python, Go, JavaScript, TypeSc
 
 C# projects receive build-boundary awareness through recursive `.sln` and `.csproj` discovery, enabling Graphenium to model assemblies, namespaces, and project references as structural boundaries even in deeply nested enterprise layouts.
 
-Lean 4 support is built in and requires no tree-sitter grammar feature flag. It extracts namespaces, declarations, imports, and proof dependencies, and emits `AMBIGUOUS` `unverified_sorry` edges for `sorry` / `admit` proof gaps so CI can gate incomplete formal verification work.
+Lean 4 support is built in and requires no tree-sitter grammar feature flag. It extracts namespaces, declarations, imports, and proof dependencies, and emits `AMBIGUOUS` `unverified_sorry` edges for `sorry` / `admit` proof gaps so CI can gate incomplete formal verification work. For semantic trust boundaries, `gm run --lean-axioms <report>` bakes `#print axioms` facts into the graph (or `--run-lean-axioms <file>` explicitly invokes `lake env lean`), and `gm trust` audits inherited kernel axioms, external axioms, and `native_decide` shortcuts.
 
 ---
 

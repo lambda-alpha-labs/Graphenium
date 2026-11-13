@@ -274,7 +274,9 @@ pub fn materialize_full_graph(
     let mut graph = crate::model::GrapheniumGraph::new();
     for &source_file in inputs.values() {
         let local = compute_local_subgraph(db, source_file);
-        let path_str = source_file.path(db).to_string_lossy().to_string();
+        let path = source_file.path(db);
+        let root = source_file.project_root(db);
+        let path_str = crate::detect::path::to_repo_relative(&path, root.as_deref());
         graph.replace_file_extraction(&path_str, &local);
     }
     graph

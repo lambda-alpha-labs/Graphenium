@@ -11,7 +11,9 @@ echo "PASS: Warnings clean"
 
 echo "=== Verifying Lazy Server Startup ==="
 rm -f graphenium-out/graph.json
-gm serve --graph graphenium-out/graph.json &
+# Keep stdin open long enough to observe lazy startup: an MCP server exits
+# immediately on EOF because rmcp expects an initialize request.
+sleep 5 | gm serve --graph graphenium-out/graph.json &
 SERVER_PID=$!
 sleep 1
 if ! kill -0 $SERVER_PID 2>/dev/null; then

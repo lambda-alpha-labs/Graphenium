@@ -4,6 +4,24 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## Unreleased
+
+### Added
+*   **Datalog Ergonomics (`src/analyze/query.rs`):** Added `!=` / `/=` inequality constraints with grounding validation, multiple labelled `?-` queries sharing one EDB/fixpoint, and a machine-readable `datalog.v1` report via `gm query --datalog ... --json` and the `run_datalog` MCP `format = "json"` parameter.
+*   **Portable Workspaces (`src/detect/path.rs`, `src/main.rs`, `src/watch.rs`):** Added `--out-dir` to `run`, `watch`, and read commands, plus `--cache-dir` to `run`/`watch`. Custom output/cache directories are excluded from the corpus walk, and persisted node/edge/manifest/cache paths are repo-relative. Bumped the AST cache format to `3`.
+*   **CI Read-Only Hardening (`src/cache/manifest.rs`):** Manifests now record SHA-256 and byte length alongside mtime, with `is_changed_fast` (content-hash fallback for fresh checkouts) and `is_changed_strict`. Added `gm check --verify-fresh`, `gm gate --verify-fresh`, and `gm run --no-cache-write`.
+*   **Semantic Lean Trust Auditing (`src/extract/lean_axioms.rs`, `src/analyze/lean_trust.rs`):** Ingest raw `#print axioms` output or `lean-axioms.v1` JSON, classify standard kernel / `sorryAx` / `native_decide` / external axioms, and audit theorem dependency cones with `gm trust`. Added `gm run --lean-axioms` and opt-in `--run-lean-axioms`, plus Datalog predicates `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`.
+*   **MCP Surface:** Folded Lean trust counts into `get_graph_info` and a `format` parameter into `run_datalog`; the surface remains exactly 12 tools.
+
+### Changed
+*   **Documentation:** Updated the command reference, architecture guide, trust model, MCP tool reference, getting-started guide, CI governance guide, and agent skill for the new CLI flags, Datalog syntax, portable workspaces, and semantic Lean auditing.
+
+### Tests
+*   Added Datalog inequality/multi-query/JSON tests, portable-workspace and read-only CI tests, manifest freshness tests, and end-to-end `gm trust` fixtures.
+*   `cargo test`: 464 tests pass (439 library, 15 Datalog, 2 Lean trust, 4 planning, 3 portable workspace, 1 trust benchmark).
+
+---
+
 ## v0.24.0 - 2026-11-06
 
 ### Summary

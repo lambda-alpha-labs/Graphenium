@@ -50,6 +50,13 @@ pub struct Atom {
     pub negated: bool,
 }
 
+impl Atom {
+    /// `true` when this atom is an internal inequality constraint.
+    pub fn is_inequality(&self) -> bool {
+        self.name == INEQUALITY_PREDICATE
+    }
+}
+
 /// A Datalog rule: `Head :- Body1, Body2, !Body3`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Rule {
@@ -161,17 +168,39 @@ pub enum Token {
     Comma,      // ,
     LParen,     // (
     RParen,     // )
+    LBracket,   // [
+    RBracket,   // ]
     Dot,        // .
     Not,        // !
+    NotEqual,   // != or /=
     Underscore, // _
 }
 
+/// Predicate name used internally to represent an inequality constraint
+/// (`A != B` / `A /= B`) inside a rule or query body.
+pub const INEQUALITY_PREDICATE: &str = "__inequality__";
+
+/// A labelled (or anonymous) `?-` query in a Datalog program.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DatalogQuery {
+    /// Optional `[name]` label, e.g. `?- [gaps] has_proof_gap(X).`
+    pub name: Option<String>,
+    /// Conjunctive goals. Inequality constraints are encoded as atoms whose
+    /// name is [`INEQUALITY_PREDICATE`] so the existing `Atom` shape (and all
+    /// downstream consumers) stays unchanged.
+    pub goals: Vec<Atom>,
+}
+
 /// A parsed Datalog program.
+///
+/// `goal` is kept as a backwards-compatible alias for the first query's goals.
+/// New code should use `queries`, which supports multiple `?-` blocks.
 #[derive(Default, Debug)]
 pub struct DatalogProgram {
     pub facts: Vec<Atom>,
     pub rules: Vec<Rule>,
     pub goal: Vec<Atom>,
+    pub queries: Vec<DatalogQuery>,
 }
 
 impl DatalogProgram {
@@ -181,6 +210,20 @@ impl DatalogProgram {
         let mut combined = stdlib_rules;
         combined.append(&mut self.rules);
         self.rules = combined;
+    }
+
+    /// Keep the legacy `goal` field in sync with the first query.
+    fn sync_legacy_goal(&mut self) {
+        self.goal = self
+            .queries
+            .first()
+            .map(|query| query.goals.clone())
+            .unwrap_or_default();
+    }
+
+    /// Every goal atom across all `?-` queries.
+    pub fn all_goals(&self) -> impl Iterator<Item = &Atom> {
+        self.queries.iter().flat_map(|query| query.goals.iter())
     }
 }
 
@@ -231,6 +274,14 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 tokens.push(Token::RParen);
                 i += 1;
             }
+            '[' => {
+                tokens.push(Token::LBracket);
+                i += 1;
+            }
+            ']' => {
+                tokens.push(Token::RBracket);
+                i += 1;
+            }
             ',' => {
                 tokens.push(Token::Comma);
                 i += 1;
@@ -239,9 +290,17 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 tokens.push(Token::Dot);
                 i += 1;
             }
+            '!' if i + 1 < chars.len() && chars[i + 1] == '=' => {
+                tokens.push(Token::NotEqual);
+                i += 2;
+            }
             '!' => {
                 tokens.push(Token::Not);
                 i += 1;
+            }
+            '/' if i + 1 < chars.len() && chars[i + 1] == '=' => {
+                tokens.push(Token::NotEqual);
+                i += 2;
             }
             '_' => {
                 tokens.push(Token::Underscore);
@@ -349,24 +408,44 @@ impl<'a> Parser<'a> {
         while self.pos < self.tokens.len() {
             if self.peek() == Some(&Token::Query) {
                 self.consume(&Token::Query)?;
+
+                // Optional `[name]` label: `?- [proof_gaps] has_proof_gap(X).`
+                let name = if self.peek() == Some(&Token::LBracket) {
+                    self.consume(&Token::LBracket)?;
+                    let label = match self.next() {
+                        Some(Token::Ident(s)) | Some(Token::StringLiteral(s)) => s.clone(),
+                        Some(t) => {
+                            return Err(format!("Expected query label inside [...], got {:?}", t))
+                        }
+                        None => return Err("Expected query label, got end of input".to_string()),
+                    };
+                    self.consume(&Token::RBracket)?;
+                    Some(label)
+                } else {
+                    None
+                };
+
                 let mut goals = Vec::new();
-                loop {
-                    goals.push(self.parse_atom()?);
-                    if self.peek() == Some(&Token::Comma) {
-                        self.consume(&Token::Comma)?;
-                    } else {
-                        break;
+                if self.peek() != Some(&Token::Dot) {
+                    loop {
+                        goals.push(self.parse_body_item()?);
+                        if self.peek() == Some(&Token::Comma) {
+                            self.consume(&Token::Comma)?;
+                        } else {
+                            break;
+                        }
                     }
                 }
                 self.consume(&Token::Dot)?;
-                program.goal = goals;
+                program.queries.push(DatalogQuery { name, goals });
+                program.sync_legacy_goal();
             } else {
                 let atom = self.parse_atom()?;
                 if self.peek() == Some(&Token::Arrow) {
                     self.consume(&Token::Arrow)?;
                     let mut body = Vec::new();
                     loop {
-                        body.push(self.parse_atom()?);
+                        body.push(self.parse_body_item()?);
                         if self.peek() == Some(&Token::Comma) {
                             self.consume(&Token::Comma)?;
                         } else {
@@ -382,6 +461,59 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(program)
+    }
+
+    /// Parse one body/goal item: a (possibly negated) relation atom, or an
+    /// infix inequality `Term != Term` / `Term /= Term`.
+    fn parse_body_item(&mut self) -> Result<Atom, String> {
+        let negated_start = matches!(self.peek(), Some(Token::Not))
+            || matches!(self.peek(), Some(Token::Ident(s)) if s == "not");
+
+        // A relation atom always looks like `ident(...)`, so only an
+        // identifier followed by `(` (or an explicit `not`/`!`) can start one.
+        let starts_relation = negated_start
+            || matches!(self.peek(), Some(Token::Ident(_)))
+                && matches!(self.tokens.get(self.pos + 1), Some(Token::LParen));
+
+        if starts_relation {
+            return self.parse_atom();
+        }
+
+        let left = self.parse_term()?;
+        match self.next() {
+            Some(Token::NotEqual) => {}
+            Some(t) => {
+                return Err(format!(
+                    "Expected '!=' or '/=' after term in body, got {:?}",
+                    t
+                ))
+            }
+            None => return Err("Expected '!=' or '/=' after term, got end of input".to_string()),
+        }
+        let right = self.parse_term()?;
+        Ok(Atom {
+            name: INEQUALITY_PREDICATE.to_string(),
+            terms: vec![left, right],
+            negated: false,
+        })
+    }
+
+    fn parse_term(&mut self) -> Result<Term, String> {
+        match self.next() {
+            Some(Token::Ident(s)) if s.chars().next().is_some_and(|c| c.is_uppercase()) => {
+                Ok(Term::Var(s.clone()))
+            }
+            Some(Token::Ident(s)) => Ok(Term::Const(Val::Str(s.clone()))),
+            Some(Token::StringLiteral(s)) => Ok(Term::Const(Val::Str(s.clone()))),
+            Some(Token::Underscore) => {
+                let name = format!("__anon_{}", self.anon_counter);
+                self.anon_counter += 1;
+                Ok(Term::Var(name))
+            }
+            Some(Token::IntLiteral(n)) => Ok(Term::Const(Val::Int(*n))),
+            Some(t) => Err(format!("Expected term, got {:?}", t)),
+            None => Err("Expected term, got end of input".to_string()),
+        }
     }
 
     fn parse_atom(&mut self) -> Result<Atom, String> {
@@ -454,7 +586,11 @@ impl<'a> Parser<'a> {
 /// EDB predicates terminate expansion; only rules on the goal→EDB path are kept.
 fn compute_needed_predicates(program: &DatalogProgram, edb: &Edb) -> HashSet<String> {
     let mut needed = HashSet::new();
-    let mut pending: Vec<String> = program.goal.iter().map(|a| a.name.clone()).collect();
+    let mut pending: Vec<String> = program
+        .all_goals()
+        .filter(|a| !a.is_inequality())
+        .map(|a| a.name.clone())
+        .collect();
 
     let mut rules_by_head: HashMap<String, Vec<&Rule>> = HashMap::new();
     for rule in &program.rules {
@@ -474,6 +610,9 @@ fn compute_needed_predicates(program: &DatalogProgram, edb: &Edb) -> HashSet<Str
         if let Some(defining_rules) = rules_by_head.get(&pred) {
             for rule in defining_rules {
                 for atom in &rule.body {
+                    if atom.is_inequality() {
+                        continue;
+                    }
                     if !needed.contains(&atom.name) {
                         pending.push(atom.name.clone());
                     }
@@ -524,14 +663,15 @@ impl Interpreter {
         }
     }
 
-    /// True when every goal atom is fully ground and already present in the IDB/EDB.
-    /// Used to stop monotone evaluation early for existence queries.
+    /// True when every goal atom in `goals` is fully ground and already present
+    /// in the IDB/EDB. Inequality constraints are evaluated against the goal's
+    /// own constants and therefore cannot be checked without a substitution.
     fn goals_satisfied(&self, goals: &[Atom]) -> bool {
         if goals.is_empty() {
             return false;
         }
         goals.iter().all(|atom| {
-            if atom.negated {
+            if atom.negated || atom.is_inequality() {
                 return false;
             }
             let mut tuple = Vec::with_capacity(atom.terms.len());
@@ -545,19 +685,30 @@ impl Interpreter {
         })
     }
 
-    /// Evaluate a single rule body, optionally replacing one positive body atom's
-    /// relation with the semi-naive delta relation. Returns the derived head tuples.
-    fn evaluate_rule(
+    /// Every `?-` query must be fully satisfied before the monotone loop may
+    /// stop early.
+    fn all_queries_satisfied(&self, program: &DatalogProgram) -> bool {
+        !program.queries.is_empty()
+            && program
+                .queries
+                .iter()
+                .all(|query| self.goals_satisfied(&query.goals))
+    }
+
+    /// Evaluate a body (rule body or query goals), optionally replacing one
+    /// positive body atom's relation with the semi-naive delta relation.
+    /// Returns the surviving variable substitutions.
+    fn evaluate_body(
         &self,
-        rule: &Rule,
+        body: &[Atom],
         delta_pos: Option<usize>,
         delta: &HashMap<String, HashSet<Vec<Val>>>,
-    ) -> Vec<Vec<Val>> {
+    ) -> Vec<HashMap<String, Val>> {
         let mut substitutions = vec![HashMap::<String, Val>::new()];
 
-        // Evaluate positive body atoms with first-column hash-index acceleration
-        for (atom_idx, atom) in rule.body.iter().enumerate() {
-            if atom.negated {
+        // 1. Positive relation atoms (inequalities and negations are filters).
+        for (atom_idx, atom) in body.iter().enumerate() {
+            if atom.negated || atom.is_inequality() {
                 continue;
             }
             let relation: Vec<&Vec<Val>> = if delta_pos == Some(atom_idx) {
@@ -621,11 +772,26 @@ impl Interpreter {
             return Vec::new();
         }
 
-        // Apply negation filters (with first-column index when relation >= 32 tuples)
-        for atom in &rule.body {
-            if !atom.negated {
-                continue;
+        // 2. Inequality constraints (`A != B`) are applied only after all
+        //    positive bindings exist, so every variable is grounded.
+        for atom in body.iter().filter(|atom| atom.is_inequality()) {
+            substitutions.retain(|sub| {
+                let left = atom.terms.first().and_then(|t| resolve_term(sub, t));
+                let right = atom.terms.get(1).and_then(|t| resolve_term(sub, t));
+                match (left, right) {
+                    (Some(a), Some(b)) => a != b,
+                    // Ungrounded inequalities are rejected by `validate_grounding`
+                    // before evaluation; keep the row only if we cannot evaluate.
+                    _ => false,
+                }
+            });
+            if substitutions.is_empty() {
+                return Vec::new();
             }
+        }
+
+        // 3. Apply negation filters (with first-column index when relation >= 32 tuples)
+        for atom in body.iter().filter(|atom| atom.negated) {
             let relation: Vec<&Vec<Val>> = self.get_relation(&atom.name).iter().collect();
             if relation.is_empty() {
                 continue;
@@ -679,32 +845,75 @@ impl Interpreter {
             }
         }
 
-        // Generate derived tuples
-        let mut head_tuples = Vec::new();
-        for sub in &substitutions {
-            let mut head_tuple = Vec::new();
-            for term in &rule.head.terms {
-                match term {
-                    Term::Const(v) => head_tuple.push(v.clone()),
-                    Term::Var(var) => {
-                        if let Some(v) = sub.get(var) {
-                            head_tuple.push(v.clone());
-                        }
-                    }
-                }
-            }
-            head_tuples.push(head_tuple);
-        }
-        head_tuples
+        substitutions
     }
 
-    /// Run the semi-naive evaluation loop. Returns derived tuples for each goal atom.
+    /// Evaluate a single rule body and derive head tuples.
+    fn evaluate_rule(
+        &self,
+        rule: &Rule,
+        delta_pos: Option<usize>,
+        delta: &HashMap<String, HashSet<Vec<Val>>>,
+    ) -> Vec<Vec<Val>> {
+        self.evaluate_body(&rule.body, delta_pos, delta)
+            .into_iter()
+            .map(|sub| {
+                rule.head
+                    .terms
+                    .iter()
+                    .filter_map(|term| match term {
+                        Term::Const(v) => Some(v.clone()),
+                        Term::Var(var) => sub.get(var).cloned(),
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// Evaluate one conjunctive query and project its named variables.
+    /// Returns `(variables, rows)`, with duplicate rows removed.
+    fn evaluate_query(&self, goals: &[Atom]) -> (Vec<String>, Vec<Vec<Val>>) {
+        let empty_delta = HashMap::new();
+        let substitutions = self.evaluate_body(goals, None, &empty_delta);
+
+        let variables = query_variables(goals);
+
+        let mut rows: Vec<Vec<Val>> = Vec::new();
+        let mut seen: HashSet<Vec<Val>> = HashSet::new();
+        for sub in &substitutions {
+            let row: Vec<Val> = variables
+                .iter()
+                .filter_map(|var| sub.get(var).cloned())
+                .collect();
+            if (variables.is_empty() || row.len() == variables.len()) && seen.insert(row.clone()) {
+                rows.push(row);
+            }
+        }
+        rows.sort();
+        (variables, rows)
+    }
+
+    /// Run the semi-naive evaluation loop. Returns `(query_name, rows)` for
+    /// every `?-` query.
     pub fn solve(
         &mut self,
         program: &DatalogProgram,
         step_budget: usize,
     ) -> Result<Vec<(String, Vec<Vec<Val>>)>, String> {
+        self.solve_with_steps(program, step_budget)
+            .map(|(results, _steps)| results)
+    }
+
+    /// Like [`Interpreter::solve`], but also returns the number of fixed-point
+    /// iterations actually consumed.
+    pub fn solve_with_steps(
+        &mut self,
+        program: &DatalogProgram,
+        step_budget: usize,
+    ) -> Result<(Vec<(String, Vec<Vec<Val>>)>, usize), String> {
         let start = Instant::now();
+
+        validate_grounding(program)?;
 
         // Seed IDB with explicit program facts
         for fact in &program.facts {
@@ -739,6 +948,7 @@ impl Interpreter {
         let mut delta: HashMap<String, HashSet<Vec<Val>>> = self.idb.clone();
         let mut first_iteration = true;
         let mut reached_fixpoint = active_rules.is_empty();
+        let mut steps_used = 0usize;
         for _step in 0..step_budget {
             if reached_fixpoint {
                 break;
@@ -746,6 +956,7 @@ impl Interpreter {
             if start.elapsed().as_secs() > 30 {
                 return Err("Datalog evaluation timed out (>30s)".to_string());
             }
+            steps_used += 1;
 
             let mut derived: HashMap<String, HashSet<Vec<Val>>> = HashMap::new();
 
@@ -754,13 +965,17 @@ impl Interpreter {
                     .body
                     .iter()
                     .enumerate()
-                    .filter(|(_, atom)| !atom.negated && idb_predicates.contains(&atom.name))
+                    .filter(|(_, atom)| {
+                        !atom.negated
+                            && !atom.is_inequality()
+                            && idb_predicates.contains(&atom.name)
+                    })
                     .map(|(idx, _)| idx)
                     .collect();
                 let has_idb_body = rule
                     .body
                     .iter()
-                    .any(|atom| idb_predicates.contains(&atom.name));
+                    .any(|atom| !atom.is_inequality() && idb_predicates.contains(&atom.name));
 
                 if positive_idb_positions.is_empty() {
                     // Base rule (EDB-only) evaluates once; rules with only negated IDB
@@ -810,7 +1025,7 @@ impl Interpreter {
             // For fully-ground goals, existence is monotone: once every goal atom is
             // satisfied, no later derivation can invalidate it. Stop early instead of
             // materializing the entire closure (a large win on long chains).
-            if self.goals_satisfied(&program.goal) {
+            if self.all_queries_satisfied(program) {
                 reached_fixpoint = true;
                 break;
             }
@@ -823,62 +1038,70 @@ impl Interpreter {
             ));
         }
 
-        // Format goal results
+        // Evaluate every `?-` query against the shared materialized IDB.
         let mut results = Vec::new();
-        for goal_atom in &program.goal {
-            let relation = self.get_relation(&goal_atom.name);
-            let mut goal_results = Vec::new();
-
-            // If goal has variables, find which positions to project
-            let var_positions: Vec<Option<usize>> = goal_atom
-                .terms
-                .iter()
-                .map(|t| match t {
-                    Term::Var(v) => Some(v.clone()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-                .into_iter()
-                .enumerate()
-                .filter(|(_, v)| v.is_some())
-                .map(|(i, _)| Some(i))
-                .collect();
-
-            if !var_positions.is_empty() {
-                // Project variable columns, respecting constant constraints in the goal
-                for tuple in relation {
-                    let mut matches = true;
-                    for (i, term) in goal_atom.terms.iter().enumerate() {
-                        if let Term::Const(expected) = term {
-                            if tuple.get(i) != Some(expected) {
-                                matches = false;
-                                break;
-                            }
-                        }
-                    }
-                    if !matches {
-                        continue;
-                    }
-                    let projected: Vec<Val> = var_positions
-                        .iter()
-                        .filter_map(|&pos| pos.and_then(|p| tuple.get(p).cloned()))
-                        .collect();
-                    if !projected.is_empty() {
-                        goal_results.push(projected);
-                    }
-                }
-            } else {
-                // No variables: just check if relation is non-empty
-                if !relation.is_empty() {
-                    goal_results.push(vec![]);
-                }
-            }
-
-            results.push((goal_atom.name.clone(), goal_results));
+        for (index, query) in program.queries.iter().enumerate() {
+            let (_, rows) = self.evaluate_query(&query.goals);
+            let name = query
+                .name
+                .clone()
+                .unwrap_or_else(|| format!("query_{}", index + 1));
+            results.push((name, rows));
         }
 
-        Ok(results)
+        Ok((results, steps_used))
     }
+}
+
+/// Resolve a term against a substitution. Constants resolve to themselves;
+/// variables only resolve when bound.
+fn resolve_term(sub: &HashMap<String, Val>, term: &Term) -> Option<Val> {
+    match term {
+        Term::Const(v) => Some(v.clone()),
+        Term::Var(var) => sub.get(var).cloned(),
+    }
+}
+
+/// Reject clauses whose inequality constraints reference variables that are
+/// never bound by a positive body atom (mirrors Datalog negation safety).
+fn validate_grounding(program: &DatalogProgram) -> Result<(), String> {
+    for rule in &program.rules {
+        validate_body_grounding(&rule.body, &format!("rule `{}`", rule.head.name))?;
+    }
+    for (index, query) in program.queries.iter().enumerate() {
+        let label = query
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("query #{}", index + 1));
+        validate_body_grounding(&query.goals, &format!("query `{label}`"))?;
+    }
+    Ok(())
+}
+
+fn validate_body_grounding(body: &[Atom], context: &str) -> Result<(), String> {
+    let bound: HashSet<&str> = body
+        .iter()
+        .filter(|atom| !atom.negated && !atom.is_inequality())
+        .flat_map(|atom| atom.terms.iter())
+        .filter_map(|term| match term {
+            Term::Var(var) => Some(var.as_str()),
+            Term::Const(_) => None,
+        })
+        .collect();
+
+    for atom in body.iter().filter(|atom| atom.is_inequality()) {
+        for term in &atom.terms {
+            if let Term::Var(var) = term {
+                if !bound.contains(var.as_str()) {
+                    return Err(format!(
+                        "{context}: variable `{var}` appears only in an inequality constraint \
+                         and is not bound by a positive body atom"
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Unify a substitution with an atom's terms against a concrete tuple.
@@ -930,17 +1153,39 @@ pub fn depends_transitive(
     Ok(results.iter().any(|(_, tuples)| !tuples.is_empty()))
 }
 
-/// Run a complete Datalog query against a graph with safety guardrails.
-pub fn run_datalog_query(
+/// Machine-readable result for a single `?-` query.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DatalogQueryResult {
+    /// Optional `[label]` supplied by the user.
+    pub name: Option<String>,
+    /// Rendered query source, e.g. `?- has_proof_gap(X).`
+    pub query: String,
+    /// Projected variable names, in first-appearance order.
+    pub variables: Vec<String>,
+    /// Rows of projected values. String values are unquoted.
+    pub rows: Vec<Vec<String>>,
+    pub row_count: usize,
+    pub steps_used: usize,
+    pub truncated: bool,
+}
+
+/// Machine-readable report for a whole Datalog invocation (possibly several
+/// `?-` queries evaluated against one shared EDB/IDB).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DatalogReport {
+    /// Schema identifier for consumers: always `"datalog.v1"`.
+    pub schema_version: &'static str,
+    /// Number of EDB tuples materialized from the graph.
+    pub edb_facts: usize,
+    pub queries: Vec<DatalogQueryResult>,
+}
+
+/// Run a complete Datalog program and return a structured report.
+pub fn run_datalog_report(
     graph: &crate::model::GrapheniumGraph,
     query: &str,
     step_budget: usize,
-) -> Result<String, String> {
-    // Guard: empty graph
-    if graph.node_count() == 0 {
-        return Ok("(empty graph — no nodes to query)".to_string());
-    }
-
+) -> Result<DatalogReport, String> {
     // Guard: query too long
     if query.len() > 10_000 {
         return Err("Query too long (max 10,000 characters)".to_string());
@@ -961,7 +1206,7 @@ pub fn run_datalog_query(
     let mut program = parse(&tokens)?;
     program.merge_stdlib(stdlib_rules().as_ref().clone());
 
-    // Step 3: Load EDB
+    // Step 3: Load EDB once for every query in the program.
     let mut edb = Edb::default();
     edb.load_from_graph(graph);
 
@@ -976,31 +1221,157 @@ pub fn run_datalog_query(
             ));
         }
     }
+    let edb_facts = edb.relations.values().map(HashSet::len).sum();
 
-    // Step 4: Evaluate
+    // Step 4: Evaluate every query against the shared materialized state.
     let mut interpreter = Interpreter::new(edb);
-    let results = interpreter.solve(&program, step_budget)?;
+    let (results, steps_used) = interpreter.solve_with_steps(&program, step_budget)?;
 
-    // Step 5: Format results
-    if results.is_empty() || results.iter().all(|(_, tuples)| tuples.is_empty()) {
+    // Step 5: Build the structured report.
+    let queries = program
+        .queries
+        .iter()
+        .enumerate()
+        .map(|(index, parsed)| {
+            let rows = results
+                .get(index)
+                .map(|(_, rows)| rows.clone())
+                .unwrap_or_default();
+            let variables = query_variables(&parsed.goals);
+            let rows: Vec<Vec<String>> = rows
+                .iter()
+                .map(|row| row.iter().map(json_value).collect())
+                .collect();
+            DatalogQueryResult {
+                name: parsed.name.clone(),
+                query: render_query(parsed),
+                variables,
+                row_count: rows.len(),
+                rows,
+                steps_used,
+                truncated: false,
+            }
+        })
+        .collect();
+
+    Ok(DatalogReport {
+        schema_version: "datalog.v1",
+        edb_facts,
+        queries,
+    })
+}
+
+/// Run a complete Datalog query against a graph with safety guardrails and
+/// return human-readable Markdown.
+pub fn run_datalog_query(
+    graph: &crate::model::GrapheniumGraph,
+    query: &str,
+    step_budget: usize,
+) -> Result<String, String> {
+    // Preserve the historical empty-graph sentinel for the text surface.
+    if graph.node_count() == 0 {
+        return Ok("(empty graph — no nodes to query)".to_string());
+    }
+
+    let report = run_datalog_report(graph, query, step_budget)?;
+    if report.queries.is_empty() || report.queries.iter().all(|q| q.rows.is_empty()) {
         return Ok("(no results)".to_string());
     }
 
     let mut output = String::new();
-    for (goal_name, tuples) in results {
-        if tuples.is_empty() {
+    for result in &report.queries {
+        if result.rows.is_empty() {
             continue;
         }
-        output.push_str(&format!("## Results for `{}`\n\n", goal_name));
-        output.push_str("| # | Values |\n|---|---|\n");
-        for (i, tuple) in tuples.iter().enumerate() {
-            let vals: Vec<String> = tuple.iter().map(|v| format!("{}", v)).collect();
-            output.push_str(&format!("| {} | `{}` |\n", i + 1, vals.join(", ")));
+        let title = result.name.clone().unwrap_or_else(|| result.query.clone());
+        output.push_str(&format!("## Results for `{}`\n\n", title));
+        if result.variables.is_empty() {
+            output.push_str("| # | Values |\n|---|---|\n");
+        } else {
+            output.push_str(&format!(
+                "| # | {} |\n|---|{}|\n",
+                result.variables.join(" | "),
+                "---|".repeat(result.variables.len())
+            ));
+        }
+        for (i, row) in result.rows.iter().enumerate() {
+            output.push_str(&format!("| {} | `{}` |\n", i + 1, row.join("`, `")));
         }
         output.push('\n');
     }
 
     Ok(output)
+}
+
+/// Serialize a Datalog report as pretty JSON (valid even when every result set
+/// is empty).
+pub fn run_datalog_json(
+    graph: &crate::model::GrapheniumGraph,
+    query: &str,
+    step_budget: usize,
+) -> Result<String, String> {
+    let report = run_datalog_report(graph, query, step_budget)?;
+    serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
+}
+
+/// Projected variable names for a query, in first-appearance order.
+fn query_variables(goals: &[Atom]) -> Vec<String> {
+    let mut variables: Vec<String> = Vec::new();
+    for atom in goals.iter().filter(|atom| !atom.is_inequality()) {
+        for term in &atom.terms {
+            if let Term::Var(var) = term {
+                if !var.starts_with("__anon_") && !variables.contains(var) {
+                    variables.push(var.clone());
+                }
+            }
+        }
+    }
+    variables
+}
+
+fn json_value(value: &Val) -> String {
+    match value {
+        Val::Str(s) => s.clone(),
+        Val::Int(n) => n.to_string(),
+    }
+}
+
+fn render_term(term: &Term) -> String {
+    match term {
+        Term::Var(var) => var.clone(),
+        Term::Const(value) => value.to_string(),
+    }
+}
+
+fn render_atom(atom: &Atom) -> String {
+    if atom.is_inequality() {
+        let left = atom.terms.first().map(render_term).unwrap_or_default();
+        let right = atom.terms.get(1).map(render_term).unwrap_or_default();
+        return format!("{left} != {right}");
+    }
+    let args = atom
+        .terms
+        .iter()
+        .map(render_term)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let prefix = if atom.negated { "not " } else { "" };
+    format!("{prefix}{}({args})", atom.name)
+}
+
+fn render_query(query: &DatalogQuery) -> String {
+    let label = query
+        .name
+        .as_ref()
+        .map(|name| format!("[{name}] "))
+        .unwrap_or_default();
+    let goals = query
+        .goals
+        .iter()
+        .map(render_atom)
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("?- {label}{goals}.")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -93,6 +93,23 @@ gm query "taint" \
 
 Result after the proof: **537 rows** (down from 538).
 
+### Semantic axiom audit
+
+The extractor above is token-based: it sees `sorry`/`admit`, but not a theorem that is syntactically complete yet depends on a user axiom or `native_decide`. For that layer, generate a `#print axioms` report externally and ingest it:
+
+```bash
+# Raw text and lean-axioms.v1 JSON are both accepted
+gm run . --no-semantic --no-viz --lean-axioms flt-axioms.json
+
+# Audit a theorem's transitive cone
+gm trust --theorem FLT.WeierstrassCurve.galoisRepresentation \
+  --forbid-native-decide \
+  --graph graphenium-out/graph.json \
+  --json
+```
+
+`gm trust` separates standard kernel axioms (`propext`, `Classical.choice`, `Quot.sound`) from `sorryAx`, `Lean.ofReduceBool` / `Lean.trustCompiler`, and external user axioms, and exits non-zero on disallowed trust boundaries. The same facts feed Datalog as `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`.
+
 ### Report head
 
 ```bash

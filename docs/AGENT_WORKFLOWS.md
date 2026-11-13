@@ -144,6 +144,21 @@ Compare a pre-change snapshot with the current index and fail on critical archit
 gm gate --diff graphenium-snapshots/before-change.json graphenium-out/graph.json
 ```
 
+### Read-Only Freshness Gate
+Fail when the committed index is older than the checked-out source, without mutating the workspace:
+```sh
+gm check --graph graphenium-out/graph.json --verify-fresh
+```
+
+### Lean 4 Trust Gate
+For formal-verification repositories, bake in an externally generated `#print axioms` report and audit inherited trust boundaries:
+```sh
+gm run . --no-semantic --no-viz --lean-axioms axioms.json
+gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
+```
+
+`gm trust` exits non-zero on `sorryAx`, a non-allowlisted external axiom, or (with `--forbid-native-decide`) `Lean.ofReduceBool` / `Lean.trustCompiler`.
+
 ---
 
 ## Workflow 7: Manual Index Corrections & Overrides

@@ -26,6 +26,11 @@ pub struct DetectOptions {
     /// If `true`, only re-detect files changed since the last run (stub — full
     /// incremental support lives in Phase 8).
     pub incremental: bool,
+    /// Absolute (or root-relative) directories that must never be walked as
+    /// repository source. Used to keep custom `--out-dir` / `--cache-dir`
+    /// locations out of the corpus even when they are not named
+    /// `graphenium-out` and are not covered by `.gitignore`.
+    pub ignore_dirs: Vec<PathBuf>,
 }
 
 /// Walk `root`, classify every file, apply the paper heuristic to text files,
@@ -34,9 +39,27 @@ pub struct DetectOptions {
 /// Additionally layers any `.grapheniumignore` found in `root`.
 pub fn detect(
     root: &Path,
-    _opts: &DetectOptions,
+    opts: &DetectOptions,
 ) -> crate::Result<(Vec<DetectedFile>, Vec<CorpusWarning>)> {
     let graphenium_ignore = load_graphenium_ignore(root);
+
+    // Resolve ignore directories once. Relative entries are interpreted
+    // against the walked root so callers can pass either form.
+    let ignore_dirs: Vec<PathBuf> = opts
+        .ignore_dirs
+        .iter()
+        .map(|dir| {
+            if dir.is_absolute() {
+                dir.clone()
+            } else {
+                root.join(dir)
+            }
+        })
+        .collect();
+    let canonical_ignore_dirs: Vec<PathBuf> = ignore_dirs
+        .iter()
+        .filter_map(|dir| std::fs::canonicalize(dir).ok())
+        .collect();
 
     let mut files: Vec<DetectedFile> = Vec::new();
     let mut total_words: u64 = 0;
@@ -61,6 +84,17 @@ pub fn detect(
 
         // Skip directory entries outright.
         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+
+        // Never treat configured output/cache directories as source, even when
+        // they live outside the conventional `graphenium-out/` name.
+        if !ignore_dirs.is_empty()
+            && (ignore_dirs.iter().any(|dir| path.starts_with(dir))
+                || (!canonical_ignore_dirs.is_empty()
+                    && std::fs::canonicalize(path)
+                        .is_ok_and(|p| canonical_ignore_dirs.iter().any(|d| p.starts_with(d)))))
+        {
             continue;
         }
 

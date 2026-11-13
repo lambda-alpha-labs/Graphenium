@@ -47,12 +47,21 @@ use graphenium::{
 
 /// 1. Initialize Baseline Index (Run once when workspace opens)
 pub fn initialize_index(root: &Path) -> Result<(GrapheniumGraph, Vec<CommunityStats>), String> {
-    // Walk directory and classify file types (respecting ignores)
-    let (files, _warnings) = detect(root, &DetectOptions::default())
-        .map_err(|e| e.to_string())?;
+    // Walk directory and classify file types (respecting ignores). Add any
+    // artifact/cache directories to `ignore_dirs` so they are never indexed.
+    let detect_opts = DetectOptions {
+        ignore_dirs: vec![root.join("graphenium-out"), root.join("graphenium-out/cache")],
+        ..DetectOptions::default()
+    };
+    let (files, _warnings) = detect(root, &detect_opts).map_err(|e| e.to_string())?;
 
-    // Extract raw AST structure from all code files
-    let ast_result = extract_all(&files, &ExtractOptions::default());
+    // Extract raw AST structure from all code files. Passing project_root keeps
+    // emitted source paths repo-relative and IDs stable across machines.
+    let extract_opts = ExtractOptions {
+        project_root: Some(root.to_path_buf()),
+        ..ExtractOptions::default()
+    };
+    let ast_result = extract_all(&files, &extract_opts);
 
     // Compile physical AST symbols and boundaries
     let (mut graph, _stats) = build_merged([ast_result]);
@@ -65,19 +74,28 @@ pub fn initialize_index(root: &Path) -> Result<(GrapheniumGraph, Vec<CommunitySt
 }
 
 /// 2. Real-Time Incremental Patching (Run on file save/modify)
-pub fn patch_file(graph: &mut GrapheniumGraph, file_path: &Path) -> Result<(), String> {
+pub fn patch_file(
+    graph: &mut GrapheniumGraph,
+    root: &Path,
+    file_path: &Path,
+) -> Result<(), String> {
     let file = graphenium::detect::DetectedFile {
         path: file_path.to_path_buf(),
         file_type: FileType::Code,
     };
 
     // Re-extract only the modified file
-    let result = extract_file(&file, &ExtractOptions::default());
+    let extract_opts = ExtractOptions {
+        project_root: Some(root.to_path_buf()),
+        ..ExtractOptions::default()
+    };
+    let result = extract_file(&file, &extract_opts);
     if result.is_empty() {
         return Ok(()); // Skip if empty or unsupported
     }
 
-    let source_file = file_path.to_string_lossy().to_string();
+    // Graph keys are repo-relative; match them instead of leaking absolute paths.
+    let source_file = graphenium::detect::path::to_repo_relative(file_path, Some(root));
 
     // Surgically replace stale AST contributions and re-resolve local boundaries
     graph.replace_file_extraction(&source_file, &result);
@@ -85,6 +103,14 @@ pub fn patch_file(graph: &mut GrapheniumGraph, file_path: &Path) -> Result<(), S
     Ok(())
 }
 ```
+
+### Portable Paths and Freshness in Embedded Harnesses
+
+-   Always pass `ExtractOptions.project_root`; every extractor normalizes node/edge `source_file` through `detect::path::to_repo_relative`.
+-   Use `ExtractOptions.cache_manager = None` for ephemeral harness runs, or point `CacheManager::new` at a dedicated cache directory.
+-   `Manifest` keys are repo-relative when constructed with `Manifest::new().with_root(root)`. `is_changed_fast` tolerates mtime-only changes (fresh checkout), while `is_changed_strict` always re-hashes for CI drift checks.
+-   If you merge extraction results from custom extractors (C#/CI, semantic passes), call `extract::normalize_result_source_paths(&mut result, Some(root))` before inserting them into a graph.
+-   For Lean 4 trust auditing, `extract::lean_axioms::{load_report, merge_report_into_graph}` ingest `#print axioms` facts, and `analyze::lean_trust::evaluate_trust` returns a serializable `TrustReport` without invoking a Lean compiler.
 
 ---
 

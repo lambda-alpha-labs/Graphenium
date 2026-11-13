@@ -166,7 +166,9 @@ Graphenium enforces these policies at multiple checkpoints in the development li
 | **`gm check --delta --plan <id>`** | CI / Pre-Commit Hook | Topological entropy gate: modularity delta + surprise edge profiling. |
 | **`gm check --plan <id>`** | CI / Pre-Commit Hook | Double Gate: Evaluates pre-flight design compliance first, then performs a post-facto scope-creep and planned-edge audit. |
 | **`gm gate --diff <before> <after>`** | CI / PR Pipeline | Compares two compiled indexes and exits non-zero on any `Critical` architectural drift event. |
-| **`gm gate`** | CI / Pre-Commit Hook | Runs the default trust gate against `graphenium-out/graph.json`. |
+| **`gm gate`** | CI / Pre-Commit Hook | Runs the default trust gate against `<out-dir>/graph.json`; add `--verify-fresh` for read-only manifest drift detection. |
+| **`gm check --verify-fresh` / `gm gate --verify-fresh`** | CI / PR Pipeline | Hashes current sources against `<out-dir>/manifest.json` and fails on modified/added/deleted files without writing to disk. Mtime-only changes (fresh checkout) are ignored. |
+| **`gm trust`** | CI / PR Pipeline | Audits Lean 4 theorem dependency cones for `sorryAx`, external axioms, and native-decision shortcuts. Exits non-zero on disallowed trust boundaries. |
 | **`verify_changes`** | CI / PR Pipeline | Evaluates global trust quality metrics (import resolution ratio, maximum allowed ambiguity) plus blast radius and verification plans. |
 
 ---
@@ -183,6 +185,38 @@ gm check --graph graphenium-out/graph.json --min-resolution 80 --max-ambiguous 1
 *   `--min-resolution <pct>`: Fails the build if the AST import resolution ratio drops below the target percentage (default: 80%).
 *   `--max-ambiguous <count>`: Fails the build if Graphenium detects more than `<count>` unresolved name collisions (default: 10). Lean 4 `sorry` / `admit` proof gaps are emitted as `AMBIGUOUS` edges and count toward this limit, so `--max-ambiguous 0` can gate incomplete formal proofs.
 *   `--strict`: Exits non-zero on any parser or configuration warnings.
+
+### Read-Only Freshness Gate
+
+CI must detect when `graph.json` is older than the checked-out source without mutating the workspace. `--verify-fresh` reads `<out-dir>/manifest.json`, compares SHA-256 hashes for every tracked file, and reports modified/added/deleted repo-relative paths:
+
+```sh
+gm check --graph graphenium-out/graph.json --verify-fresh
+```
+
+Manifests are content-addressed, so a fresh checkout or `git switch` (new mtimes, identical bytes) does not trigger a false failure. A one-byte source change does. `gm check`, `gm gate`, `gm doctor`, `gm query`, and `gm explain` are otherwise non-mutating and safe to run against read-only artifact directories.
+
+### Lean 4 Trust Gate
+
+For Lean 4 repositories, bake an externally generated `#print axioms` report into the index and audit it in CI:
+
+```sh
+gm run . --no-semantic --no-viz --lean-axioms axioms.json
+gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
+```
+
+`gm trust` exits non-zero when the theorem's transitive cone contains `sorryAx`, a non-allowlisted external axiom, or (with `--forbid-native-decide`) `Lean.ofReduceBool` / `Lean.trustCompiler`. The same facts are available to Datalog via `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`.
+
+### Portable CI Artifacts
+
+Use `--out-dir` / `--cache-dir` to keep artifacts outside the repository, and `--no-cache-write` for ephemeral jobs:
+
+```sh
+gm run . --no-semantic --no-viz --out-dir /tmp/gm-out --cache-dir /tmp/gm-cache --no-cache-write
+gm check --graph /tmp/gm-out/graph.json --min-resolution 80 --max-ambiguous 5 --strict
+```
+
+Persisted `source_file`, manifest keys, and AST cache payloads are repo-relative, so artifacts can be uploaded, cached, or moved between runners without leaking absolute workspace paths.
 
 For snapshot-to-snapshot containment, compare a pre-change snapshot with the current index:
 

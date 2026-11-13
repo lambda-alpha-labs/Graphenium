@@ -6,6 +6,7 @@ pub mod csharp_project;
 pub mod go;
 pub mod import_handlers;
 pub mod lean;
+pub mod lean_axioms;
 #[cfg(feature = "lang-rust")]
 pub mod rust_lang;
 pub mod walker;
@@ -27,7 +28,7 @@ const STRUCTURAL_MODULE_STEMS: &[&str] = &["mod", "lib", "main", "index", "__ini
 
 /// Bump when extractor output semantics change so stale on-disk AST caches
 /// cannot keep serving old node IDs (e.g. collapsed `mod.rs` file nodes).
-const AST_CACHE_FORMAT_VERSION: &str = "2";
+const AST_CACHE_FORMAT_VERSION: &str = "3";
 
 fn ast_cache_key(content_hash: &str) -> String {
     format!("{AST_CACHE_FORMAT_VERSION}-{content_hash}")
@@ -215,7 +216,7 @@ pub fn dispatch_with_root(
     file_path: &str,
     project_root: Option<&Path>,
 ) -> ExtractionResult {
-    match ext {
+    let mut result = match ext {
         // Rust, Go, and Lean 4 have dedicated extractors.
         #[cfg(feature = "lang-rust")]
         "rs" => rust_lang::extract_with_root(source, file_path, project_root),
@@ -230,6 +231,47 @@ pub fn dispatch_with_root(
             } else {
                 ExtractionResult::new()
             }
+        }
+    };
+
+    // Persist only repo-relative source paths. Doing this at the dispatch
+    // boundary covers every extractor and every AST-cache payload.
+    normalize_extraction_paths(&mut result, file_path, project_root);
+    result
+}
+
+/// Rewrite every node/edge `source_file` to a repo-relative path using the
+/// canonical [`crate::detect::path::to_repo_relative`] helper.
+pub fn normalize_extraction_paths(
+    result: &mut ExtractionResult,
+    file_path: &str,
+    project_root: Option<&Path>,
+) {
+    let relative = crate::detect::path::to_repo_relative(Path::new(file_path), project_root);
+    if relative.is_empty() {
+        return;
+    }
+    for node in &mut result.nodes {
+        node.source_file = relative.clone();
+    }
+    for edge in &mut result.edges {
+        edge.source_file = relative.clone();
+    }
+}
+
+/// Rewrite each node/edge's existing `source_file` relative to `project_root`.
+/// Useful for extractors that emit per-node paths (C#/CI, semantic passes).
+pub fn normalize_result_source_paths(result: &mut ExtractionResult, project_root: Option<&Path>) {
+    for node in &mut result.nodes {
+        if !node.source_file.is_empty() {
+            node.source_file =
+                crate::detect::path::to_repo_relative(Path::new(&node.source_file), project_root);
+        }
+    }
+    for edge in &mut result.edges {
+        if !edge.source_file.is_empty() {
+            edge.source_file =
+                crate::detect::path::to_repo_relative(Path::new(&edge.source_file), project_root);
         }
     }
 }

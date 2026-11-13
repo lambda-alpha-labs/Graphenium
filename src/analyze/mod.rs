@@ -2,6 +2,7 @@ pub mod delta;
 pub mod diff;
 pub mod god;
 pub mod impact;
+pub mod lean_trust;
 pub mod query;
 pub mod questions;
 pub mod rank;

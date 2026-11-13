@@ -58,6 +58,15 @@ Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`). **Nev
     `?- calls_transitive('api_router', X).`
 *   **Trace Generic Transitive Dependencies:**
     `?- depends_transitive('auth_helper', X).`
+*   **Audit Lean Axiom Trust:**
+    `?- has_untrusted_axiom(X).`
+    `?- untrusted_theorem(X).`
+
+### Datalog Syntax
+*   **Inequality:** bodies accept `A != B` or `A /= B`. Variables must be bound by a positive atom; ungrounded inequalities are rejected.
+*   **Multiple queries:** one program may contain several labelled `?-` blocks, evaluated against one shared EDB/fixpoint:
+    `?- [gaps] has_proof_gap(X). ?- [orphans] is_orphan(Y).`
+*   **Machine-readable output:** call `run_datalog` with `format = "json"` for a `datalog.v1` report (`variables`, `rows`, `row_count`, `steps_used`).
 
 ### Available EDB Relations:
 *   `node(Id, Label, Type, File, Community)`
@@ -65,6 +74,8 @@ Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`). **Nev
 *   `imports(Source, Target, Confidence)`
 *   `inherits(Source, Target, Confidence)`
 *   `implements(Source, Target, Confidence)`
+*   `contains(Source, Target, Confidence)`
+*   `edge(Source, Target, Relation, Confidence)`
 *   `degree(NodeId, Count)`
 *   `hub(NodeId)`
 
@@ -76,7 +87,16 @@ You must explicitly separate AST-proven facts from semantic guesswork when plann
 
 *   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, class boundaries, method calls). Use as the **planning backbone**.
 *   `INFERRED` **(Heuristics):** Semantic similarity or naming guesses. Treat as a **hypothesis** - you are strictly blocked from editing these targets until you read their source files directly.
-*   `AMBIGUOUS` **(Collisions):** Symbol name collisions. **Risk gated** - stop and run `inspect_symbol` to resolve the collision before proceeding.
+*   `AMBIGUOUS` **(Collisions / Proof Gaps):** Symbol name collisions, Lean `sorryAx` gaps, or semantic axiom findings (`native_decide`, external axioms). **Risk gated** - stop and run `inspect_symbol` or `gm trust` before proceeding.
+
+### Lean 4 Trust Auditing
+When the index contains semantic `#print axioms` facts (or you pass `--axioms`), audit theorem trust before relying on a formal claim:
+
+```sh
+gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
+```
+
+Standard kernel axioms (`propext`, `Classical.choice`, `Quot.sound`) are allowed. `sorryAx`, non-allowlisted external axioms, and (with `--forbid-native-decide`) `Lean.ofReduceBool` / `Lean.trustCompiler` cause a non-zero exit. Use `--allow-axiom <name>` only for reviewed external axioms.
 
 ---
 
@@ -110,8 +130,11 @@ gm query "auth service" --mode hybrid --budget 2000
 # Trace AST-proven dependencies only
 gm query "validate_token" --safe --budget 1500
 
-# Execute Datalog rules
-gm query "hubs" --datalog "?- is_hub(X)."
+# Execute Datalog rules (multiple queries, JSON output)
+gm query "" --datalog "?- [hubs] is_hub(X). ?- [gaps] has_proof_gap(Y)." --json
+
+# Audit Lean 4 trust boundaries
+gm trust --theorem MyProject.main_theorem --forbid-native-decide
 ```
 
 ---

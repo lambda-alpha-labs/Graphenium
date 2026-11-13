@@ -16,7 +16,7 @@ Every symbol declaration and dependency edge in Graphenium's structural index ca
 |---|---|---|
 | `EXTRACTED` **(Facts)** | AST-proven and compiler-backed. Discovered directly in code by Tree-sitter, Stack Graphs, or Visual Studio solution parsers. | **Planning Backbone:** Safe to plan and build against. (Agent must still read the targeted source files before writing edits). |
 | `INFERRED` **(Hypotheses)** | Generatively or heuristically inferred. Discovered via Graphenium's optional semantic pass, naming convention heuristics, or cross-file fuzzy resolution. | **Exploratory Leads:** Treat as a hypothesis. The agent is strictly blocked from editing until it inspects at least one source file to prove the dependency. |
-| `AMBIGUOUS` **(Collisions / Proof Gaps)** | Identifier or namespace collision (e.g., matching a symbol that exists in multiple directories), or a Lean 4 `sorry` / `admit` proof gap. | **Risk Gated:** Rejects automated edits. The agent is forced to halt, flag the collision or unproved theorem, and request human review or execute targeted file-level disambiguation. |
+| `AMBIGUOUS` **(Collisions / Proof Gaps)** | Identifier or namespace collision (e.g., matching a symbol that exists in multiple directories), a Lean 4 `sorry` / `admit` proof gap, or a semantic `#print axioms` finding (non-kernel axiom or `native_decide` shortcut). | **Risk Gated:** Rejects automated edits. The agent is forced to halt, flag the collision or unproved theorem, and request human review or execute targeted file-level disambiguation. |
 
 ---
 
@@ -41,8 +41,24 @@ The `extractor` metadata field discloses exactly which module compiled the relat
 | `tree-sitter-stack-graphs` | Local cross-file call resolution | High trust (`EXTRACTED` / `INFERRED` unique bindings). |
 | `csproj-parser` | Visual Studio project boundaries | High trust (`EXTRACTED`). Solution-proven. |
 | `lean-extractor` | Native Lean 4 syntax extraction | High trust for declarations/imports (`EXTRACTED`); `AMBIGUOUS` for `sorry`/`admit` proof gaps. |
+| `lean-axioms` | Semantic `#print axioms` ingestion | High trust for the report's facts; `AMBIGUOUS` for external axioms and `native_decide` shortcuts. |
 | `llm` | Remote semantic inference | Medium trust (`INFERRED`). Heuristic guess. |
 | `manual-mcp-write` | Programmatic agent injection | Auditable. Only accepted if the agent provides explicit proof of source inspection. |
+
+### 3.1 Semantic Lean 4 Axiom Provenance
+
+Token-based `sorry` detection cannot see a theorem that is syntactically complete but depends on a user axiom or `native_decide`. Graphenium closes that gap with opt-in semantic ingestion from Lean's `#print axioms` output (raw text or `lean-axioms.v1` JSON):
+
+| Axiom class | Examples | Graph fact |
+|---|---|---|
+| `standard_kernel` | `propext`, `Classical.choice`, `Quot.sound` | `depends_on_axiom` (`INFERRED`) |
+| `incomplete_proof_gap` | `sorryAx` | `unverified_sorry` (`AMBIGUOUS`) |
+| `native_eval_shortcut` | `Lean.ofReduceBool`, `Lean.trustCompiler` | `unverified_native_decide` (`AMBIGUOUS`) |
+| `external_axiom` | User `axiom`s, certificate axioms | `depends_on_axiom` (`AMBIGUOUS`) |
+
+These facts are baked in with `gm run --lean-axioms <report>` (or explicitly generated with `--run-lean-axioms <file>`). `gm trust` then resolves the theorem's transitive dependency cone and reports inherited axioms by class; it exits non-zero on `sorryAx`, non-allowlisted external axioms, or (with `--forbid-native-decide`) native-decision shortcuts. Datalog exposes the same facts as `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`.
+
+Graphenium never embeds or invokes a Lean compiler unless `--run-lean-axioms` is explicitly passed; the report is otherwise produced by the project's own `lake env lean` workflow.
 
 ---
 
@@ -58,6 +74,8 @@ Graphenium translates these trust tiers into a strict, programmatic contract for
    └── Require agent to read target implementation files first.
 4. If plan relies exclusively on resolved, EXTRACTED boundaries:
    └── Approve pre-flight and authorize file edits.
+5. If a Lean 4 theorem's dependency cone inherits sorryAx or a disallowed axiom:
+   └── Fail the trust gate (`gm trust`) and require a kernel-checked proof.
 ```
 
 ---

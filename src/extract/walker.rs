@@ -78,9 +78,9 @@ pub fn walk_file_with_root(
 
 /// Walk an already-parsed `tree`.  Called by `walk_file` and may be reused by
 /// custom extractors (Go, Rust) when they want the generic logic.
-pub fn walk_tree<'tree>(
+pub fn walk_tree(
     source: &[u8],
-    tree: &'tree Tree,
+    tree: &Tree,
     config: &LanguageConfig,
     file_path: &str,
 ) -> ExtractionResult {

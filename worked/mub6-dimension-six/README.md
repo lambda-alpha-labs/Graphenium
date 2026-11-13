@@ -142,6 +142,29 @@ Interleaving the canonical-order atoms with the adjacency atoms keeps every part
 
 No Soufflé binary is required, and the generated graph/log files use only relative paths.
 
+### 5.1 Semantic trust audit of the Lean certificate
+
+The token-based Lean extractor flags `sorry`/`admit`. It cannot see a theorem that compiles but inherits a custom certificate axiom or a `native_decide` shortcut. Generate a `#print axioms` report with the project's own Lean toolchain, then audit the theorem's dependency cone:
+
+```bash
+# Ingest the report (raw text or lean-axioms.v1 JSON)
+gm run . --no-semantic --no-viz --lean-axioms mub6-axioms.json
+
+# Audit the certificate theorem
+gm trust --theorem MUB6.no_four_mubs_dim6 --forbid-native-decide --json
+```
+
+The report classifies each inherited axiom:
+
+| Class | Examples | Meaning |
+|---|---|---|
+| `standard_kernel` | `propext`, `Classical.choice`, `Quot.sound` | Trusted Lean kernel |
+| `incomplete_proof_gap` | `sorryAx` | Incomplete proof |
+| `native_eval_shortcut` | `Lean.ofReduceBool`, `Lean.trustCompiler` | `native_decide` trust |
+| `external_axiom` | Certificate axioms such as `EdgeAtlasCertificate` | Must be reviewed or allowlisted |
+
+`gm trust` exits non-zero on `sorryAx`, non-allowlisted external axioms, or (with `--forbid-native-decide`) native-decision shortcuts. This is the mechanical counterpart to the prose claim that the core certificate depends only on `propext` / `Quot.sound` and not on `sorryAx` or `native_decide`: the claim becomes a CI-checkable graph fact.
+
 ---
 
 ## 6. Indexing the showcase with Graphenium

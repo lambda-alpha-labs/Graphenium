@@ -87,7 +87,7 @@ A second, language-specific case study covers Buzzard's Lean 4 formalization of 
 *   **Case Study Directory:** `worked/flt-lean4-proof-gaps/`
 *   **Summary Report:** `worked/flt-lean4-proof-gaps/README.md`
 
-It documents the Lean 4 extractor upgrades required for a real proof repository (`public import`, anonymous `instance` declarations, module-qualified IDs, and FNV-1a name disambiguation), the deterministic Louvain and import-stub merge fixes, and the difference between module/import-propagated proof-gap taint (11.8%) and strict declaration-level taint (1.93%). It also includes a verified proof of the four `sorry`s in `WeierstrassCurve.galoisRepresentation` and the resulting graph diff.
+It documents the Lean 4 extractor upgrades required for a real proof repository (`public import`, anonymous `instance` declarations, module-qualified IDs, and FNV-1a name disambiguation), the deterministic Louvain and import-stub merge fixes, and the difference between module/import-propagated proof-gap taint (11.8%) and strict declaration-level taint (1.93%). It also includes a verified proof of the four `sorry`s in `WeierstrassCurve.galoisRepresentation` and the resulting graph diff. The study now also shows how to layer semantic `#print axioms` auditing (`gm run --lean-axioms`, `gm trust`) on top of token-based proof-gap detection.
 
 A third case study covers exact graph obstructions in the dimension-six MUB problem:
 

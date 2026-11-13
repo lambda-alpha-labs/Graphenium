@@ -145,6 +145,26 @@ enum Commands {
         /// Only plan: scan directory and report file statistics without running extraction
         #[arg(long)]
         plan: bool,
+
+        /// Output directory for graph.json, manifest.json, report, and cache
+        #[arg(long, default_value = "graphenium-out")]
+        out_dir: PathBuf,
+
+        /// Extraction cache directory (default: <out-dir>/cache)
+        #[arg(long)]
+        cache_dir: Option<PathBuf>,
+
+        /// Run without writing extraction caches (useful for ephemeral CI runs)
+        #[arg(long)]
+        no_cache_write: bool,
+
+        /// Ingest a `#print axioms` report (raw text or lean-axioms.v1 JSON)
+        #[arg(long)]
+        lean_axioms: Option<PathBuf>,
+
+        /// Opt in to running `lake env lean <file>` and ingesting its `#print axioms` output
+        #[arg(long, value_name = "LEAN_FILE")]
+        run_lean_axioms: Option<PathBuf>,
     },
 
     /// Query the relational index with keywords
@@ -166,9 +186,13 @@ enum Commands {
         #[arg(long, default_value = "2000")]
         budget: usize,
 
-        /// Path to graph.json produced by `gm run`
-        #[arg(long, default_value = "graphenium-out/graph.json")]
-        graph: PathBuf,
+        /// Path to graph.json produced by `gm run` (default: <out-dir>/graph.json)
+        #[arg(long)]
+        graph: Option<PathBuf>,
+
+        /// Output directory used to resolve the default graph path
+        #[arg(long, default_value = "graphenium-out")]
+        out_dir: PathBuf,
 
         /// Query mode: lexical (default), structural, or hybrid
         #[arg(long, default_value = "lexical")]
@@ -197,9 +221,13 @@ enum Commands {
 
     /// Start the MCP server for agent/tool integration (stdio JSON-RPC)
     Serve {
-        /// Path to graph.json
-        #[arg(long, default_value = "graphenium-out/graph.json")]
-        graph: PathBuf,
+        /// Path to graph.json (default: <out-dir>/graph.json)
+        #[arg(long)]
+        graph: Option<PathBuf>,
+
+        /// Output directory used to resolve the default graph path
+        #[arg(long, default_value = "graphenium-out")]
+        out_dir: PathBuf,
 
         /// Watch graph file for changes and auto-reload
         #[arg(long)]
@@ -208,9 +236,13 @@ enum Commands {
 
     /// Run diagnostic checks on the Graphenium installation
     Doctor {
-        /// Optional path to graph.json
+        /// Optional path to graph.json (default: <out-dir>/graph.json)
         #[arg(long)]
         graph: Option<PathBuf>,
+
+        /// Output directory used to resolve the default graph path
+        #[arg(long, default_value = "graphenium-out")]
+        out_dir: PathBuf,
 
         /// Show graph schema information
         #[arg(long)]
@@ -227,9 +259,17 @@ enum Commands {
 
     /// Run trust quality checks and enforce gates for CI
     Check {
-        /// Path to the graph to check
-        #[arg(long, default_value = "graphenium-out/graph.json")]
-        graph: PathBuf,
+        /// Path to the graph to check (default: <out-dir>/graph.json)
+        #[arg(long)]
+        graph: Option<PathBuf>,
+
+        /// Output directory used to resolve the default graph path and manifest
+        #[arg(long, default_value = "graphenium-out")]
+        out_dir: PathBuf,
+
+        /// Verify source content hashes against <out-dir>/manifest.json without writing
+        #[arg(long)]
+        verify_fresh: bool,
 
         /// Minimum resolution percentage (default: 80)
         #[arg(long, default_value_t = 80.0)]
@@ -265,9 +305,13 @@ enum Commands {
         /// Symbol to explain
         symbol: String,
 
-        /// Path to the graph to use
-        #[arg(long, default_value = "graphenium-out/graph.json")]
-        graph: PathBuf,
+        /// Path to the graph to use (default: <out-dir>/graph.json)
+        #[arg(long)]
+        graph: Option<PathBuf>,
+
+        /// Output directory used to resolve the default graph path
+        #[arg(long, default_value = "graphenium-out")]
+        out_dir: PathBuf,
     },
 
     /// Diff two graph snapshots and show symbol-level changes
@@ -322,6 +366,14 @@ enum Commands {
         /// Show blast radius impact after rebuilds
         #[arg(long)]
         impact: bool,
+
+        /// Output directory (default: graphenium-out)
+        #[arg(long, default_value = "graphenium-out")]
+        out_dir: PathBuf,
+
+        /// Extraction cache directory (default: <out-dir>/cache)
+        #[arg(long)]
+        cache_dir: Option<PathBuf>,
     },
 
     /// Inspect and manage the relational index
@@ -336,11 +388,50 @@ enum Commands {
         command: SnapshotCommands,
     },
 
+    /// Audit Lean 4 theorem trust: inherited axioms, sorry gaps, and native_decide
+    Trust {
+        /// Path to graph.json (default: <out-dir>/graph.json)
+        #[arg(long)]
+        graph: Option<PathBuf>,
+
+        /// Output directory used to resolve the default graph path
+        #[arg(long, default_value = "graphenium-out")]
+        out_dir: PathBuf,
+
+        /// Optional `#print axioms` report (raw text or lean-axioms.v1 JSON)
+        #[arg(long)]
+        axioms: Option<PathBuf>,
+
+        /// Restrict the audit to one theorem (name or node ID)
+        #[arg(long)]
+        theorem: Option<String>,
+
+        /// Fail when Lean.ofReduceBool / Lean.trustCompiler is inherited
+        #[arg(long)]
+        forbid_native_decide: bool,
+
+        /// External axiom to allow (repeatable)
+        #[arg(long = "allow-axiom")]
+        allow_axiom: Vec<String>,
+
+        /// Emit a machine-readable lean-trust.v1 report
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Run gate checks and quality gates for CI
     Gate {
         /// Diff two graph snapshots: --diff <before> <after>
         #[arg(long, num_args = 2, value_names = ["before", "after"])]
         diff: Option<Vec<PathBuf>>,
+
+        /// Output directory used to resolve the default graph path and manifest
+        #[arg(long, default_value = "graphenium-out")]
+        out_dir: PathBuf,
+
+        /// Verify source content hashes against <out-dir>/manifest.json without writing
+        #[arg(long)]
+        verify_fresh: bool,
     },
 }
 
@@ -379,6 +470,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             exclude_dirs,
             no_report,
             plan,
+            out_dir,
+            cache_dir,
+            no_cache_write,
+            lean_axioms,
+            run_lean_axioms,
         } => {
             if plan {
                 cmd_plan(&path)
@@ -395,6 +491,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     api_key,
                     exclude_dirs,
                     no_report,
+                    out_dir,
+                    cache_dir,
+                    no_cache_write,
+                    lean_axioms,
+                    run_lean_axioms,
                 )
                 .await
             }
@@ -407,6 +508,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             safe,
             budget,
             graph,
+            out_dir,
             mode,
             path_prefix,
             exclude_path,
@@ -414,17 +516,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ast_only_tuning,
             json,
         } => {
+            let graph = resolve_graph_path(graph, &out_dir);
             if let Some(ref dl) = datalog {
                 let graph_path =
                     std::path::Path::new(graph.to_str().unwrap_or("graphenium-out/graph.json"));
                 match graphenium::export::json::load_graph(graph_path) {
-                    Ok(g) => match query::run_datalog_query(&g, dl, 1000) {
-                        Ok(r) => println!("{}", r),
-                        Err(e) => eprintln!("Datalog error: {}", e),
-                    },
-                    Err(e) => eprintln!("Failed to load graph: {}", e),
+                    Ok(g) => {
+                        let rendered = if json {
+                            query::run_datalog_json(&g, dl, 1000)
+                        } else {
+                            query::run_datalog_query(&g, dl, 1000)
+                        };
+                        match rendered {
+                            Ok(r) => {
+                                println!("{}", r);
+                                Ok(())
+                            }
+                            Err(e) => {
+                                eprintln!("Datalog error: {}", e);
+                                Err(graphenium::GrapheniumError::Validation(format!(
+                                    "Datalog error: {e}"
+                                )))
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to load graph: {}", e);
+                        Err(e)
+                    }
                 }
-                Ok::<(), graphenium::GrapheniumError>(())
             } else {
                 cmd_query(
                     question,
@@ -442,7 +562,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        Commands::Serve { graph, watch } => {
+        Commands::Serve {
+            graph,
+            out_dir,
+            watch,
+        } => {
+            let graph = resolve_graph_path(graph, &out_dir);
             if watch {
                 graphenium::serve::serve_with_watch(&graph, true).await
             } else {
@@ -452,11 +577,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::Doctor {
             graph,
+            out_dir,
             schema,
             resolution,
             repository,
         } => {
-            let g = graph.as_deref();
+            let resolved_graph = resolve_graph_path(graph, &out_dir);
+            let g = Some(resolved_graph.as_path());
             if schema {
                 graphenium::doctor::show_schema(g);
             } else if resolution {
@@ -471,6 +598,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::Check {
             graph,
+            out_dir,
+            verify_fresh,
             min_resolution,
             max_ambiguous,
             strict,
@@ -478,18 +607,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             delta,
             mod_tolerance,
             surprise_threshold,
-        } => cmd_check(
-            &graph,
-            min_resolution,
-            max_ambiguous,
-            strict,
-            plan,
-            delta,
-            mod_tolerance,
-            surprise_threshold,
-        ),
+        } => {
+            let graph_path = resolve_graph_path(graph, &out_dir);
+            if verify_fresh {
+                verify_fresh_manifest(&graph_path, &out_dir)?;
+            }
+            cmd_check(
+                &graph_path,
+                min_resolution,
+                max_ambiguous,
+                strict,
+                plan,
+                delta,
+                mod_tolerance,
+                surprise_threshold,
+            )
+        }
 
-        Commands::Explain { symbol, graph } => cmd_explain(&symbol, &graph),
+        Commands::Explain {
+            symbol,
+            graph,
+            out_dir,
+        } => {
+            let graph = resolve_graph_path(graph, &out_dir);
+            cmd_explain(&symbol, &graph)
+        }
 
         Commands::Diff {
             before,
@@ -515,9 +657,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             debounce,
             incremental,
             impact: _,
+            out_dir,
+            cache_dir,
         } => {
+            let root = path.canonicalize().unwrap_or_else(|_| path.clone());
+            let out_dir = if out_dir.is_absolute() {
+                out_dir
+            } else {
+                root.join(out_dir)
+            };
+            let cache_dir = match cache_dir {
+                Some(dir) if dir.is_absolute() => dir,
+                Some(dir) => root.join(dir),
+                None => out_dir.join("cache"),
+            };
             match tokio::task::spawn_blocking(move || {
-                graphenium::watch::watch(&path, debounce, incremental)
+                graphenium::watch::watch_with_dirs(
+                    &root,
+                    debounce,
+                    incremental,
+                    &out_dir,
+                    &cache_dir,
+                )
             })
             .await
             {
@@ -538,7 +699,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             SnapshotCommands::List => cmd_snapshot_list(),
         },
 
-        Commands::Gate { diff } => cmd_gate(diff.as_deref()),
+        Commands::Gate {
+            diff,
+            out_dir,
+            verify_fresh,
+        } => {
+            if verify_fresh {
+                let graph_path = out_dir.join("graph.json");
+                verify_fresh_manifest(&graph_path, &out_dir)?;
+            }
+            cmd_gate_with_out_dir(diff.as_deref(), &out_dir)
+        }
+
+        Commands::Trust {
+            graph,
+            out_dir,
+            axioms,
+            theorem,
+            forbid_native_decide,
+            allow_axiom,
+            json,
+        } => {
+            let graph_path = resolve_graph_path(graph, &out_dir);
+            cmd_trust(
+                &graph_path,
+                axioms.as_deref(),
+                theorem,
+                forbid_native_decide,
+                allow_axiom,
+                json,
+            )
+        }
     };
 
     if let Err(e) = &_result {
@@ -546,6 +737,93 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         process::exit(1);
     }
     _result.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+}
+
+/// Resolve `--graph` (or the `<out-dir>/graph.json` default).
+fn resolve_graph_path(graph: Option<PathBuf>, out_dir: &Path) -> PathBuf {
+    graph.unwrap_or_else(|| out_dir.join("graph.json"))
+}
+
+/// Read-only manifest drift check used by `gm check --verify-fresh` and
+/// `gm gate --verify-fresh`. Never writes to `<out-dir>` or `<cache-dir>`.
+fn verify_fresh_manifest(graph_path: &Path, out_dir: &Path) -> graphenium::Result<()> {
+    let graph = load_graph(graph_path)?;
+    let root = graph
+        .metadata
+        .project_root
+        .as_deref()
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .ok_or_else(|| {
+            graphenium::GrapheniumError::Validation(
+                "cannot resolve project root for --verify-fresh".to_string(),
+            )
+        })?;
+
+    let manifest_path = out_dir.join("manifest.json");
+    if !manifest_path.exists() {
+        return Err(graphenium::GrapheniumError::Validation(format!(
+            "--verify-fresh: manifest not found at {}",
+            manifest_path.display()
+        )));
+    }
+
+    let manifest = Manifest::load(&manifest_path).with_root(&root);
+    let opts = DetectOptions {
+        ignore_dirs: vec![
+            out_dir.to_path_buf(),
+            root.join("graphenium-out"),
+            root.join("graphenium-out").join("cache"),
+        ],
+        ..DetectOptions::default()
+    };
+    let (files, _) = detect::detect(&root, &opts)?;
+
+    let mut current: std::collections::HashMap<String, PathBuf> = std::collections::HashMap::new();
+    for file in &files {
+        let key = graphenium::detect::path::to_repo_relative(&file.path, Some(&root));
+        current.insert(key, file.path.clone());
+    }
+
+    let mut added = Vec::new();
+    let mut drifted = Vec::new();
+    for (key, path) in &current {
+        if !manifest.file_meta.contains_key(key) {
+            added.push(key.clone());
+        } else if manifest.is_changed_strict(path) {
+            drifted.push(key.clone());
+        }
+    }
+    let mut deleted: Vec<String> = manifest
+        .file_meta
+        .keys()
+        .filter(|key| !current.contains_key(*key))
+        .cloned()
+        .collect();
+
+    added.sort();
+    drifted.sort();
+    deleted.sort();
+
+    if added.is_empty() && drifted.is_empty() && deleted.is_empty() {
+        println!("✓ Manifest is fresh ({} tracked file(s))", current.len());
+        return Ok(());
+    }
+
+    eprintln!("✗ Manifest drift detected since graph.json was built:");
+    for path in &drifted {
+        eprintln!("  modified: {path}");
+    }
+    for path in &added {
+        eprintln!("  added:    {path}");
+    }
+    for path in &deleted {
+        eprintln!("  deleted:  {path}");
+    }
+    Err(graphenium::GrapheniumError::Validation(format!(
+        "--verify-fresh failed: {} stale file(s). Re-run `gm run`.",
+        drifted.len() + added.len() + deleted.len()
+    )))
 }
 
 // ── `run` command ──────────────────────────────────────────────────────────────
@@ -562,10 +840,23 @@ async fn cmd_run(
     api_key: Option<String>,
     exclude_dirs: Option<String>,
     no_report: bool,
+    out_dir: PathBuf,
+    cache_dir: Option<PathBuf>,
+    no_cache_write: bool,
+    lean_axioms: Option<PathBuf>,
+    run_lean_axioms: Option<PathBuf>,
 ) -> graphenium::Result<()> {
     let root = path.canonicalize().unwrap_or_else(|_| path.clone());
-    let out_dir = root.join("graphenium-out");
-    let cache_dir = out_dir.join("cache");
+    let out_dir = if out_dir.is_absolute() {
+        out_dir
+    } else {
+        root.join(out_dir)
+    };
+    let cache_dir = match cache_dir {
+        Some(dir) if dir.is_absolute() => dir,
+        Some(dir) => root.join(dir),
+        None => out_dir.join("cache"),
+    };
     let manifest_path = out_dir.join("manifest.json");
 
     let title = root
@@ -582,7 +873,11 @@ async fn cmd_run(
     // ── 1. Detect files ────────────────────────────────────────────────────────
     eprintln!("[graphenium] Detecting files in: {}", root.display());
 
-    let (mut all_files, corpus_warnings) = detect::detect(&root, &DetectOptions::default())?;
+    let detect_opts = DetectOptions {
+        ignore_dirs: vec![out_dir.clone(), cache_dir.clone()],
+        ..DetectOptions::default()
+    };
+    let (mut all_files, corpus_warnings) = detect::detect(&root, &detect_opts)?;
 
     // Apply --exclude-dirs filter
     if let Some(ref dirs) = exclude_dirs {
@@ -610,9 +905,9 @@ async fn cmd_run(
 
     // ── 2. Incremental filtering (--update) ────────────────────────────────────
     let mut manifest = if update {
-        Manifest::load(&manifest_path)
+        Manifest::load(&manifest_path).with_root(&root)
     } else {
-        Manifest::new()
+        Manifest::new().with_root(&root)
     };
 
     let files_to_process: Vec<_> = if update {
@@ -640,9 +935,13 @@ async fn cmd_run(
     eprintln!("[graphenium] Extracting AST structure...");
     let ast_opts = ExtractOptions {
         mode: extract_mode.clone(),
-        cache_manager: Some(std::sync::Arc::new(graphenium::cache::CacheManager::new(
-            out_dir.join("cache"),
-        ))),
+        cache_manager: if no_cache_write {
+            None
+        } else {
+            Some(std::sync::Arc::new(graphenium::cache::CacheManager::new(
+                cache_dir.clone(),
+            )))
+        },
         project_root: Some(root.clone()),
     };
     let ast_result = extract::extract_all(&files_to_process, &ast_opts);
@@ -713,6 +1012,17 @@ async fn cmd_run(
         }
     };
 
+    // Persist portable source paths even for LLM-produced results.
+    let (mut semantic_result, _) = (semantic_result, ast_only_graph);
+    for node in &mut semantic_result.nodes {
+        node.source_file =
+            graphenium::detect::path::to_repo_relative(Path::new(&node.source_file), Some(&root));
+    }
+    for edge in &mut semantic_result.edges {
+        edge.source_file =
+            graphenium::detect::path::to_repo_relative(Path::new(&edge.source_file), Some(&root));
+    }
+
     // Save token counts before consuming the results.
     let total_input_tokens = ast_result.input_tokens + semantic_result.input_tokens;
     let total_output_tokens = ast_result.output_tokens + semantic_result.output_tokens;
@@ -724,12 +1034,16 @@ async fn cmd_run(
         eprintln!("[graphenium] Parsing C# project: {}", sp.display());
         if ext.eq_ignore_ascii_case("sln") {
             let ws = graphenium::extract::csharp_project::CSharpWorkspace::parse_solution(&sp);
-            ci_result.merge(ci::csproj_to_extraction(&ws));
+            let mut extracted = ci::csproj_to_extraction(&ws);
+            extract::normalize_result_source_paths(&mut extracted, Some(&root));
+            ci_result.merge(extracted);
         } else if ext.eq_ignore_ascii_case("csproj") {
             let proj = graphenium::extract::csharp_project::CSharpWorkspace::parse_csproj(&sp);
             let mut single = graphenium::extract::csharp_project::CSharpWorkspace::default();
             single.projects.insert(sp.clone(), proj);
-            ci_result.merge(ci::csproj_to_extraction(&single));
+            let mut extracted = ci::csproj_to_extraction(&single);
+            extract::normalize_result_source_paths(&mut extracted, Some(&root));
+            ci_result.merge(extracted);
         }
     }
 
@@ -837,6 +1151,60 @@ async fn cmd_run(
     );
     if let Some(msg) = label_collision_report(&graph) {
         eprintln!("[graphenium] {msg}");
+    }
+
+    // ── 5b. Lean 4 trust-boundary ingestion (optional) ─────────────────────────
+    let lean_axiom_report = if let Some(script) = run_lean_axioms {
+        let script_path = if script.is_absolute() {
+            script
+        } else {
+            root.join(script)
+        };
+        let output = std::process::Command::new("lake")
+            .args(["env", "lean"])
+            .arg(&script_path)
+            .current_dir(&root)
+            .output()
+            .map_err(|e| {
+                graphenium::GrapheniumError::Validation(format!(
+                    "failed to invoke `lake env lean` for --run-lean-axioms: {e}"
+                ))
+            })?;
+        if !output.status.success() {
+            return Err(graphenium::GrapheniumError::Validation(format!(
+                "`lake env lean {}` failed: {}",
+                script_path.display(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+        Some(graphenium::extract::lean_axioms::parse_print_axioms_text(
+            &String::from_utf8_lossy(&output.stdout),
+        ))
+    } else if let Some(path) = lean_axioms {
+        let report_path = if path.is_absolute() {
+            path
+        } else {
+            root.join(path)
+        };
+        Some(
+            graphenium::extract::lean_axioms::load_report(&report_path)
+                .map_err(graphenium::GrapheniumError::Validation)?,
+        )
+    } else {
+        None
+    };
+
+    if let Some(report) = &lean_axiom_report {
+        let fallback = report
+            .declarations
+            .iter()
+            .find_map(|decl| decl.source_file.clone().filter(|file| !file.is_empty()))
+            .unwrap_or_else(|| "lean-axioms".to_string());
+        graphenium::extract::lean_axioms::merge_report_into_graph(&mut graph, report, &fallback);
+        eprintln!(
+            "[graphenium] Lean axioms: {} declaration(s) ingested",
+            report.declarations.len()
+        );
     }
 
     // ── 6. Cluster ─────────────────────────────────────────────────────────────
@@ -1142,6 +1510,54 @@ fn cmd_query(
 
     print!("{output}");
     Ok(())
+}
+
+// ── `trust` command ────────────────────────────────────────────────────────────
+
+fn cmd_trust(
+    graph_path: &Path,
+    axioms: Option<&Path>,
+    theorem: Option<String>,
+    forbid_native_decide: bool,
+    allow_axiom: Vec<String>,
+    json: bool,
+) -> graphenium::Result<()> {
+    let graph = export::json::load_graph(graph_path)?;
+    let axiom_report = match axioms {
+        Some(path) => Some(
+            graphenium::extract::lean_axioms::load_report(path)
+                .map_err(graphenium::GrapheniumError::Validation)?,
+        ),
+        None => None,
+    };
+    let options = graphenium::analyze::lean_trust::TrustOptions {
+        theorem,
+        forbid_native_decide,
+        allowed_axioms: allow_axiom,
+    };
+    let report =
+        graphenium::analyze::lean_trust::evaluate_trust(&graph, axiom_report.as_ref(), &options)
+            .map_err(graphenium::GrapheniumError::Validation)?;
+
+    if json {
+        println!(
+            "{}",
+            report
+                .to_json()
+                .map_err(graphenium::GrapheniumError::Validation)?
+        );
+    } else {
+        print!("{}", report.to_text());
+    }
+
+    if report.passed {
+        Ok(())
+    } else {
+        Err(graphenium::GrapheniumError::Validation(
+            "Lean trust audit failed: disallowed axioms, sorryAx, or forbidden native_decide"
+                .to_string(),
+        ))
+    }
 }
 
 // ── `check` command ────────────────────────────────────────────────────────────
@@ -1735,7 +2151,7 @@ fn cmd_graph_migrate(graph_path: &Path) -> graphenium::Result<()> {
 }
 
 /// Execute automated PR containment gates over two graph snapshots (or current graph).
-fn cmd_gate(diff_paths: Option<&[PathBuf]>) -> graphenium::Result<()> {
+fn cmd_gate_with_out_dir(diff_paths: Option<&[PathBuf]>, out_dir: &Path) -> graphenium::Result<()> {
     if let Some(paths) = diff_paths {
         if paths.len() == 2 {
             let before = load_graph(&paths[0])?;
@@ -1759,17 +2175,10 @@ fn cmd_gate(diff_paths: Option<&[PathBuf]>) -> graphenium::Result<()> {
         }
     }
 
-    // Default when `--diff` is not supplied: run standard check on graphenium-out/graph.json
-    cmd_check(
-        Path::new("graphenium-out/graph.json"),
-        80.0,
-        10,
-        true,
-        None,
-        false,
-        None,
-        None,
-    )
+    // Default when `--diff` is not supplied: run standard check on
+    // `<out-dir>/graph.json`.
+    let graph_path = out_dir.join("graph.json");
+    cmd_check(&graph_path, 80.0, 10, true, None, false, None, None)
 }
 
 /// Load and print graph schema / metadata (`graph schema`).

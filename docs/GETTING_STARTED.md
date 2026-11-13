@@ -87,12 +87,19 @@ gm doctor --graph graphenium-out/graph.json
 
 # Audit import resolution ratios
 gm doctor --graph graphenium-out/graph.json --resolution
+
+# Read-only CI drift check: hashes current sources against manifest.json
+gm check --verify-fresh --graph graphenium-out/graph.json
 ```
 
 A healthy index should report:
 *   A non-zero count of compiled symbols (nodes).
 *   An import resolution ratio over 80%.
 *   Zero corpus warnings. If warnings are present, adjust your `.grapheniumignore` file.
+
+`gm check`, `gm gate`, `gm doctor`, `gm query`, and `gm explain` are non-mutating. `--verify-fresh` only reads `<out-dir>/manifest.json` and source files; it never rewrites the graph or cache.
+
+If you relocate artifacts with `gm run --out-dir <dir> --cache-dir <dir>`, point read commands at the same location (`--out-dir <dir>`) and confirm the custom directories are not indexed as source.
 
 ---
 
@@ -109,7 +116,29 @@ gm query "cycles" --datalog "?- circular_dependency(X, Y)."
 
 # Prove if a component bypasses an intermediary layer
 gm query "layer-check" --datalog "?- bypasses_layer('auth_ctrl', 'auth_service', 'db_helper')."
+
+# Inequality + multiple labelled queries in one invocation
+gm query "" --datalog "?- [gaps] has_proof_gap(X). ?- [orphans] is_orphan(Y)."
+
+# Machine-readable rows for CI/tooling
+gm query "" --datalog "?- calls_transitive('main', X)." --json
 ```
+
+Datalog bodies accept `A != B` / `A /= B`; variables must be bound by a positive atom, and ungrounded inequalities are rejected. `--json` emits a `datalog.v1` report (`edb_facts` plus per-query `variables`, `rows`, `row_count`, `steps_used`, and `truncated`).
+
+### 6.1 Audit Lean 4 Trust Boundaries
+
+If the repository is a Lean 4 project, generate an axiom report externally and audit it without embedding a Lean compiler:
+
+```sh
+# Raw `#print axioms` text and lean-axioms.v1 JSON are both accepted
+gm run . --no-semantic --no-viz --lean-axioms axioms.json
+
+# Inspect a theorem's inherited axioms and proof gaps
+gm trust --theorem MUB6.no_four_mubs_dim6 --forbid-native-decide --json
+```
+
+`gm trust` reports standard kernel axioms (`propext`, `Classical.choice`, `Quot.sound`), `sorryAx`, `native_decide` shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), and external axioms. It exits non-zero on disallowed external axioms, `sorryAx`, or (when `--forbid-native-decide` is set) native-decision shortcuts. Use `--allow-axiom <name>` for reviewed external axioms.
 
 ---
 

@@ -2,7 +2,7 @@
 
 Graphenium is a local relational codebase compiler and spec-driven containment engine for AI coding agents. It is not a passive code search index, a visualizer, or a folder-regex linter.
 
-Its architecture serves two reinforcing goals. First, it compiles a polyglot codebase into a provenance-tagged relational index so agents can replace blind `grep`/file-read loops with compact, sub-50ms structural queries. Second, it uses that same index to mechanically govern write-time behavior: pre-flight Virtual AST validation, embedded Datalog invariant solving, zero-config Louvain modularity (ΔQ) gating, Lean 4 proof-gap auditing, and post-edit realization/scope audits before changes are committed.
+Its architecture serves two reinforcing goals. First, it compiles a polyglot codebase into a provenance-tagged relational index so agents can replace blind `grep`/file-read loops with compact, sub-50ms structural queries. Second, it uses that same index to mechanically govern write-time behavior: pre-flight Virtual AST validation, embedded Datalog invariant solving, zero-config Louvain modularity (ΔQ) gating, Lean 4 proof-gap and semantic axiom auditing, and post-edit realization/scope audits before changes are committed.
 
 ### Layer 4 of the Verification Stack
 
@@ -93,7 +93,13 @@ graph LR
 4.  **Semantic Inference:** (Optional) Batches uncached text and image files through remote LLM endpoints to extract high-level conceptual boundaries.
 5.  **Cohesion Partitioning:** Runs a native Louvain community clustering algorithm to partition the index into structural folder domains.
 6.  **Hotspot & Anomaly Analysis:** Calculates centrality metrics (PageRank, betweenness centrality) and anomaly scores (Surprise Connections) to identify architectural erosion.
-7.  **Diagnostic Export:** Writes the complete index to `graphenium-out/graph.json` and compiles a human-readable `GRAPH_REPORT.md`.
+7.  **Diagnostic Export:** Writes the complete index to `<out-dir>/graph.json` and compiles a human-readable `GRAPH_REPORT.md`.
+
+### Portable Workspaces and Content-Addressed Manifests
+
+`--out-dir` relocates `graph.json`, `manifest.json`, reports, and the default cache; `--cache-dir` separates extraction caches. Both directories are excluded from the corpus walk, so a custom output directory is never indexed as source. Every persisted path (`Node.source_file`, `Edge.source_file`, manifest keys, AST-cache payloads) passes through `detect::path::to_repo_relative`, which strips the project root and normalizes separators. This keeps artifacts portable across machines and CI runners.
+
+The manifest is content-addressed: each entry records `mtime`, `sha256`, and `byte_len`. `is_changed_fast` trusts matching mtime/size and falls back to SHA-256 when mtimes drift (fresh checkout, `git switch`); `is_changed_strict` always hashes. `gm check --verify-fresh` / `gm gate --verify-fresh` use the strict predicate read-only to detect stale graphs; `gm run --no-cache-write` skips cache writes for ephemeral jobs.
 
 ---
 
@@ -118,6 +124,21 @@ Graphenium indexes Lean 4 `.lean` files with a native pure-Rust extractor (`src/
 *   Incomplete proofs containing `sorry` or `admit`, emitted as `AMBIGUOUS` `unverified_sorry` self-edges.
 
 The proof-gap edges feed `gm check --max-ambiguous`, so CI can mechanically block unproved theorems. The standard library also exposes `has_proof_gap(X)` and `tainted_by_proof_gap(X)` for transitive proof-gap taint analysis.
+
+### 5.2 Semantic Axiom Auditing (`#print axioms`)
+
+The token-based extractor above is complemented by an opt-in semantic ingestion path (`src/extract/lean_axioms.rs`). Graphenium never embeds or invokes a Lean compiler by default. Instead it accepts either raw `#print axioms` text or a `lean-axioms.v1` JSON document (`schema_version`, `source_hash`, `declarations[]`) produced externally. `gm run --lean-axioms <path>` bakes the report into the graph, and `--run-lean-axioms <file>` explicitly opts in to running `lake env lean <file>`.
+
+Axioms are classified into four buckets:
+
+| Class | Examples | Graph effect |
+|---|---|---|
+| `standard_kernel` | `propext`, `Classical.choice`, `Quot.sound` | `depends_on_axiom` (`INFERRED`) |
+| `incomplete_proof_gap` | `sorryAx` | `unverified_sorry` (`AMBIGUOUS`) |
+| `native_eval_shortcut` | `Lean.ofReduceBool`, `Lean.trustCompiler` | `unverified_native_decide` (`AMBIGUOUS`) |
+| `external_axiom` | User `axiom`s, certificate axioms | `depends_on_axiom` (`AMBIGUOUS`) |
+
+This closes the syntactic-proof-gap blind spot: a theorem may contain no `sorry` token yet still depend on a user axiom or `native_decide`. `gm trust` resolves the transitive dependency cone, reports inherited axioms by class, and exits non-zero on disallowed external axioms, `sorryAx`, or (with `--forbid-native-decide`) native-decision shortcuts. Datalog exposes the same facts as `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`.
 
 ---
 
@@ -202,6 +223,8 @@ Graphenium parses your `.graphenium/policy.json` rules and translates them into 
 
 The solver uses goal-directed rule selection, first-column hash indexes for bound joins, and semi-naive delta relations so recursive rules only join newly derived tuples. Fully-ground existence goals stop as soon as every goal atom is satisfied.
 
+Query syntax supports negation (`not` / `!`), inequality (`A != B` / `A /= B`), and multiple labelled `?-` blocks. Inequality constraints are evaluated only after all positive body atoms have bound their variables; an ungrounded inequality is a validation error. Multiple `?-` queries share one materialized EDB/IDB and one step budget, and `gm query --datalog ... --json` returns the `datalog.v1` report.
+
 ### Verification Predicates
 
 Beyond architectural policy helpers, `stdlib.dl` includes:
@@ -210,6 +233,8 @@ Beyond architectural policy helpers, `stdlib.dl` includes:
 *   `aliased_container_call(Caller, Target, Container, Member)` - detects calls that depend on both a container and a member transitively contained inside it.
 *   `unreachable_from(Entry, Node)` - finds symbols not transitively reachable from an entry point.
 *   `has_proof_gap(X)` / `tainted_by_proof_gap(X)` - detects Lean `sorry`/`admit` gaps and propagates taint through dependency chains.
+*   `uses_axiom(Decl, Axiom)` / `has_untrusted_axiom(X)` / `has_native_decide(X)` / `untrusted_theorem(X)` - audits semantic `#print axioms` facts, including non-kernel and `native_decide` trust shortcuts.
+*   Inequality constraints (`A != B` / `A /= B`) are first-class body items; they are evaluated after positive bindings and rejected when a variable is ungrounded.
 
 ---
 
@@ -229,4 +254,4 @@ Graphenium implements advanced network analysis algorithms to identify architect
 | **Dynamic Dispatch & Reflection** | Purely static analysis may miss runtime dependency injections. | Use Graphenium's **optional semantic pass** or import **runtime telemetry traces** to overlay execution paths. |
 | **Contextual Ambiguity** | Identical names in different folders can create identifier collisions. | Graphenium enforces the use of **qualified labels** and namespace scoping to distinguish identically named classes. |
 | **No Source-Code Mutation** | Graphenium is a gating layer; it does not write code edits. | Run Graphenium directly inside git commit hooks or CI pipelines to block bad agentic output before merge. |
-| **Syntactic Proof Gaps** | Lean 4 `sorry` / `admit` detection is token-based; custom axioms or tactics that conceal incompleteness may not be flagged. | Inspect `unverified_sorry` edges and run the Lean compiler in CI for semantic proof checking. |
+| **Syntactic Proof Gaps** | The default Lean extractor is token-based; custom axioms or tactics that conceal incompleteness may not be flagged without semantic input. | Ingest `#print axioms` explicitly (`gm run --lean-axioms`, `gm trust`) so `sorryAx`, external axioms, and `native_decide` shortcuts become graph edges. |

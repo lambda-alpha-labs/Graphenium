@@ -43,7 +43,7 @@ Compliance audit       -> verify_changes
 
 Combines `graph_info`, `graph_stats`, `unresolved_references`, `resolution_report`, and `ambiguous_symbols`.
 
-**Purpose:** Handshake and health check. Always returns project root, schema version, build timestamp, extraction modes, source languages, node/edge/hyperedge/community counts, active policy gates, graph trust mode, and the index path when known.
+**Purpose:** Handshake and health check. Always returns project root, schema version, build timestamp, extraction modes, source languages, node/edge/hyperedge/community counts, active policy gates, graph trust mode, the index path when known, and a Lean trust summary (sorry gaps, `native_decide` shortcuts, external axiom edges) whenever semantic `#print axioms` facts are present.
 
 **Optional flags:**
 
@@ -190,14 +190,17 @@ Combines `shortest_path`, `safest_path`, `query_transitive`, and `module_depende
 
 Executes a declarative first-order logic program over the compiled EDB.
 
-**Standard library predicates:** `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, and `tainted_by_proof_gap`.
+**Standard library predicates:** `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, `uses_axiom`, `has_untrusted_axiom`, `has_native_decide`, and `untrusted_theorem`.
+
+**Syntax:** bodies accept `A != B` / `A /= B` (variables must be bound by a positive atom), and a program may contain multiple `?-` blocks, optionally labelled: `?- [proof_gaps] has_proof_gap(X).`
 
 **Parameters:**
 
 | Parameter | Description |
 |---|---|
-| `query` | Datalog program text. Supports goals (`?-`), user rules (`:-`), facts, and negation (`not`). |
+| `query` | Datalog program text. Supports goals (`?-`), user rules (`:-`), facts, negation (`not`), inequality (`!=`), and multiple labelled queries. |
 | `step_budget` | Maximum solver steps. Default 1000, clamped to 100 through 10000. |
+| `format` | `text` (default, Markdown) or `json` (`datalog.v1` report with per-query rows, variables, and step metadata). |
 
 **When to use:** To mathematically prove transitive boundary violations, circular dependencies, or orphan nodes.
 

@@ -31,8 +31,28 @@ use crate::report::{self, ReportInput};
 /// parent tokio runtime drops the task).  Intended to be called inside
 /// `tokio::task::spawn_blocking`.
 pub fn watch(root: &Path, debounce_secs: f64, incremental: bool) -> crate::Result<()> {
-    let root = root.to_path_buf();
     let out_dir = root.join("graphenium-out");
+    watch_with_dirs(
+        root,
+        debounce_secs,
+        incremental,
+        &out_dir,
+        &out_dir.join("cache"),
+    )
+}
+
+/// Like [`watch`], but with explicitly configured output/cache directories so
+/// custom `--out-dir` / `--cache-dir` locations are never walked as source.
+pub fn watch_with_dirs(
+    root: &Path,
+    debounce_secs: f64,
+    incremental: bool,
+    out_dir: &Path,
+    cache_dir: &Path,
+) -> crate::Result<()> {
+    let root = root.to_path_buf();
+    let out_dir = out_dir.to_path_buf();
+    let cache_dir = cache_dir.to_path_buf();
 
     let timeout = Duration::from_secs_f64(debounce_secs.max(0.1));
 
@@ -56,12 +76,12 @@ pub fn watch(root: &Path, debounce_secs: f64, incremental: bool) -> crate::Resul
 
     // Initial build so the user has a graph immediately.
     eprintln!("[graphenium] Running initial build...");
-    full_rebuild_and_log(&root, &out_dir, Instant::now());
+    full_rebuild_and_log(&root, &out_dir, &cache_dir, Instant::now());
 
     loop {
         match rx.recv() {
             Ok(Ok(events)) => {
-                handle_events(&root, &out_dir, &events, incremental);
+                handle_events(&root, &out_dir, &cache_dir, &events, incremental);
             }
             Ok(Err(e)) => {
                 eprintln!("[graphenium] watcher error: {e}");
@@ -76,14 +96,20 @@ pub fn watch(root: &Path, debounce_secs: f64, incremental: bool) -> crate::Resul
 
 // ── Event handling ────────────────────────────────────────────────────────────
 
-fn handle_events(root: &Path, out_dir: &Path, events: &[DebouncedEvent], incremental: bool) {
+fn handle_events(
+    root: &Path,
+    out_dir: &Path,
+    cache_dir: &Path,
+    events: &[DebouncedEvent],
+    incremental: bool,
+) {
     let mut code_paths: Vec<&Path> = Vec::new();
     let mut non_code_paths: Vec<&Path> = Vec::new();
 
     for event in events {
         let path = &event.path;
 
-        if should_skip(path, out_dir) {
+        if should_skip(path, out_dir) || path.starts_with(cache_dir) {
             continue;
         }
 
@@ -108,9 +134,9 @@ fn handle_events(root: &Path, out_dir: &Path, events: &[DebouncedEvent], increme
 
     if !code_paths.is_empty() {
         if incremental {
-            incremental_rebuild(root, out_dir, &code_paths);
+            incremental_rebuild(root, out_dir, cache_dir, &code_paths);
         } else {
-            full_rebuild_and_log(root, out_dir, Instant::now());
+            full_rebuild_and_log(root, out_dir, cache_dir, Instant::now());
         }
     }
 
@@ -146,9 +172,23 @@ fn should_skip(path: &Path, out_dir: &Path) -> bool {
 /// Used on initial startup and as fallback when incremental patching is
 /// not applicable.  Semantic results are intentionally skipped to keep the
 /// rebuild fast (< 2s for most projects).
+#[cfg_attr(not(test), allow(dead_code))]
 fn full_rebuild(root: &Path, out_dir: &Path) -> crate::Result<(usize, usize, usize)> {
-    // 1. Detect files
-    let (files, corpus_warnings) = detect::detect(root, &DetectOptions::default())?;
+    let cache_dir = out_dir.join("cache");
+    full_rebuild_ignoring(root, out_dir, &cache_dir)
+}
+
+fn full_rebuild_ignoring(
+    root: &Path,
+    out_dir: &Path,
+    cache_dir: &Path,
+) -> crate::Result<(usize, usize, usize)> {
+    // 1. Detect files (never walk the configured output/cache directories).
+    let opts = DetectOptions {
+        ignore_dirs: vec![out_dir.to_path_buf(), cache_dir.to_path_buf()],
+        ..DetectOptions::default()
+    };
+    let (files, corpus_warnings) = detect::detect(root, &opts)?;
 
     // 2. AST extraction via Salsa (memoized — unchanged files skip re-parsing)
     let ast_result = crate::cache::query::salsa_extract_all(&files, Some(root));
@@ -183,7 +223,7 @@ fn full_rebuild(root: &Path, out_dir: &Path) -> crate::Result<(usize, usize, usi
 /// Incrementally patch the graph: re-extract only changed files, remove
 /// their old contributions, and insert the new ones. If the existing graph
 /// cannot be loaded, falls back to a full rebuild.
-fn incremental_rebuild(root: &Path, out_dir: &Path, changed_paths: &[&Path]) {
+fn incremental_rebuild(root: &Path, out_dir: &Path, cache_dir: &Path, changed_paths: &[&Path]) {
     let start = Instant::now();
 
     match try_incremental(root, out_dir, changed_paths) {
@@ -203,7 +243,7 @@ fn incremental_rebuild(root: &Path, out_dir: &Path, changed_paths: &[&Path]) {
                 "[graphenium] Incremental patch failed ({}), falling back to full rebuild...",
                 e
             );
-            full_rebuild_and_log(root, out_dir, start);
+            full_rebuild_and_log(root, out_dir, cache_dir, start);
         }
     }
 }
@@ -225,6 +265,7 @@ fn try_incremental(
     // Load the existing graph and manifest.
     let mut graph = json::load_graph(&json_path)?;
     let mut manifest = crate::cache::Manifest::load(&manifest_path);
+    manifest.set_root(root);
     let prev_node_count = graph.node_count();
 
     let mut total_nodes_removed = 0usize;
@@ -244,9 +285,14 @@ fn try_incremental(
     let mut patched_paths: Vec<String> = Vec::new();
     let mut reextracted: Vec<crate::model::ExtractionResult> = Vec::new();
     for path_str in &paths_to_extract {
-        let file_path = std::path::Path::new(path_str);
+        let raw_path = std::path::Path::new(path_str);
+        let file_path = if raw_path.is_absolute() {
+            raw_path.to_path_buf()
+        } else {
+            root.join(raw_path)
+        };
         let result = crate::cache::query::salsa_extract_file(
-            file_path,
+            &file_path,
             FileType::Code,
             Some(root.to_path_buf()),
         );
@@ -264,8 +310,13 @@ fn try_incremental(
     }
 
     for (path_str, result) in patched_paths.iter().zip(reextracted.iter()) {
-        let file_path = std::path::Path::new(path_str);
-        let source_file = path_str.to_string();
+        let raw_path = std::path::Path::new(path_str);
+        let file_path = if raw_path.is_absolute() {
+            raw_path.to_path_buf()
+        } else {
+            root.join(raw_path)
+        };
+        let source_file = crate::detect::path::to_repo_relative(&file_path, Some(root));
         let stats = graph.replace_file_extraction(&source_file, result);
         total_nodes_removed += stats.nodes_removed;
         total_nodes_inserted += stats.nodes_inserted;
@@ -278,8 +329,8 @@ fn try_incremental(
             .filter(|e| e.relation == "imports")
             .map(|e| e.target.clone())
             .collect();
-        manifest.set_imports(file_path, imported);
-        manifest.update(file_path);
+        manifest.set_imports(&file_path, imported);
+        manifest.update(&file_path);
     }
 
     // Persist the updated manifest.
@@ -318,12 +369,12 @@ fn try_incremental(
     })
 }
 
-fn full_rebuild_and_log(root: &Path, out_dir: &Path, start: Instant) {
+fn full_rebuild_and_log(root: &Path, out_dir: &Path, cache_dir: &Path, start: Instant) {
     // Snapshot the old graph before rebuilding (for blast radius display)
     let old_json_path = out_dir.join("graph.json");
     let old_graph = export::json::load_graph(&old_json_path).ok();
 
-    match full_rebuild(root, out_dir) {
+    match full_rebuild_ignoring(root, out_dir, cache_dir) {
         Ok((nodes, edges, communities)) => {
             eprintln!(
                 "[graphenium] Full rebuild in {:.2}s — {} nodes, {} edges, {} communities",

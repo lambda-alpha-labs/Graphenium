@@ -3156,6 +3156,35 @@ impl GrapheniumServer {
             ));
         }
 
+        // Lean 4 trust-boundary summary (semantic `#print axioms` ingestion).
+        let mut sorry_gaps = 0usize;
+        let mut native_decide = 0usize;
+        let mut external_axioms = 0usize;
+        for edge in graph.edges_iter() {
+            match edge.relation.as_str() {
+                "unverified_sorry" => sorry_gaps += 1,
+                "unverified_native_decide" => native_decide += 1,
+                "depends_on_axiom" => {
+                    let axiom = edge.tgt_original.to_ascii_lowercase();
+                    if !matches!(
+                        axiom.as_str(),
+                        "propext" | "classical.choice" | "quot.sound"
+                    ) && !matches!(
+                        edge.target.as_str(),
+                        "propext" | "classical_choice" | "quot_sound"
+                    ) {
+                        external_axioms += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if sorry_gaps + native_decide + external_axioms > 0 {
+            out.push_str(&format!(
+                "\n**Lean trust:** {sorry_gaps} sorry gap(s) · {native_decide} native_decide shortcut(s) · {external_axioms} external axiom edge(s)\n"
+            ));
+        }
+
         // Trust banner: mode and resolution status (reflect actual cross-file resolution).
         let is_ast = graph.is_ast_only();
         let (mut calls_total, mut calls_res) = (0usize, 0usize);
@@ -4156,10 +4185,19 @@ impl GrapheniumServer {
             description = "Maximum solver steps before the query is bounded (default 1000, clamped to 100 through 10000)."
         )]
         step_budget: Option<usize>,
+        #[tool(param)]
+        #[schemars(
+            description = "Output format: 'text' (default, Markdown) or 'json' (datalog.v1 machine-readable report with per-query rows, variables, and step metadata)."
+        )]
+        format: Option<String>,
     ) -> String {
         let graph = self.graph();
         let budget = step_budget.unwrap_or(1000).clamp(100, 10_000);
-        match crate::analyze::query::run_datalog_query(&graph, &query, budget) {
+        let rendered = match format.as_deref().unwrap_or("text") {
+            "json" => crate::analyze::query::run_datalog_json(&graph, &query, budget),
+            _ => crate::analyze::query::run_datalog_query(&graph, &query, budget),
+        };
+        match rendered {
             Ok(r) => r,
             Err(e) => format!("Datalog error: {}", e),
         }

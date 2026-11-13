@@ -1,6 +1,8 @@
 //! Integration tests for the pre-loaded Datalog Standard Library.
 
-use graphenium::analyze::query::{run_datalog_query, stdlib_rules, DatalogProgram};
+use graphenium::analyze::query::{
+    run_datalog_json, run_datalog_query, run_datalog_report, stdlib_rules, DatalogProgram,
+};
 use graphenium::model::{Edge, FileType, GrapheniumGraph, Node};
 
 fn chain_graph() -> GrapheniumGraph {
@@ -194,6 +196,75 @@ fn test_stdlib_aliased_container_call_detects_struct_field_overlap() {
         result.contains("tmn_field"),
         "Should detect member: {result}"
     );
+}
+
+#[test]
+fn test_inequality_between_variables() {
+    let graph = chain_graph();
+    let query = r#"
+        different(X, Y) :- node(X, _, _, _, _), node(Y, _, _, _, _), X != Y.
+        ?- different("a", Y).
+    "#;
+    let result = run_datalog_query(&graph, query, 1000).unwrap();
+    assert!(result.contains("b"), "b differs from a: {result}");
+    assert!(result.contains("c"), "c differs from a: {result}");
+    assert!(!result.contains("`a`"), "a must be excluded: {result}");
+}
+
+#[test]
+fn test_inequality_against_string_literal() {
+    let graph = chain_graph();
+    let query = r#"
+        not_a(X) :- node(X, _, _, _, _), X != "a".
+        ?- not_a(X).
+    "#;
+    let result = run_datalog_query(&graph, query, 1000).unwrap();
+    assert!(result.contains("b") && result.contains("c"), "{result}");
+    assert!(!result.contains("`a`"), "a must be excluded: {result}");
+}
+
+#[test]
+fn test_ungrounded_inequality_is_rejected() {
+    let graph = chain_graph();
+    let query = r#"
+        bad(X) :- X != "a".
+        ?- bad(X).
+    "#;
+    let err = run_datalog_query(&graph, query, 1000).unwrap_err();
+    assert!(
+        err.contains("only in an inequality"),
+        "expected grounding error, got: {err}"
+    );
+}
+
+#[test]
+fn test_multiple_queries_share_one_edb() {
+    let graph = chain_graph();
+    let query = r#"
+        ?- [direct] calls("a", X, _).
+        ?- [transitive] calls_transitive("a", Y).
+        ?- [missing] calls("c", Z, _).
+    "#;
+    let report = run_datalog_report(&graph, query, 1000).unwrap();
+    assert_eq!(report.schema_version, "datalog.v1");
+    assert_eq!(report.queries.len(), 3);
+    assert_eq!(report.queries[0].name.as_deref(), Some("direct"));
+    assert_eq!(report.queries[0].rows, vec![vec!["b".to_string()]]);
+    assert_eq!(report.queries[1].name.as_deref(), Some("transitive"));
+    assert_eq!(report.queries[1].row_count, 2);
+    assert_eq!(report.queries[2].row_count, 0);
+    assert!(report.edb_facts > 0);
+}
+
+#[test]
+fn test_datalog_json_is_valid_for_empty_results() {
+    let graph = chain_graph();
+    let json = run_datalog_json(&graph, r#"?- calls("zzz", X, _)."#, 1000).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed["schema_version"], "datalog.v1");
+    assert_eq!(parsed["queries"][0]["row_count"], 0);
+    assert_eq!(parsed["queries"][0]["rows"], serde_json::json!([]));
+    assert!(parsed["queries"][0]["steps_used"].is_number());
 }
 
 #[test]

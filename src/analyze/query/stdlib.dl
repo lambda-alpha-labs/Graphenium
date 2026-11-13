@@ -41,7 +41,7 @@ is_orphan(X) :-
 
 # ── Architectural Gating & Constraints ───────────────────────────────────────
 
-# Helper for inequality via negation (parser has no X /= Y syntax)
+# Equality helper (kept for backwards compatibility; prefer `X != Y`).
 identical(X, X) :- node(X, _, _, _, _).
 
 # Circular dependency: X and Y call each other transitively
@@ -88,3 +88,26 @@ unreachable_from(Entry, Node) :-
 has_proof_gap(X) :- edge(X, X, "unverified_sorry", _).
 tainted_by_proof_gap(X) :- has_proof_gap(X).
 tainted_by_proof_gap(X) :- depends_on(X, Y), tainted_by_proof_gap(Y).
+
+# ── Lean 4 trust-boundary auditing (semantic `#print axioms` ingestion) ──────
+# `Edge` normalizes node IDs, so kernel axiom names arrive as e.g.
+# "classical_choice" / "quot_sound" rather than their Lean spellings.
+
+uses_axiom(Decl, Axiom) :- edge(Decl, Axiom, "depends_on_axiom", _).
+
+# `native_decide` relies on Lean.trustCompiler / Lean.ofReduceBool.
+has_native_decide(X) :- edge(X, X, "unverified_native_decide", _).
+
+# Any non-kernel axiom inherited by X (user-declared axioms, certificate
+# axioms, or the deliberate proof gaps handled above).
+has_untrusted_axiom(X) :-
+    uses_axiom(X, Ax),
+    Ax != "propext",
+    Ax != "classical_choice",
+    Ax != "quot_sound".
+
+# A theorem is untrusted if it contains a sorry gap or inherits a non-kernel
+# axiom. Native-decision shortcuts are reported separately (`has_native_decide`)
+# so existing proof-gap gates stay source-compatible.
+untrusted_theorem(X) :- tainted_by_proof_gap(X).
+untrusted_theorem(X) :- has_untrusted_axiom(X).

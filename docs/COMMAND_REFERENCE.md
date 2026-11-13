@@ -20,6 +20,7 @@ The Graphenium command-line interface (`gm`) serves as both a relational codebas
 | [`gm setup`](#gm-setup) | Generate workspace MCP configurations for IDEs and assistants. |
 | [`gm graph`](#gm-graph) | Subcommands to inspect compiled metadata, build targets, and test mappings. |
 | [`gm snapshot`](#gm-snapshot) | Create and list indexed codebase snapshots. |
+| [`gm trust`](#gm-trust) | Audit Lean 4 theorem trust boundaries and inherited axioms. |
 | [`gm gate`](#gm-gate) | Execute automated containment gates over index differences. |
 
 ---
@@ -58,6 +59,11 @@ gm run [path] [flags]
 *   `--api-key <key>` (string) — API key (overrides the provider-specific env var).
 *   `--api-base <url>` (string) — API base URL for `openai-compatible` provider.
 *   `--model <model>` (string) — Model to use (defaults to provider-specific default).
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Output directory for `graph.json`, `manifest.json`, `GRAPH_REPORT.md`, and the default cache. Relative paths resolve against `path`.
+*   `--cache-dir <path>` (string, default: `<out-dir>/cache`) — Extraction cache directory. Configured output/cache directories are excluded from the corpus walk automatically.
+*   `--no-cache-write` (bool) — Run without writing AST/semantic caches (ephemeral CI).
+*   `--lean-axioms <path>` (string) — Ingest a `#print axioms` report (raw text or `lean-axioms.v1` JSON) and bake `depends_on_axiom`, `unverified_sorry`, and `unverified_native_decide` edges into the graph.
+*   `--run-lean-axioms <lean-file>` (string) — Opt in to running `lake env lean <lean-file>` and ingesting its `#print axioms` output. Graphenium never invokes Lean unless this flag is passed.
 
 ---
 
@@ -76,12 +82,16 @@ gm query "<query>" [flags]
     *   `lexical`: Relevance matching against symbol names, qualified paths, and source files.
     *   `structural`: Topological distance sorting radiating outward from matched seed nodes.
     *   `hybrid`: Combined score weighting lexical relevance (60%) and structural distance (40%).
-*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Evaluation uses first-column hash indexing and semi-naive delta relations, with early stopping for fully-ground existence goals. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs. Built-in predicates include `calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, and `tainted_by_proof_gap`.
+*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Evaluation uses first-column hash indexing and semi-naive delta relations, with early stopping for fully-ground existence goals. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs.
+    *   **Inequality:** rule and query bodies accept `A != B` (and `A /= B`). Variables must be bound by a positive body atom; an ungrounded inequality is a validation error.
+    *   **Multiple queries:** a program may contain several `?-` blocks, optionally labelled (`?- [proof_gaps] has_proof_gap(X).`). The EDB and fixpoint are materialized once and shared by every query.
+    *   Built-in predicates include `calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, `uses_axiom`, `has_untrusted_axiom`, `has_native_decide`, and `untrusted_theorem`.
 *   `--budget <tokens>` (integer, default: `2000`) — Limits Graphenium's printed output to remain within the specified context-token limit.
 *   `--dfs` (bool) — Uses Depth-First Search for structural tracing (default: BFS).
 *   `--safe` (bool) — Restricts query-tracing strictly to AST-proven (`EXTRACTED`) dependencies.
-*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Overrides the source index file location.
-*   `--json` (bool) — Outputs query results as a raw JSON array instead of a formatted Markdown report.
+*   `--graph <path>` (string, default: `<out-dir>/graph.json`) — Overrides the source index file location.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Resolves the default graph path.
+*   `--json` (bool) — With `--datalog`, emits a `datalog.v1` report (`schema_version`, `edb_facts`, and per-query `name`, `query`, `variables`, `rows`, `row_count`, `steps_used`, `truncated`). Without `--datalog`, outputs lexical/structural results as JSON.
 *   `--path-prefix <path>` (string) — Restricts results to symbols located inside the specified directory path.
 *   `--exclude-path <path>` (string) — Filters out results located inside the specified directory path.
 *   `--generated-code-mode <mode>` (string, default: `include`) — How to handle files classified as generated: `include`, `exclude`, or `only`.
@@ -97,7 +107,9 @@ gm check [flags]
 ```
 
 ### Flags:
-*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Path to the codebase index file.
+*   `--graph <path>` (string, default: `<out-dir>/graph.json`) — Path to the codebase index file.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Resolves the default graph and manifest paths.
+*   `--verify-fresh` (bool) — Read-only CI drift check: hashes current corpus files against `<out-dir>/manifest.json` and fails with exit code `1`, listing modified/added/deleted repo-relative paths. Mtime-only changes (fresh checkout) are ignored. Never writes to disk.
 *   `--min-resolution <pct>` (float, default: `80.0`) — Fails the check if Graphenium's AST import resolution ratio drops below the target percentage.
 *   `--max-ambiguous <count>` (integer, default: `10`) — Fails the check if Graphenium detects more than `<count>` unresolved name collisions. Lean 4 `sorry` / `admit` proof gaps are emitted as `AMBIGUOUS` edges and count toward this threshold.
 *   `--strict` (bool) — Fails the check on any index, parser, or configuration warnings.
@@ -161,7 +173,8 @@ gm serve [flags]
 ```
 
 ### Flags:
-*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Path to Graphenium's compiled codebase index.
+*   `--graph <path>` (string, default: `<out-dir>/graph.json`) — Path to Graphenium's compiled codebase index.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Resolves the default graph path.
 *   `--watch` (bool) — Monitors the compiled index file and hot-reloads the server's state in-memory as modifications occur.
 
 ---
@@ -180,6 +193,8 @@ gm watch <path> [flags]
 *   `--debounce <secs>` (float, default: `3.0`) — Wait time in seconds after the last file modification before compiling changes.
 *   `--incremental` (bool, default: `true`) — Restricts re-extraction to modified files and their direct importers, skipping full repository re-scans.
 *   `--impact` (bool) — Prints the structural blast radius (affected callers, dependent domains) immediately after compiling an update.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Output directory, resolved against `<path>`.
+*   `--cache-dir <path>` (string, default: `<out-dir>/cache`) — Extraction cache directory.
 
 ---
 
@@ -191,7 +206,8 @@ gm doctor [flags]
 ```
 
 ### Flags:
-*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Path of Graphenium's compiled codebase index.
+*   `--graph <path>` (string, default: `<out-dir>/graph.json`) — Path of Graphenium's compiled codebase index.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Resolves the default graph path.
 *   `--schema` (bool) — Displays graph.json schema version and compiler versions.
 *   `--resolution` (bool) — Outputs a detailed resolution report (imports, calls, methods, and evidence freshness status).
 *   `--repository` (bool) — Show repository info from graph metadata.
@@ -224,7 +240,8 @@ gm explain <symbol> [flags]
 *   `symbol` (string, required) — The class, method, or function name to explain.
 
 ### Flags:
-*   `--graph <path>` (string, default: `graphenium-out/graph.json`) — Path of Graphenium's codebase index.
+*   `--graph <path>` (string, default: `<out-dir>/graph.json`) — Path of Graphenium's codebase index.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Resolves the default graph path.
 
 ---
 
@@ -272,6 +289,30 @@ gm snapshot <subcommand>
 
 ---
 
+## `gm trust`
+Audits Lean 4 theorem trust boundaries. Resolves the transitive dependency cone of a theorem and reports inherited kernel axioms, proof gaps (`sorryAx`), native-decision shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), and external user axioms.
+
+```sh
+gm trust [flags]
+```
+
+### Flags:
+*   `--graph <path>` (string, default: `<out-dir>/graph.json`) — Index to audit.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Resolves the default graph path.
+*   `--axioms <path>` (string) — Optional `#print axioms` report (raw text or `lean-axioms.v1` JSON). Omit it when axiom edges were already baked in with `gm run --lean-axioms`.
+*   `--theorem <name>` (string) — Audit one theorem (qualified Lean name or node ID). Omit to audit every declaration with axiom/proof-gap data.
+*   `--forbid-native-decide` (bool) — Fail when `Lean.ofReduceBool` / `Lean.trustCompiler` is inherited.
+*   `--allow-axiom <name>` (repeatable) — Allow a specific external axiom. Standard kernel axioms are always allowed; `sorryAx` is never allowed.
+*   `--json` (bool) — Emit a `lean-trust.v1` report.
+
+Exits non-zero if a disallowed axiom, `sorryAx`, or (with `--forbid-native-decide`) a native-decision shortcut is inherited.
+
+```sh
+gm trust --axioms axioms.json --theorem MUB6.no_four_mubs_dim6 --forbid-native-decide --json
+```
+
+---
+
 ## `gm gate`
 Executes automated PR containment gates over index differences, or runs the standard trust check when no diff is supplied.
 
@@ -281,7 +322,9 @@ gm gate [--diff <before> <after>]
 
 ### Flags:
 *   `--diff <before> <after>` (strings, optional) — The baseline and post-change index files to gate. The command reports architectural drift and exits non-zero if any `Critical` drift event is detected.
-*   When `--diff` is omitted, `gm gate` runs the standard `gm check` gate against `graphenium-out/graph.json` with `--min-resolution 80`, `--max-ambiguous 10`, and `--strict` semantics.
+*   `--out-dir <path>` (string, default: `graphenium-out`) — Resolves the default graph/manifest paths.
+*   `--verify-fresh` (bool) — Reads `<out-dir>/manifest.json`, hashes the current corpus, and fails on drift without mutating disk.
+*   When `--diff` is omitted, `gm gate` runs the standard `gm check` gate against `<out-dir>/graph.json` with `--min-resolution 80`, `--max-ambiguous 10`, and `--strict` semantics.
 
 ### Examples:
 ```sh

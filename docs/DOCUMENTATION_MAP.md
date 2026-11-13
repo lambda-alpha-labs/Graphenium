@@ -25,8 +25,8 @@ docs/
   ├── CI_AND_GOVERNANCE.md      # CI/CD gates, git hooks, & policy.json schemas
   ├── COMMAND_REFERENCE.md      # Complete CLI flags, commands, & outputs
   ├── MCP_TOOLS.md              # MCP tool schemas & behavioral protocols
-  ├── ARCHITECTURE.md           # Tree-sitter pipelines, C# bounds, & Datalog solving
-  ├── TRUST_MODEL.md            # AST-proven vs. semantic provenance
+  ├── ARCHITECTURE.md           # Tree-sitter pipelines, C# bounds, Datalog solving, portable manifests, & Lean axiom auditing
+  ├── TRUST_MODEL.md            # AST-proven vs. semantic provenance, including #print axioms trust boundaries
   ├── BENCHMARKING.md           # Payload budgets, latency metrics, & TTVP
   ├── COMPARISON.md             # Graphenium vs. grep, ast-grep, SCIP, RAG, & arch linters
   ├── HARNESS_ADAPTER.md        # Programmatic Rust integration reference

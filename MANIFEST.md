@@ -20,10 +20,10 @@ This manifest indexes all core documentation and playbook assets maintained in G
 *   `docs/GETTING_STARTED.md` — Workspace initialization, index generation, and baseline workspace setups.
 *   `docs/AGENT_WORKFLOWS.md` — Step-by-step operating playbooks for AI agents (pre-flight, in-edit planning, post-facto verification).
 *   `docs/CI_AND_GOVERNANCE.md` — CI pipeline gates, git hooks, PR comment templates, and declarative policy schemas.
-*   `docs/COMMAND_REFERENCE.md` — Syntax and flag definitions for Graphenium's CLI commands (`gm run`, `gm check`, `gm query`, etc.).
+*   `docs/COMMAND_REFERENCE.md` — Syntax and flag definitions for Graphenium's CLI commands (`gm run`, `gm query`, `gm check`, `gm trust`, etc.), including portable output/cache directories and freshness gates.
 *   `docs/MCP_TOOLS.md` — Tool descriptions and behavioral guidelines for agents connected via MCP.
-*   `docs/ARCHITECTURE.md` — Deep technical dive into Graphenium's AST parsing pipelines, C# project bounds, and Datalog solvers.
-*   `docs/TRUST_MODEL.md` — Technical reference defining AST-proven vs. semantic provenance.
+*   `docs/ARCHITECTURE.md` — Deep technical dive into Graphenium's AST parsing pipelines, C# project bounds, Datalog solvers, portable manifests, and semantic Lean axiom auditing.
+*   `docs/TRUST_MODEL.md` — Technical reference defining AST-proven vs. semantic provenance, including Lean `#print axioms` trust boundaries.
 *   `docs/BENCHMARKING.md` — Performance testing methodologies: latencies, token budgets, and scaling limits.
 *   `docs/COMPARISON.md` — Comparison matrix mapping Graphenium against grep, ast-grep, SCIP, RAG indexes, and traditional static architecture linters.
 *   `docs/HARNESS_ADAPTER.md` — Reference guide for programmatically embedding Graphenium's relational compiler and containment engine as a library.
