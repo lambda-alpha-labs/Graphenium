@@ -16,7 +16,7 @@ Every symbol declaration and dependency edge in Graphenium's structural index ca
 |---|---|---|
 | `EXTRACTED` **(Facts)** | AST-proven and compiler-backed. Discovered directly in code by Tree-sitter, Stack Graphs, or Visual Studio solution parsers. | **Planning Backbone:** Safe to plan and build against. (Agent must still read the targeted source files before writing edits). |
 | `INFERRED` **(Hypotheses)** | Generatively or heuristically inferred. Discovered via Graphenium's optional semantic pass, naming convention heuristics, or cross-file fuzzy resolution. | **Exploratory Leads:** Treat as a hypothesis. The agent is strictly blocked from editing until it inspects at least one source file to prove the dependency. |
-| `AMBIGUOUS` **(Collisions / Proof Gaps)** | Identifier or namespace collision (e.g., matching a symbol that exists in multiple directories), a Lean 4 `sorry` / `admit` proof gap, or a semantic `#print axioms` finding (non-kernel axiom or `native_decide` shortcut). | **Risk Gated:** Rejects automated edits. The agent is forced to halt, flag the collision or unproved theorem, and request human review or execute targeted file-level disambiguation. |
+| `AMBIGUOUS` **(Collisions / Proof Gaps)** | Identifier or namespace collision (e.g., matching a symbol that exists in multiple directories), a Lean 4 `sorry` / `admit` proof gap, a semantic `#print axioms` finding (non-kernel axiom or `native_decide` shortcut), or a hidden structure/opaque binder parameter. | **Risk Gated:** Rejects automated edits. The agent is forced to halt, flag the collision or unproved/conditional theorem, and request human review or execute targeted file-level disambiguation. |
 
 ---
 
@@ -55,8 +55,45 @@ Token-based `sorry` detection cannot see a theorem that is syntactically complet
 | `incomplete_proof_gap` | `sorryAx` | `unverified_sorry` (`AMBIGUOUS`) |
 | `native_eval_shortcut` | `Lean.ofReduceBool`, `Lean.trustCompiler` | `unverified_native_decide` (`AMBIGUOUS`) |
 | `external_axiom` | User `axiom`s, certificate axioms | `depends_on_axiom` (`AMBIGUOUS`) |
+| `hypothesis` | Theorem binders such as `(h : EdgeAtlasCertificate)`, `[Fact P]` | `depends_on_hypothesis` (`INFERRED` / `AMBIGUOUS` for hidden structures) |
 
-These facts are baked in with `gm run --lean-axioms <report>` (or explicitly generated with `--run-lean-axioms <file>`). `gm trust` then resolves the theorem's transitive dependency cone and reports inherited axioms by class; it exits non-zero on `sorryAx`, non-allowlisted external axioms, or (with `--forbid-native-decide`) native-decision shortcuts. Datalog exposes the same facts as `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`.
+These facts are baked in with `gm run --lean-axioms <report>` (or explicitly generated with `--run-lean-axioms <file>`). `gm trust` then resolves the theorem's transitive dependency cone and reports inherited axioms by class; it exits non-zero on `sorryAx`, non-allowlisted external axioms, or (with `--forbid-native-decide`) native-decision shortcuts. Datalog exposes the same facts as `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`, plus hypothesis propagation via `depends_on_hypothesis/2`, `inherits_hypothesis/2`, and `conditional_theorem/1`.
+
+### 3.2 Conditional Theorems and Hypothesis Propagation
+
+In Lean, `theorem T (h : EdgeAtlasCertificate) : Goal` proves `EdgeAtlasCertificate → Goal`. `#print axioms T` reports only the kernel axioms used by the proof, so a purely axiom-based audit can incorrectly mark `T` as `PASS` even though nothing constructs or validates the certificate. Graphenium closes this gap by extracting `depends_on_hypothesis` edges from theorem/lemma/def binder signatures and propagating them backward across `calls`, `depends_on`, `imports`, `inherits`, `implements`, `depends_on_hypothesis`, and `parameter_type`.
+
+Every audited theorem is classified as:
+
+| Status | Meaning | Gate behavior |
+|---|---|---|
+| `UNCONDITIONAL` | Only standard kernel axioms (`propext`, `Classical.choice`, `Quot.sound`); no proof gaps, forbidden native decisions, external axioms, or hypotheses. | Passes. |
+| `CONDITIONAL` | Kernel-clean, but takes or transitively inherits a hypothesis/structure parameter. | Fails unless every inherited hypothesis is allowlisted. |
+| `TAINTED` | Inherits `sorryAx`, a forbidden `Lean.ofReduceBool` / `Lean.trustCompiler`, or a disallowed external axiom. | Always fails. |
+
+`lean-trust.v1` entries include `kernel_axioms`, `external_axioms`, `proof_gaps`, `native_decide`, and `assumptions[]`. Each assumption records its `name`, `kind`, `direct_or_transitive` scope, the declaration that introduced it, and its source file:
+
+```json
+{
+  "theorem": "NoFourMUBs.EdgeXFinal.no_four_mubs_seed",
+  "status": "CONDITIONAL",
+  "kernel_axioms": ["propext", "Classical.choice", "Quot.sound"],
+  "external_axioms": [],
+  "assumptions": [
+    {
+      "name": "EdgeAtlasCertificate",
+      "kind": "hypothesis",
+      "direct_or_transitive": "direct",
+      "introduced_by": "NoFourMUBs.EdgeXFinal.no_four_mubs_seed",
+      "source_file": "NoFourMUBs/EdgeXFinal/Proof.lean"
+    }
+  ],
+  "proof_gaps": [],
+  "native_decide": []
+}
+```
+
+Use `--allow-hypothesis <name>` for reviewed assumptions, or declare them in `.graphenium/policy.json` under a `trust` block (`hypotheses`, `allow_hypotheses`, `allow_axioms`, `forbid_native_decide`). `--warn-structure-params` additionally warns about unconstructed `structure` / `class` / `opaque` parameters. Datalog exposes `depends_on_hypothesis/2`, `inherits_hypothesis/2`, and `conditional_theorem/1`.
 
 Graphenium never embeds or invokes a Lean compiler unless `--run-lean-axioms` is explicitly passed; the report is otherwise produced by the project's own `lake env lean` workflow.
 
@@ -74,8 +111,8 @@ Graphenium translates these trust tiers into a strict, programmatic contract for
    └── Require agent to read target implementation files first.
 4. If plan relies exclusively on resolved, EXTRACTED boundaries:
    └── Approve pre-flight and authorize file edits.
-5. If a Lean 4 theorem's dependency cone inherits sorryAx or a disallowed axiom:
-   └── Fail the trust gate (`gm trust`) and require a kernel-checked proof.
+5. If a Lean 4 theorem is TAINTED or CONDITIONAL on an unapproved hypothesis:
+   └── Fail the trust gate (`gm trust`) and require a kernel-checked proof or an explicit `--allow-hypothesis`.
 ```
 
 ---
@@ -87,7 +124,7 @@ Graphenium distinguishes between three complementary policy layers in your gover
 | Policy Layer | Primary Config | Enforcement Target | Metric Evaluated |
 |---|---|---|---|
 | **Trust Quality** | `gm check` options | Index-Wide Health | Import resolution ratio, maximum allowed ambiguity, and evidence freshness. |
-| **Architecture** | `.graphenium/policy.json` | Agent Design Spec | Forbidden dependencies, strict layering domains, and banned symbols. |
+| **Architecture** | `.graphenium/policy.json` | Agent Design Spec | Forbidden dependencies, strict layering domains, banned symbols, and optional Lean `trust` allowances (`hypotheses`, `allow_hypotheses`, `allow_axioms`, `forbid_native_decide`). |
 | **Topological Entropy (Zero-Drift)** | Zero-config (always on) | Agent Design Spec | Louvain modularity delta (ΔQ), surprise edge scores, community drift. |
 
 Use **Trust Quality** policies to ensure Graphenium's index is complete and healthy enough to plan against. Use **Architecture** policies to block agents from committing designs that violate declared boundaries. **Topological Entropy** gating runs automatically as a zero-config fallback - even without `.graphenium/policy.json` - rejecting plans that mathematically degrade modularity or introduce structurally anomalous dependencies (`cross-community`, `peripheral→hub`).

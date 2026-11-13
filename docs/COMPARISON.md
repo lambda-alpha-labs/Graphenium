@@ -2,7 +2,7 @@
 
 AI developer tooling is currently saturated with passive codebase search indexes, codebase visualization tools, and "GraphRAG" databases. These tools help agents *read* or *search* repositories. Graphenium is a **relational codebase compiler** that both compresses that reading and enforces a far more critical engineering role: **active write-time containment and spec-driven pre-flight gating**.
 
-This document outlines how Graphenium compares to alternative categories of developer tooling, including traditional static architecture linters. The short version: Graphenium matches their boundary intent, but adds Virtual AST pre-flight workspaces, zero-config Louvain ΔQ relative modularity gating, Datalog fixed-point reasoning, and Lean 4 proof-gap plus semantic axiom auditing (`gm trust`) — none of which classic import-rule linters provide.
+This document outlines how Graphenium compares to alternative categories of developer tooling, including traditional static architecture linters. The short version: Graphenium matches their boundary intent, but adds Virtual AST pre-flight workspaces, zero-config Louvain ΔQ relative modularity gating, Datalog fixed-point reasoning with stratified negation, and Lean 4 proof-gap plus hypothesis-aware semantic axiom auditing (`gm trust`) — none of which classic import-rule linters provide.
 
 ---
 
@@ -14,7 +14,7 @@ This document outlines how Graphenium compares to alternative categories of deve
 | **Syntactic AST Matchers** (`ast-grep`) | Single-file pattern-matching and syntax rewrites. | Graphenium maintains a persistent, cross-file structural index and enforces pre-flight design specs. |
 | **Enterprise Search** (Sourcegraph) | Federated human search across thousands of repositories. | Graphenium is local-first, MCP-native, and designed as a machine-level write-gate for agents. |
 | **Symbol Indexers** (SCIP, LSIF, Kythe) | Compiler-perfect reference indices for IDE definitions. | Graphenium incorporates provenance confidence tracking, transitive solvers, and design planning workspaces. |
-| **Static Architecture Linters** (ArchUnit, import-linter, dependency-cruiser) | Declared import/folder rules checked against source. | Graphenium adds Virtual AST pre-flight plans, zero-config Louvain ΔQ relative modularity gating, Datalog fixed-point proofs, and Lean 4 proof-gap plus semantic axiom auditing. |
+| **Static Architecture Linters** (ArchUnit, import-linter, dependency-cruiser) | Declared import/folder rules checked against source. | Graphenium adds Virtual AST pre-flight plans, zero-config Louvain ΔQ relative modularity gating, Datalog fixed-point proofs, and Lean 4 proof-gap plus hypothesis-aware semantic axiom auditing. |
 | **Codebase RAG / Vector Indexes** | Probabilistic semantic retrieval from text chunks. | Graphenium is AST-proven and deterministic. It uses a local Datalog engine instead of neural "guesses." |
 | **AI Coding Agents** (Cursor, Claude Code) | Generating and editing file contents. | Graphenium acts as an **external containment gate**, blocking these agents from violating architecture rules. |
 
@@ -41,7 +41,7 @@ These indexers provide compiler-perfect reference tracking for IDE navigations (
 ### Traditional Static Architecture Linters (ArchUnit, import-linter, dependency-cruiser)
 Classic architecture linters encode human-written import or folder rules and fail builds when a direct dependency violates them. That is useful, but it stops at the exact point where AI agents create the most risk.
 *   **The Gap for Agents:** They evaluate physical code after the agent has already edited it. They generally require hand-maintained glob/layer configuration, cannot model a proposed design before files change, do not reason over multi-hop fixed points beyond simple transitive imports, and have no notion of provenance tiers, relative modularity decay, or formal proof gaps.
-*   **The Graphenium Edge:** Graphenium compiles a provenance-tagged relational index, lets the agent declare a **Virtual AST** in memory, and validates that future topology before disk mutation. It runs embedded semi-naive Datalog for transitive/aliasing/unreachability proofs, applies zero-config Louvain ΔQ gating that accepts legacy complexity as baseline while rejecting *new* entropy, audits Lean 4 `sorry`/`admit` taint plus semantic `#print axioms` trust boundaries, and then verifies realized nodes, realized edges, and file-scope compliance after the edit.
+*   **The Graphenium Edge:** Graphenium compiles a provenance-tagged relational index, lets the agent declare a **Virtual AST** in memory, and validates that future topology before disk mutation. It runs embedded semi-naive Datalog with stratified negation for transitive/aliasing/unreachability proofs, applies zero-config Louvain ΔQ gating that accepts legacy complexity as baseline while rejecting *new* entropy, audits Lean 4 `sorry`/`admit` taint plus semantic `#print axioms` trust boundaries and binder hypotheses, and then verifies realized nodes, realized edges, and file-scope compliance after the edit.
 
 ### Codebase RAG & Semantic Vector Databases
 Vector databases split code files into text chunks and use embedding models to perform nearest-neighbor searches.

@@ -141,3 +141,191 @@ fn allowlisted_external_axiom_passes() {
         "report should surface sorryAx"
     );
 }
+
+fn setup_hypotheses(root: &Path) -> std::path::PathBuf {
+    let lean_dir = root.join("NoFourMUBs").join("EdgeXFinal");
+    std::fs::create_dir_all(&lean_dir).unwrap();
+    std::fs::write(
+        lean_dir.join("Proof.lean"),
+        br#"
+namespace NoFourMUBs.EdgeXFinal
+
+structure EdgeAtlasCertificate where
+  witness : Nat
+
+theorem no_four_mubs_seed (h : EdgeAtlasCertificate) : 1 = 1 := by
+  exact rfl
+
+theorem downstream : 1 = 1 := by
+  exact no_four_mubs_seed { witness := 0 }
+
+end NoFourMUBs.EdgeXFinal
+"#,
+    )
+    .unwrap();
+
+    let report = root.join("axioms-hypotheses.json");
+    std::fs::write(
+        &report,
+        br#"{
+  "schema_version": "lean-axioms.v1",
+  "source_hash": "feedface",
+  "declarations": [
+    { "name": "NoFourMUBs.EdgeXFinal.no_four_mubs_seed", "axioms": ["propext"] },
+    { "name": "NoFourMUBs.EdgeXFinal.downstream", "axioms": ["propext"] }
+  ]
+}"#,
+    )
+    .unwrap();
+    report
+}
+
+fn run_with_hypotheses(root: &Path) {
+    let output = gm()
+        .arg("run")
+        .arg(root)
+        .args([
+            "--no-semantic",
+            "--no-viz",
+            "--lean-axioms",
+            "axioms-hypotheses.json",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn conditional_hypotheses_are_detected_allowlisted_and_transitive() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_hypotheses(root);
+    run_with_hypotheses(root);
+
+    // Direct hypothesis: kernel-clean (`propext`) but CONDITIONAL.
+    let output = gm()
+        .args([
+            "trust",
+            "--graph",
+            "graphenium-out/graph.json",
+            "--theorem",
+            "NoFourMUBs.EdgeXFinal.no_four_mubs_seed",
+            "--json",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "conditional theorem must fail without --allow-hypothesis"
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let theorem = &report["theorems"][0];
+    assert_eq!(theorem["status"], "CONDITIONAL");
+    assert_eq!(theorem["passed"], false);
+    let assumptions = theorem["assumptions"].as_array().unwrap();
+    assert_eq!(assumptions.len(), 1, "{assumptions:?}");
+    assert_eq!(assumptions[0]["name"], "EdgeAtlasCertificate");
+    assert_eq!(assumptions[0]["kind"], "hypothesis");
+    assert_eq!(assumptions[0]["direct_or_transitive"], "direct");
+    assert!(theorem["kernel_axioms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|a| a == "propext"));
+
+    // Explicit allowance makes the gate pass while preserving the status.
+    let output = gm()
+        .args([
+            "trust",
+            "--graph",
+            "graphenium-out/graph.json",
+            "--theorem",
+            "NoFourMUBs.EdgeXFinal.no_four_mubs_seed",
+            "--allow-hypothesis",
+            "EdgeAtlasCertificate",
+            "--json",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "allowlisted hypothesis should pass: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["theorems"][0]["status"], "CONDITIONAL");
+    assert_eq!(report["theorems"][0]["passed"], true);
+
+    // A downstream theorem inherits the hypothesis transitively.
+    let output = gm()
+        .args([
+            "trust",
+            "--graph",
+            "graphenium-out/graph.json",
+            "--theorem",
+            "NoFourMUBs.EdgeXFinal.downstream",
+            "--json",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let theorem = &report["theorems"][0];
+    assert_eq!(theorem["status"], "CONDITIONAL");
+    let assumptions = theorem["assumptions"].as_array().unwrap();
+    assert!(
+        assumptions
+            .iter()
+            .any(|a| a["name"] == "EdgeAtlasCertificate"
+                && a["direct_or_transitive"] == "transitive"
+                && a["introduced_by"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("no_four_mubs_seed")),
+        "{assumptions:?}"
+    );
+}
+
+#[test]
+fn policy_file_can_allow_hypotheses() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_hypotheses(root);
+    run_with_hypotheses(root);
+
+    std::fs::create_dir_all(root.join(".graphenium")).unwrap();
+    std::fs::write(
+        root.join(".graphenium/policy.json"),
+        br#"{
+  "rules": [],
+  "trust": { "allow_hypotheses": ["EdgeAtlasCertificate"] }
+}"#,
+    )
+    .unwrap();
+
+    let output = gm()
+        .args([
+            "trust",
+            "--graph",
+            "graphenium-out/graph.json",
+            "--theorem",
+            "NoFourMUBs.EdgeXFinal.no_four_mubs_seed",
+            "--json",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "policy allow_hypotheses should pass: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

@@ -61,11 +61,64 @@ pub enum ArchRule {
     },
 }
 
+/// Lean trust audit configuration from `.graphenium/policy.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TrustPolicyConfig {
+    /// Hypothesis names that should be treated as assumptions.
+    #[serde(default)]
+    pub hypotheses: Vec<String>,
+    /// Hypothesis names that are explicitly accepted.
+    #[serde(default)]
+    pub allow_hypotheses: Vec<String>,
+    /// External axioms that are explicitly accepted.
+    #[serde(default)]
+    pub allow_axioms: Vec<String>,
+    /// Fail when `Lean.ofReduceBool` / `Lean.trustCompiler` is inherited.
+    #[serde(default)]
+    pub forbid_native_decide: Option<bool>,
+}
+
 /// Repository architecture policy loaded from `.graphenium/policy.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ArchPolicyConfig {
     #[serde(default)]
     pub rules: Vec<ArchRule>,
+    /// Optional Lean trust policy block.
+    #[serde(default)]
+    pub trust: TrustPolicyConfig,
+    /// Top-level hypothesis declarations (accepted for policy files that do not
+    /// use a nested `trust` block).
+    #[serde(default)]
+    pub hypotheses: Vec<String>,
+    /// Top-level allowed hypotheses.
+    #[serde(default)]
+    pub allow_hypotheses: Vec<String>,
+    /// Top-level allowed external axioms.
+    #[serde(default)]
+    pub allow_axioms: Vec<String>,
+    /// Top-level native-decision toggle.
+    #[serde(default)]
+    pub forbid_native_decide: Option<bool>,
+}
+
+impl ArchPolicyConfig {
+    /// Merge the nested `trust` block with top-level trust keys. Top-level
+    /// keys are appended so existing `.graphenium/policy.json` files keep
+    /// working without a schema migration.
+    pub fn trust_config(&self) -> TrustPolicyConfig {
+        let mut merged = self.trust.clone();
+        merged.hypotheses.extend(self.hypotheses.iter().cloned());
+        merged
+            .allow_hypotheses
+            .extend(self.allow_hypotheses.iter().cloned());
+        merged
+            .allow_axioms
+            .extend(self.allow_axioms.iter().cloned());
+        if self.forbid_native_decide.is_some() {
+            merged.forbid_native_decide = self.forbid_native_decide;
+        }
+        merged
+    }
 }
 
 impl ArchPolicyConfig {
@@ -295,5 +348,24 @@ mod tests {
             &config.rules[0],
             ArchRule::ForbiddenDependency { .. }
         ));
+    }
+
+    #[test]
+    fn trust_policy_supports_nested_and_top_level_keys() {
+        let nested: ArchPolicyConfig = serde_json::from_str(
+            r#"{"rules": [], "trust": {"allow_hypotheses": ["A"], "hypotheses": ["B"]}}"#,
+        )
+        .unwrap();
+        let merged = nested.trust_config();
+        assert_eq!(merged.hypotheses, vec!["B"]);
+        assert_eq!(merged.allow_hypotheses, vec!["A"]);
+
+        let top_level: ArchPolicyConfig = serde_json::from_str(
+            r#"{"rules": [], "allow_hypotheses": ["C"], "hypotheses": ["D"]}"#,
+        )
+        .unwrap();
+        let merged = top_level.trust_config();
+        assert_eq!(merged.hypotheses, vec!["D"]);
+        assert_eq!(merged.allow_hypotheses, vec!["C"]);
     }
 }

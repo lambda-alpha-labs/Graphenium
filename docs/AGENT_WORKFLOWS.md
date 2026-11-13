@@ -157,7 +157,7 @@ gm run . --no-semantic --no-viz --lean-axioms axioms.json
 gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
 ```
 
-`gm trust` exits non-zero on `sorryAx`, a non-allowlisted external axiom, or (with `--forbid-native-decide`) `Lean.ofReduceBool` / `Lean.trustCompiler`.
+`gm trust` classifies each theorem as `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED`. It exits non-zero on `sorryAx`, a non-allowlisted external axiom, a forbidden `Lean.ofReduceBool` / `Lean.trustCompiler`, or an unapproved binder hypothesis. Pass `--allow-hypothesis <name>` (or configure `trust.allow_hypotheses` in `.graphenium/policy.json`) only after reviewing the structure/certificate parameter.
 
 ---
 

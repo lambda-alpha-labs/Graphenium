@@ -20,7 +20,7 @@ The Graphenium command-line interface (`gm`) serves as both a relational codebas
 | [`gm setup`](#gm-setup) | Generate workspace MCP configurations for IDEs and assistants. |
 | [`gm graph`](#gm-graph) | Subcommands to inspect compiled metadata, build targets, and test mappings. |
 | [`gm snapshot`](#gm-snapshot) | Create and list indexed codebase snapshots. |
-| [`gm trust`](#gm-trust) | Audit Lean 4 theorem trust boundaries and inherited axioms. |
+| [`gm trust`](#gm-trust) | Audit Lean 4 theorem trust boundaries, inherited axioms, and binder hypotheses. |
 | [`gm gate`](#gm-gate) | Execute automated containment gates over index differences. |
 
 ---
@@ -82,10 +82,11 @@ gm query "<query>" [flags]
     *   `lexical`: Relevance matching against symbol names, qualified paths, and source files.
     *   `structural`: Topological distance sorting radiating outward from matched seed nodes.
     *   `hybrid`: Combined score weighting lexical relevance (60%) and structural distance (40%).
-*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Evaluation uses first-column hash indexing and semi-naive delta relations, with early stopping for fully-ground existence goals. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs.
+*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Evaluation uses goal-directed pruning, stratified negation over SCC-ordered strata, semi-naive delta relations, and full-tuple plus per-column hash indexes, with early stopping for fully-ground existence goals. Unstratifiable negative recursion is rejected explicitly. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs.
+    *   **Negation:** `not p(...)` is evaluated only after all positive atoms have bound their variables; frozen lower-stratum relations are indexed so negation does not scan large relations. A named variable that appears only in a negated atom is rejected by range-restriction validation.
     *   **Inequality:** rule and query bodies accept `A != B` (and `A /= B`). Variables must be bound by a positive body atom; an ungrounded inequality is a validation error.
     *   **Multiple queries:** a program may contain several `?-` blocks, optionally labelled (`?- [proof_gaps] has_proof_gap(X).`). The EDB and fixpoint are materialized once and shared by every query.
-    *   Built-in predicates include `calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, `uses_axiom`, `has_untrusted_axiom`, `has_native_decide`, and `untrusted_theorem`.
+    *   Built-in predicates include `calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, `uses_axiom`, `has_untrusted_axiom`, `has_native_decide`, `untrusted_theorem`, `depends_on_hypothesis`, `inherits_hypothesis`, and `conditional_theorem`.
 *   `--budget <tokens>` (integer, default: `2000`) — Limits Graphenium's printed output to remain within the specified context-token limit.
 *   `--dfs` (bool) — Uses Depth-First Search for structural tracing (default: BFS).
 *   `--safe` (bool) — Restricts query-tracing strictly to AST-proven (`EXTRACTED`) dependencies.
@@ -100,7 +101,7 @@ gm query "<query>" [flags]
 ---
 
 ## `gm check`
-Enforces global resolution thresholds and validates planning workspaces. This is Graphenium's primary CI/CD and pre-commit containment hook.
+Enforces global resolution thresholds and validates planning workspaces. This is Graphenium's primary CI/CD and pre-commit containment hook. When the graph contains Lean axiom or hypothesis facts, `gm check` also prints the `UNCONDITIONAL` / `CONDITIONAL` / `TAINTED` theorem summary.
 
 ```sh
 gm check [flags]
@@ -290,7 +291,7 @@ gm snapshot <subcommand>
 ---
 
 ## `gm trust`
-Audits Lean 4 theorem trust boundaries. Resolves the transitive dependency cone of a theorem and reports inherited kernel axioms, proof gaps (`sorryAx`), native-decision shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), and external user axioms.
+Audits Lean 4 theorem trust boundaries. Resolves the transitive dependency cone of a theorem and reports inherited kernel axioms, proof gaps (`sorryAx`), native-decision shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), external user axioms, and hypothesis/structure parameters that make a theorem conditional.
 
 ```sh
 gm trust [flags]
@@ -300,15 +301,43 @@ gm trust [flags]
 *   `--graph <path>` (string, default: `<out-dir>/graph.json`) — Index to audit.
 *   `--out-dir <path>` (string, default: `graphenium-out`) — Resolves the default graph path.
 *   `--axioms <path>` (string) — Optional `#print axioms` report (raw text or `lean-axioms.v1` JSON). Omit it when axiom edges were already baked in with `gm run --lean-axioms`.
-*   `--theorem <name>` (string) — Audit one theorem (qualified Lean name or node ID). Omit to audit every declaration with axiom/proof-gap data.
+*   `--theorem <name>` (string) — Audit one theorem (qualified Lean name or node ID). Omit to audit every declaration with axiom, proof-gap, or hypothesis data.
 *   `--forbid-native-decide` (bool) — Fail when `Lean.ofReduceBool` / `Lean.trustCompiler` is inherited.
 *   `--allow-axiom <name>` (repeatable) — Allow a specific external axiom. Standard kernel axioms are always allowed; `sorryAx` is never allowed.
+*   `--hypothesis <name>` (repeatable) — Explicitly flag a hypothesis by declaration label, qualified name, or node ID. Useful when a binder is hidden behind notation or generated code.
+*   `--allow-hypothesis <name>` (repeatable) — Accept an inherited hypothesis. Without this (or a policy allowance), a `CONDITIONAL` theorem exits non-zero.
+*   `--warn-structure-params` (bool) — Warn about unconstructed `structure` / `class` / `opaque` parameters that are inherited without an explicit allowance.
 *   `--json` (bool) — Emit a `lean-trust.v1` report.
 
-Exits non-zero if a disallowed axiom, `sorryAx`, or (with `--forbid-native-decide`) a native-decision shortcut is inherited.
+Each audited theorem receives one of three statuses:
+
+| Status | Meaning |
+|---|---|
+| `UNCONDITIONAL` | Only standard kernel axioms; no proof gaps, forbidden native decisions, external axioms, or hypotheses. |
+| `CONDITIONAL` | Kernel-clean but dependent on one or more binder hypotheses/structure parameters. |
+| `TAINTED` | Inherits `sorryAx`, a forbidden `native_decide` shortcut, or a disallowed external axiom. |
+
+Exits non-zero for `TAINTED`, or for `CONDITIONAL` unless every inherited hypothesis is allowed.
+
+Hypotheses can also be configured in `.graphenium/policy.json`:
+
+```json
+{
+  "rules": [],
+  "trust": {
+    "hypotheses": ["EdgeAtlasCertificate"],
+    "allow_hypotheses": ["ReviewedCertificate"],
+    "allow_axioms": ["MyReviewedAxiom"],
+    "forbid_native_decide": true
+  }
+}
+```
+
+The same keys are accepted at the top level of the policy file. CLI flags layer on top of policy values.
 
 ```sh
 gm trust --axioms axioms.json --theorem MUB6.no_four_mubs_dim6 --forbid-native-decide --json
+gm trust --theorem NoFourMUBs.EdgeXFinal.no_four_mubs_seed --allow-hypothesis EdgeAtlasCertificate --json
 ```
 
 ---

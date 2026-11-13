@@ -168,7 +168,7 @@ Graphenium enforces these policies at multiple checkpoints in the development li
 | **`gm gate --diff <before> <after>`** | CI / PR Pipeline | Compares two compiled indexes and exits non-zero on any `Critical` architectural drift event. |
 | **`gm gate`** | CI / Pre-Commit Hook | Runs the default trust gate against `<out-dir>/graph.json`; add `--verify-fresh` for read-only manifest drift detection. |
 | **`gm check --verify-fresh` / `gm gate --verify-fresh`** | CI / PR Pipeline | Hashes current sources against `<out-dir>/manifest.json` and fails on modified/added/deleted files without writing to disk. Mtime-only changes (fresh checkout) are ignored. |
-| **`gm trust`** | CI / PR Pipeline | Audits Lean 4 theorem dependency cones for `sorryAx`, external axioms, and native-decision shortcuts. Exits non-zero on disallowed trust boundaries. |
+| **`gm trust`** | CI / PR Pipeline | Audits Lean 4 theorem dependency cones for `sorryAx`, external axioms, native-decision shortcuts, and binder hypotheses. Exits non-zero on `TAINTED` or unapproved `CONDITIONAL` theorems. |
 | **`verify_changes`** | CI / PR Pipeline | Evaluates global trust quality metrics (import resolution ratio, maximum allowed ambiguity) plus blast radius and verification plans. |
 
 ---
@@ -205,7 +205,31 @@ gm run . --no-semantic --no-viz --lean-axioms axioms.json
 gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
 ```
 
-`gm trust` exits non-zero when the theorem's transitive cone contains `sorryAx`, a non-allowlisted external axiom, or (with `--forbid-native-decide`) `Lean.ofReduceBool` / `Lean.trustCompiler`. The same facts are available to Datalog via `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`.
+`gm trust` classifies each theorem as `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED`. It exits non-zero when the transitive cone contains `sorryAx`, a non-allowlisted external axiom, a forbidden `Lean.ofReduceBool` / `Lean.trustCompiler`, or an unapproved binder hypothesis:
+
+```sh
+# A theorem with `(h : EdgeAtlasCertificate)` is conditional even though
+# #print axioms reports only standard kernel axioms.
+gm trust --theorem NoFourMUBs.EdgeXFinal.no_four_mubs_seed --json
+gm trust --theorem NoFourMUBs.EdgeXFinal.no_four_mubs_seed \
+  --allow-hypothesis EdgeAtlasCertificate --json
+```
+
+Instead of repeating flags in CI, declare trust policy alongside architecture rules (both nested and top-level keys are accepted):
+
+```json
+{
+  "rules": [],
+  "trust": {
+    "hypotheses": ["EdgeAtlasCertificate"],
+    "allow_hypotheses": ["ReviewedCertificate"],
+    "allow_axioms": ["MyReviewedAxiom"],
+    "forbid_native_decide": true
+  }
+}
+```
+
+`--warn-structure-params` flags unconstructed `structure` / `class` / `opaque` parameters. The same facts are available to Datalog via `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, `untrusted_theorem/1`, `depends_on_hypothesis/2`, `inherits_hypothesis/2`, and `conditional_theorem/1`.
 
 ### Portable CI Artifacts
 

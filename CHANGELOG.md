@@ -4,6 +4,21 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## Unreleased
+
+### Added
+*   **Hypothesis-Aware Lean Trust (`src/extract/lean.rs`, `src/analyze/lean_trust.rs`):** The Lean extractor now emits `depends_on_hypothesis` edges for theorem/lemma/def binder types, so a theorem of the form `theorem T (h : Cert) : Goal` is reported as `CONDITIONAL` instead of passing on kernel axioms alone. `gm trust` gained `--hypothesis`, `--allow-hypothesis`, `--warn-structure-params`, transitive assumption propagation, and explicit `UNCONDITIONAL` / `CONDITIONAL` / `TAINTED` statuses in `lean-trust.v1` JSON. `.graphenium/policy.json` can declare `hypotheses`, `allow_hypotheses`, `allow_axioms`, and `forbid_native_decide` either at the top level or under a `trust` block.
+*   **Stratified Datalog Negation (`src/analyze/query.rs`, `src/analyze/query/stdlib.dl`):** Rules are partitioned into SCC-ordered strata before evaluation; unstratifiable negative recursion is rejected explicitly, and every negated relation is frozen and indexed with a full-tuple set plus per-column hash indexes before higher strata query it. Added `depends_on_hypothesis/2`, `inherits_hypothesis/2`, and `conditional_theorem/1` stdlib predicates.
+*   **Lazy EDB Materialization:** `run_datalog` now loads only the EDB relations reachable from the query goals, and Datalog values share interned `Arc<str>` allocations.
+
+### Changed
+*   **Lean Trust Surfacing:** `gm check`, `verify_changes`, and `get_graph_info` report conditional theorem counts and assumption names when Lean data is loaded. The MCP surface remains exactly 12 tools.
+
+### Tests
+*   End-to-end conditional/allowlisted/transitive hypothesis fixtures, unstratifiable-negation and range-restriction tests, and a 200k-edge stratified `not` benchmark (1s release budget, relaxed debug regression bound).
+
+---
+
 ## v0.25.0 - 2026-11-13
 
 ### Added

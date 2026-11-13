@@ -386,7 +386,12 @@ pub fn resolve_cross_file_calls(
             // Only resolve behavioral cross-file edges
             let is_behavioral = matches!(
                 edge.relation.as_str(),
-                "calls" | "uses" | "inherits" | "implements" | "depends_on"
+                "calls"
+                    | "uses"
+                    | "inherits"
+                    | "implements"
+                    | "depends_on"
+                    | "depends_on_hypothesis"
             );
             if !is_behavioral {
                 continue;
@@ -471,8 +476,16 @@ pub fn resolve_cross_file_calls(
                 edge.target = distinct[0].1.to_string();
                 edge.extractor = Some("tree-sitter-stack-graphs".to_string());
                 edge.resolution_status = Some("resolved".to_string());
-                edge.confidence = crate::model::Confidence::Inferred;
-                edge.confidence_score = crate::model::Confidence::Inferred.default_score();
+                // Hypothesis edges retain their Ambiguous/Inferred marker so
+                // `--warn-structure-params` still sees hidden structure
+                // parameters after cross-file resolution.
+                if !matches!(
+                    edge.relation.as_str(),
+                    "depends_on_hypothesis" | "parameter_type"
+                ) {
+                    edge.confidence = crate::model::Confidence::Inferred;
+                    edge.confidence_score = crate::model::Confidence::Inferred.default_score();
+                }
                 resolved_count += 1;
             }
         }

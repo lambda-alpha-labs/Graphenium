@@ -124,7 +124,7 @@ gm query "" --datalog "?- [gaps] has_proof_gap(X). ?- [orphans] is_orphan(Y)."
 gm query "" --datalog "?- calls_transitive('main', X)." --json
 ```
 
-Datalog bodies accept `A != B` / `A /= B`; variables must be bound by a positive atom, and ungrounded inequalities are rejected. `--json` emits a `datalog.v1` report (`edb_facts` plus per-query `variables`, `rows`, `row_count`, `steps_used`, and `truncated`).
+Datalog bodies accept `A != B` / `A /= B`; variables must be bound by a positive atom, and ungrounded inequalities are rejected. Negation is stratified: recursive negative cycles are rejected, lower strata are fully materialized before higher strata negate them, and frozen relations use full-tuple plus per-column hash indexes. `--json` emits a `datalog.v1` report (`edb_facts` plus per-query `variables`, `rows`, `row_count`, `steps_used`, and `truncated`).
 
 ### 6.1 Audit Lean 4 Trust Boundaries
 
@@ -138,7 +138,17 @@ gm run . --no-semantic --no-viz --lean-axioms axioms.json
 gm trust --theorem MUB6.no_four_mubs_dim6 --forbid-native-decide --json
 ```
 
-`gm trust` reports standard kernel axioms (`propext`, `Classical.choice`, `Quot.sound`), `sorryAx`, `native_decide` shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), and external axioms. It exits non-zero on disallowed external axioms, `sorryAx`, or (when `--forbid-native-decide` is set) native-decision shortcuts. Use `--allow-axiom <name>` for reviewed external axioms.
+`gm trust` reports standard kernel axioms (`propext`, `Classical.choice`, `Quot.sound`), `sorryAx`, `native_decide` shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), external axioms, and binder hypotheses. It assigns each theorem `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED` status and exits non-zero on disallowed external axioms, `sorryAx`, forbidden native-decision shortcuts, or an unapproved hypothesis. Use `--allow-axiom <name>` for reviewed external axioms and `--allow-hypothesis <name>` for reviewed structure/class parameters:
+
+```sh
+# A theorem with `(h : EdgeAtlasCertificate)` is CONDITIONAL even when
+# #print axioms reports only propext / Classical.choice / Quot.sound.
+gm trust --theorem NoFourMUBs.EdgeXFinal.no_four_mubs_seed --json
+gm trust --theorem NoFourMUBs.EdgeXFinal.no_four_mubs_seed \
+  --allow-hypothesis EdgeAtlasCertificate --json
+```
+
+Equivalent allowances can live in `.graphenium/policy.json` under `trust.allow_hypotheses` or top-level `allow_hypotheses`.
 
 ---
 

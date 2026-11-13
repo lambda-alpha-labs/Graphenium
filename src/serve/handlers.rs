@@ -2731,6 +2731,23 @@ impl GrapheniumServer {
             ));
         }
 
+        if let Some(summary) = crate::analyze::lean_trust::summarize(graph.as_ref()) {
+            output.push_str("\n## Lean Trust\n\n");
+            output.push_str(&format!(
+                "- Theorems: {} ({} UNCONDITIONAL, {} CONDITIONAL, {} TAINTED)\n",
+                summary.theorems, summary.unconditional, summary.conditional, summary.tainted
+            ));
+            if !summary.assumptions.is_empty() {
+                output.push_str(&format!(
+                    "- Conditional assumptions: {}\n",
+                    summary.assumptions.join(", ")
+                ));
+            }
+            for theorem in &summary.conditional_theorems {
+                output.push_str(&format!("- CONDITIONAL: `{theorem}`\n"));
+            }
+        }
+
         if let Some(ref pid) = plan_id {
             output.push_str("\n## Pre-Flight Architecture Policy\n\n");
             let preflight = self.validate_plan_preflight(pid);
@@ -3160,10 +3177,12 @@ impl GrapheniumServer {
         let mut sorry_gaps = 0usize;
         let mut native_decide = 0usize;
         let mut external_axioms = 0usize;
+        let mut hypothesis_params = 0usize;
         for edge in graph.edges_iter() {
             match edge.relation.as_str() {
                 "unverified_sorry" => sorry_gaps += 1,
                 "unverified_native_decide" => native_decide += 1,
+                "depends_on_hypothesis" | "parameter_type" => hypothesis_params += 1,
                 "depends_on_axiom" => {
                     let axiom = edge.tgt_original.to_ascii_lowercase();
                     if !matches!(
@@ -3179,10 +3198,22 @@ impl GrapheniumServer {
                 _ => {}
             }
         }
-        if sorry_gaps + native_decide + external_axioms > 0 {
+        if sorry_gaps + native_decide + external_axioms + hypothesis_params > 0 {
             out.push_str(&format!(
-                "\n**Lean trust:** {sorry_gaps} sorry gap(s) · {native_decide} native_decide shortcut(s) · {external_axioms} external axiom edge(s)\n"
+                "\n**Lean trust:** {sorry_gaps} sorry gap(s) · {native_decide} native_decide shortcut(s) · {external_axioms} external axiom edge(s) · {hypothesis_params} hypothesis/parameter edge(s)\n"
             ));
+        }
+        if let Some(summary) = crate::analyze::lean_trust::summarize(graph.as_ref()) {
+            out.push_str(&format!(
+                "**Lean status:** {} theorem(s) · {} UNCONDITIONAL · {} CONDITIONAL · {} TAINTED\n",
+                summary.theorems, summary.unconditional, summary.conditional, summary.tainted
+            ));
+            if !summary.assumptions.is_empty() {
+                out.push_str(&format!(
+                    "**Conditional assumptions:** {}\n",
+                    summary.assumptions.join(", ")
+                ));
+            }
         }
 
         // Trust banner: mode and resolution status (reflect actual cross-file resolution).

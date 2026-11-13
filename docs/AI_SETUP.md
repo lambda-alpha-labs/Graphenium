@@ -275,9 +275,12 @@ gm query "bypass" --datalog "?- bypasses_layer('auth_controller', 'auth_service'
 
 # Multiple labelled queries sharing one EDB; JSON output for agents
 gm query "" --datalog "?- [gaps] has_proof_gap(X). ?- [orphans] is_orphan(Y)." --json
+
+# Theorems that are kernel-clean but conditional on a binder hypothesis
+gm query "conditional" --datalog "?- inherits_hypothesis(X, H)."
 ```
 
-Bodies also accept `A != B` / `A /= B` (variables must be bound by a positive atom). The MCP `run_datalog` tool accepts `format = "json"` for the same `datalog.v1` report.
+Bodies also accept `A != B` / `A /= B` (variables must be bound by a positive atom). Negation is stratified and rejects recursive negative cycles; lower strata are frozen and indexed before higher strata negate them. The MCP `run_datalog` tool accepts `format = "json"` for the same `datalog.v1` report.
 
 ### 3.1 Lean 4 Trust Auditing
 For Lean 4 repositories, never treat a theorem as verified merely because it has no `sorry` token. Ingest `#print axioms` output and audit the theorem's dependency cone:
@@ -288,7 +291,17 @@ gm run . --no-semantic --no-viz --lean-axioms axioms.json
 gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
 ```
 
-`gm trust` reports standard kernel axioms, `sorryAx`, `native_decide` shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), and external axioms. It exits non-zero on disallowed trust boundaries. Use `--allow-axiom <name>` only for reviewed external axioms.
+`gm trust` reports standard kernel axioms, `sorryAx`, `native_decide` shortcuts (`Lean.ofReduceBool` / `Lean.trustCompiler`), external axioms, and binder hypotheses. It classifies each theorem as `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED` and exits non-zero on `TAINTED` or an unapproved `CONDITIONAL` theorem. Use `--allow-axiom <name>` only for reviewed external axioms and `--allow-hypothesis <name>` for reviewed structure/class parameters. Policy files can declare the same allowances under `trust` or at the top level:
+
+```json
+{
+  "rules": [],
+  "trust": {
+    "allow_hypotheses": ["EdgeAtlasCertificate"],
+    "forbid_native_decide": true
+  }
+}
+```
 
 ---
 
@@ -301,8 +314,10 @@ gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
 | MCP tool initialization fails | Target tool needs restart | Fully quit and relaunch the agent's parent IDE or terminal session. |
 | `get_graph_info` reports stale index | Code modifications occurred post-build | Execute `gm run . --no-semantic --no-viz` and instruct the agent to run `reload_graph`. |
 | Datalog queries return no results | Old server binary is running, or step budget exhausted on transitive closure | Verify that `GM_BIN` points to the updated compilation of `gm` and restart the agent workspace. For `*_transitive` predicates, bind the seed (`?- calls_transitive('seed', X).`) so goal-directed evaluation reaches the target closure within the 1,000-step budget. |
+| Datalog reports `unstratifiable negation` | A recursive cycle contains a negated dependency (`p(X) :- not p(X)`) | Break the cycle or remove the negation. Stratified evaluation rejects this immediately instead of timing out; verify that every variable in `not p(...)` is bound by a positive atom. |
 | `gm check --verify-fresh` fails after checkout | Graph/manifest content differs from current sources | Re-run `gm run` (or `gm run . --update`) before the gate. Mtime-only changes are ignored; this failure means bytes changed. |
-| `gm trust` reports a disallowed axiom | Theorem inherits `sorryAx`, an external axiom, or `native_decide` | Inspect the reported axiom cone, replace the axiom/shortcut with a kernel-checked proof, or explicitly allow a reviewed external axiom with `--allow-axiom`. |
+| `gm trust` reports a disallowed axiom | Theorem `TAINTED` by `sorryAx`, an external axiom, or `native_decide` | Inspect the reported axiom cone, replace the axiom/shortcut with a kernel-checked proof, or explicitly allow a reviewed external axiom with `--allow-axiom`. |
+| `gm trust` reports a `CONDITIONAL` theorem | Theorem inherits a binder hypothesis or structure parameter | Either construct/prove the hypothesis, allow it with `--allow-hypothesis <name>` (or `trust.allow_hypotheses` in `.graphenium/policy.json`), or use `--warn-structure-params` to surface hidden structure parameters. |
 | Too much architectural noise | Build artifacts or library vendors included | Restructure `.grapheniumignore` to exclude build, target, or third-party folders. |
 
 ---

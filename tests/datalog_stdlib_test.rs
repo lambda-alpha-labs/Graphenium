@@ -289,3 +289,125 @@ theorem main_theorem : 1 = 1 := by
         "Theorem depending on sorry lemma should be tainted: {result}"
     );
 }
+
+#[test]
+fn test_stratified_negation_on_200k_edges_is_fast() {
+    use std::time::Instant;
+
+    const EDGES: usize = 200_000;
+    const NODES: usize = 633;
+    let mut graph = GrapheniumGraph::new();
+    for i in 0..NODES {
+        let id = format!("n{i}");
+        graph.upsert_node(Node::new(&id, &id, FileType::Code, "big.rs"));
+    }
+    let mut inserted = 0usize;
+    'outer: for i in 0..NODES {
+        for j in (i + 1)..NODES {
+            graph.add_edge(Edge::extracted(
+                &format!("n{i}"),
+                &format!("n{j}"),
+                "calls",
+                "big.rs",
+            ));
+            inserted += 1;
+            if inserted == EDGES {
+                break 'outer;
+            }
+        }
+    }
+    assert_eq!(inserted, EDGES);
+
+    let query = r#"
+        e(A, B) :- calls(A, B, _).
+        ?- [missing] e(A, B), not e(B, A).
+    "#;
+
+    let start = Instant::now();
+    let report = run_datalog_report(&graph, query, 10_000).unwrap();
+    let elapsed = start.elapsed();
+
+    assert_eq!(report.queries.len(), 1);
+    assert_eq!(
+        report.queries[0].row_count, EDGES,
+        "every forward edge lacks a reverse edge"
+    );
+    // Release builds must meet the spec's 1s budget. Debug builds are ~4x
+    // slower, so they use a relaxed regression bound while still catching the
+    // old >300s linear-scan behaviour.
+    let budget_ms = if cfg!(debug_assertions) {
+        10_000
+    } else {
+        1_000
+    };
+    assert!(
+        elapsed.as_millis() < budget_ms,
+        "stratified negation over {EDGES} edges took {elapsed:?} (budget {budget_ms}ms)"
+    );
+}
+
+#[test]
+fn test_unstratifiable_negation_is_rejected() {
+    let graph = chain_graph();
+    let query = r#"
+        p(X) :- node(X, _, _, _, _), not p(X).
+        ?- p(X).
+    "#;
+    let err = run_datalog_query(&graph, query, 1000).unwrap_err();
+    assert!(
+        err.contains("unstratifiable negation"),
+        "expected an explicit stratification error, got: {err}"
+    );
+}
+
+#[test]
+fn test_negation_requires_bound_variables() {
+    let graph = chain_graph();
+    let query = r#"
+        bad(X) :- node(X, _, _, _, _), not calls(Y, X, _).
+        ?- bad(X).
+    "#;
+    let err = run_datalog_query(&graph, query, 1000).unwrap_err();
+    assert!(
+        err.contains("range restriction"),
+        "expected a range-restriction error, got: {err}"
+    );
+}
+
+#[test]
+fn test_inherits_hypothesis_is_queryable() {
+    let src = br#"
+structure EdgeAtlasCertificate where
+  witness : Nat
+
+theorem no_four_mubs_seed (h : EdgeAtlasCertificate) : 1 = 1 := by
+  exact rfl
+
+theorem downstream : 1 = 1 := by
+  exact no_four_mubs_seed { witness := 0 }
+"#;
+    let ext = graphenium::extract::lean::extract(src, "Proof.lean");
+    let (graph, _) = graphenium::build::build_merged([ext]);
+
+    let result = run_datalog_query(
+        &graph,
+        r#"?- inherits_hypothesis("proof_no_four_mubs_seed", H)."#,
+        1000,
+    )
+    .unwrap();
+    assert!(
+        result.to_ascii_lowercase().contains("edgeatlascertificate"),
+        "seed should inherit its binder hypothesis: {result}"
+    );
+
+    let result = run_datalog_query(
+        &graph,
+        r#"?- inherits_hypothesis("proof_downstream", H)."#,
+        1000,
+    )
+    .unwrap();
+    assert!(
+        result.to_ascii_lowercase().contains("edgeatlascertificate"),
+        "downstream should inherit the hypothesis transitively: {result}"
+    );
+}

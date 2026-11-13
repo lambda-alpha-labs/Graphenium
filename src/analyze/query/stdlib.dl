@@ -95,6 +95,26 @@ tainted_by_proof_gap(X) :- depends_on(X, Y), tainted_by_proof_gap(Y).
 
 uses_axiom(Decl, Axiom) :- edge(Decl, Axiom, "depends_on_axiom", _).
 
+# Binder hypotheses / structure parameters: T is conditional on H when its
+# signature takes `(h : H)` or `[Fact P]`. Both relations are recognized so
+# extractors can choose either spelling.
+depends_on_hypothesis(X, H) :- edge(X, H, "depends_on_hypothesis", _).
+depends_on_hypothesis(X, H) :- edge(X, H, "parameter_type", _).
+
+# Transitive hypothesis inheritance through the same dependency cone used by
+# `gm trust` (calls, depends_on, inherits, implements, imports).
+inherits_hypothesis(X, H) :- depends_on_hypothesis(X, H).
+inherits_hypothesis(X, H) :- depends_on(X, Y), inherits_hypothesis(Y, H).
+inherits_hypothesis(X, H) :- imports(X, Y, _), inherits_hypothesis(Y, H).
+inherits_hypothesis(X, H) :- inherits(X, Y, _), inherits_hypothesis(Y, H).
+inherits_hypothesis(X, H) :- implements(X, Y, _), inherits_hypothesis(Y, H).
+
+# A theorem is conditional (kernel-clean but hypothesis-dependent) when it
+# inherits at least one binder hypothesis and has no direct proof gap.
+conditional_theorem(X) :-
+    inherits_hypothesis(X, _),
+    not tainted_by_proof_gap(X).
+
 # `native_decide` relies on Lean.trustCompiler / Lean.ofReduceBool.
 has_native_decide(X) :- edge(X, X, "unverified_native_decide", _).
 

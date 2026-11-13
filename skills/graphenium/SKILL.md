@@ -61,8 +61,12 @@ Graphenium contains a pre-compiled Datalog standard library (`stdlib.dl`). **Nev
 *   **Audit Lean Axiom Trust:**
     `?- has_untrusted_axiom(X).`
     `?- untrusted_theorem(X).`
+*   **Audit Conditional Theorems:**
+    `?- inherits_hypothesis(X, H).`
+    `?- conditional_theorem(X).`
 
 ### Datalog Syntax
+*   **Negation:** `not p(...)` is stratified. Lower strata are fully materialized before higher strata negate them; unstratifiable recursive negation is rejected. Every named variable in a negated atom must be bound by a positive atom.
 *   **Inequality:** bodies accept `A != B` or `A /= B`. Variables must be bound by a positive atom; ungrounded inequalities are rejected.
 *   **Multiple queries:** one program may contain several labelled `?-` blocks, evaluated against one shared EDB/fixpoint:
     `?- [gaps] has_proof_gap(X). ?- [orphans] is_orphan(Y).`
@@ -87,16 +91,17 @@ You must explicitly separate AST-proven facts from semantic guesswork when plann
 
 *   `EXTRACTED` **(AST-Proven):** Compiler-backed facts (imports, class boundaries, method calls). Use as the **planning backbone**.
 *   `INFERRED` **(Heuristics):** Semantic similarity or naming guesses. Treat as a **hypothesis** - you are strictly blocked from editing these targets until you read their source files directly.
-*   `AMBIGUOUS` **(Collisions / Proof Gaps):** Symbol name collisions, Lean `sorryAx` gaps, or semantic axiom findings (`native_decide`, external axioms). **Risk gated** - stop and run `inspect_symbol` or `gm trust` before proceeding.
+*   `AMBIGUOUS` **(Collisions / Proof Gaps):** Symbol name collisions, Lean `sorryAx` gaps, semantic axiom findings (`native_decide`, external axioms), or hidden structure/opaque binder parameters. **Risk gated** - stop and run `inspect_symbol` or `gm trust` before proceeding.
 
 ### Lean 4 Trust Auditing
 When the index contains semantic `#print axioms` facts (or you pass `--axioms`), audit theorem trust before relying on a formal claim:
 
 ```sh
 gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
+gm trust --theorem MyProject.main_theorem --allow-hypothesis ReviewedCertificate --json
 ```
 
-Standard kernel axioms (`propext`, `Classical.choice`, `Quot.sound`) are allowed. `sorryAx`, non-allowlisted external axioms, and (with `--forbid-native-decide`) `Lean.ofReduceBool` / `Lean.trustCompiler` cause a non-zero exit. Use `--allow-axiom <name>` only for reviewed external axioms.
+Each theorem is classified `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED`. Standard kernel axioms (`propext`, `Classical.choice`, `Quot.sound`) are allowed. `sorryAx`, non-allowlisted external axioms, forbidden `Lean.ofReduceBool` / `Lean.trustCompiler`, and unapproved binder hypotheses cause a non-zero exit. Use `--allow-axiom <name>` only for reviewed external axioms and `--allow-hypothesis <name>` only for reviewed structure/class parameters. Policy files can declare `trust.allow_hypotheses` / `trust.allow_axioms` instead of repeating CLI flags.
 
 ---
 
@@ -135,6 +140,7 @@ gm query "" --datalog "?- [hubs] is_hub(X). ?- [gaps] has_proof_gap(Y)." --json
 
 # Audit Lean 4 trust boundaries
 gm trust --theorem MyProject.main_theorem --forbid-native-decide
+gm trust --theorem MyProject.main_theorem --allow-hypothesis ReviewedCertificate
 ```
 
 ---

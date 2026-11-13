@@ -22,7 +22,7 @@ const STDLIB_SOURCE: &str = include_str!("query/stdlib.dl");
 /// A single value in a relation tuple.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize)]
 pub enum Val {
-    Str(String),
+    Str(Arc<str>),
     Int(i64),
 }
 
@@ -70,9 +70,49 @@ pub struct Edb {
     pub relations: HashMap<String, HashSet<Vec<Val>>>,
 }
 
+/// Intern a string so every tuple shares the same `Arc<str>` allocation.
+fn intern_arc(interned: &mut HashMap<String, Arc<str>>, value: &str) -> Arc<str> {
+    if let Some(existing) = interned.get(value) {
+        return existing.clone();
+    }
+    let arc: Arc<str> = Arc::from(value);
+    interned.insert(value.to_string(), arc.clone());
+    arc
+}
+
+/// Names of every EDB relation materialized from a graph.
+pub fn edb_relation_names() -> HashSet<String> {
+    [
+        "node",
+        "calls",
+        "imports",
+        "contains",
+        "inherits",
+        "implements",
+        "edge",
+        "degree",
+        "hub",
+    ]
+    .iter()
+    .map(|name| (*name).to_string())
+    .collect()
+}
+
 impl Edb {
-    /// Load facts directly from a GrapheniumGraph.
+    /// Load every fact directly from a GrapheniumGraph.
     pub fn load_from_graph(&mut self, graph: &crate::model::GrapheniumGraph) {
+        let all = edb_relation_names();
+        self.load_from_graph_selective(graph, &all);
+    }
+
+    /// Load only the EDB relations in `include`. Goal-directed evaluation uses
+    /// this to avoid materializing multi-hundred-thousand-row relations that no
+    /// active rule can reach.
+    pub fn load_from_graph_selective(
+        &mut self,
+        graph: &crate::model::GrapheniumGraph,
+        include: &HashSet<String>,
+    ) {
         if cfg!(test) {
             eprintln!(
                 "DEBUG load_from_graph: {} nodes, {} edges",
@@ -80,77 +120,119 @@ impl Edb {
                 graph.edges_iter().count()
             );
         }
+        let mut interned: HashMap<String, Arc<str>> = HashMap::new();
+        let want = |name: &str| include.contains(name);
+        self.relations.clear();
+
         // 1. node(Id, Label, Type, File, Community)
-        let mut nodes = HashSet::new();
-        for n in graph.nodes() {
-            nodes.insert(vec![
-                Val::Str(n.id.clone()),
-                Val::Str(n.label.clone()),
-                Val::Str(format!("{:?}", n.file_type)),
-                Val::Str(n.source_file.clone()),
-                Val::Int(n.community.unwrap_or(999) as i64),
-            ]);
+        if want("node") {
+            let mut nodes = HashSet::new();
+            for n in graph.nodes() {
+                nodes.insert(vec![
+                    Val::Str(intern_arc(&mut interned, &n.id)),
+                    Val::Str(intern_arc(&mut interned, &n.label)),
+                    Val::Str(intern_arc(&mut interned, &format!("{:?}", n.file_type))),
+                    Val::Str(intern_arc(&mut interned, &n.source_file)),
+                    Val::Int(n.community.unwrap_or(999) as i64),
+                ]);
+            }
+            self.relations.insert("node".to_string(), nodes);
         }
-        self.relations.insert("node".to_string(), nodes);
 
         // 2. Typed relations: calls, imports, contains, inherits, implements
+        let typed = ["calls", "imports", "contains", "inherits", "implements"];
+        let want_edge = want("edge");
+        let want_any_typed = typed.iter().any(|name| want(name));
         let mut calls = HashSet::new();
         let mut imports = HashSet::new();
         let mut contains = HashSet::new();
         let mut inherits = HashSet::new();
         let mut implements = HashSet::new();
         let mut edges = HashSet::new();
-        for e in graph.edges_iter() {
-            let conf = Val::Str(format!("{:?}", e.confidence));
-            let tuple = vec![
-                Val::Str(e.source.clone()),
-                Val::Str(e.target.clone()),
-                conf.clone(),
-            ];
-            match e.relation.as_str() {
-                "calls" => {
-                    calls.insert(tuple);
+        if want_edge || want_any_typed {
+            for e in graph.edges_iter() {
+                let confidence = match e.confidence {
+                    crate::model::Confidence::Extracted => "EXTRACTED",
+                    crate::model::Confidence::Inferred => "INFERRED",
+                    crate::model::Confidence::Ambiguous => "AMBIGUOUS",
+                };
+                let source = intern_arc(&mut interned, &e.source);
+                let target = intern_arc(&mut interned, &e.target);
+                if want_any_typed && typed.contains(&e.relation.as_str()) {
+                    let tuple = vec![
+                        Val::Str(source.clone()),
+                        Val::Str(target.clone()),
+                        Val::Str(intern_arc(&mut interned, confidence)),
+                    ];
+                    match e.relation.as_str() {
+                        "calls" => {
+                            calls.insert(tuple);
+                        }
+                        "imports" => {
+                            imports.insert(tuple);
+                        }
+                        "contains" => {
+                            contains.insert(tuple);
+                        }
+                        "inherits" => {
+                            inherits.insert(tuple);
+                        }
+                        "implements" => {
+                            implements.insert(tuple);
+                        }
+                        _ => {}
+                    }
                 }
-                "imports" => {
-                    imports.insert(tuple);
+                if want_edge {
+                    edges.insert(vec![
+                        Val::Str(source),
+                        Val::Str(target),
+                        Val::Str(intern_arc(&mut interned, &e.relation)),
+                        Val::Str(intern_arc(&mut interned, confidence)),
+                    ]);
                 }
-                "contains" => {
-                    contains.insert(tuple);
-                }
-                "inherits" => {
-                    inherits.insert(tuple);
-                }
-                "implements" => {
-                    implements.insert(tuple);
-                }
-                _ => {}
             }
-            edges.insert(vec![
-                Val::Str(e.source.clone()),
-                Val::Str(e.target.clone()),
-                Val::Str(e.relation.clone()),
-                conf,
-            ]);
         }
-        self.relations.insert("calls".to_string(), calls);
-        self.relations.insert("imports".to_string(), imports);
-        self.relations.insert("contains".to_string(), contains);
-        self.relations.insert("inherits".to_string(), inherits);
-        self.relations.insert("implements".to_string(), implements);
-        self.relations.insert("edge".to_string(), edges);
+        if want("calls") {
+            self.relations.insert("calls".to_string(), calls);
+        }
+        if want("imports") {
+            self.relations.insert("imports".to_string(), imports);
+        }
+        if want("contains") {
+            self.relations.insert("contains".to_string(), contains);
+        }
+        if want("inherits") {
+            self.relations.insert("inherits".to_string(), inherits);
+        }
+        if want("implements") {
+            self.relations.insert("implements".to_string(), implements);
+        }
+        if want_edge {
+            self.relations.insert("edge".to_string(), edges);
+        }
 
         // 3. degree(NodeId, Count) and hub(NodeId) for is_hub/1
-        let mut degrees = HashSet::new();
-        let mut hubs = HashSet::new();
-        for n in graph.nodes() {
-            let count = graph.degree(&n.id) as i64;
-            degrees.insert(vec![Val::Str(n.id.clone()), Val::Int(count)]);
-            if count > 15 {
-                hubs.insert(vec![Val::Str(n.id.clone())]);
+        if want("degree") || want("hub") {
+            let mut degrees = HashSet::new();
+            let mut hubs = HashSet::new();
+            for n in graph.nodes() {
+                let count = graph.degree(&n.id) as i64;
+                let id = intern_arc(&mut interned, &n.id);
+                if want("degree") {
+                    degrees.insert(vec![Val::Str(id.clone()), Val::Int(count)]);
+                }
+                if want("hub") && count > 15 {
+                    hubs.insert(vec![Val::Str(id)]);
+                }
+            }
+            if want("degree") {
+                self.relations.insert("degree".to_string(), degrees);
+            }
+            if want("hub") {
+                self.relations.insert("hub".to_string(), hubs);
             }
         }
-        self.relations.insert("degree".to_string(), degrees);
-        self.relations.insert("hub".to_string(), hubs);
     }
 }
 
@@ -503,8 +585,8 @@ impl<'a> Parser<'a> {
             Some(Token::Ident(s)) if s.chars().next().is_some_and(|c| c.is_uppercase()) => {
                 Ok(Term::Var(s.clone()))
             }
-            Some(Token::Ident(s)) => Ok(Term::Const(Val::Str(s.clone()))),
-            Some(Token::StringLiteral(s)) => Ok(Term::Const(Val::Str(s.clone()))),
+            Some(Token::Ident(s)) => Ok(Term::Const(Val::Str(s.clone().into()))),
+            Some(Token::StringLiteral(s)) => Ok(Term::Const(Val::Str(s.clone().into()))),
             Some(Token::Underscore) => {
                 let name = format!("__anon_{}", self.anon_counter);
                 self.anon_counter += 1;
@@ -543,10 +625,10 @@ impl<'a> Parser<'a> {
                     terms.push(Term::Var(s.clone()));
                 }
                 Some(Token::Ident(s)) => {
-                    terms.push(Term::Const(Val::Str(s.clone())));
+                    terms.push(Term::Const(Val::Str(s.clone().into())));
                 }
                 Some(Token::StringLiteral(s)) => {
-                    terms.push(Term::Const(Val::Str(s.clone())));
+                    terms.push(Term::Const(Val::Str(s.clone().into())));
                 }
                 Some(Token::Underscore) => {
                     let name = format!("__anon_{}", self.anon_counter);
@@ -585,6 +667,15 @@ impl<'a> Parser<'a> {
 /// Backward-chaining: collect predicates that must be materialized for the goals.
 /// EDB predicates terminate expansion; only rules on the goal→EDB path are kept.
 fn compute_needed_predicates(program: &DatalogProgram, edb: &Edb) -> HashSet<String> {
+    compute_needed_predicates_with(program, edb.relations.keys())
+}
+
+/// Goal-directed predicate collection against a set of available EDB names.
+fn compute_needed_predicates_with<'a>(
+    program: &DatalogProgram,
+    edb_names: impl IntoIterator<Item = &'a String>,
+) -> HashSet<String> {
+    let edb_names: HashSet<&str> = edb_names.into_iter().map(String::as_str).collect();
     let mut needed = HashSet::new();
     let mut pending: Vec<String> = program
         .all_goals()
@@ -604,7 +695,7 @@ fn compute_needed_predicates(program: &DatalogProgram, edb: &Edb) -> HashSet<Str
         if !needed.insert(pred.clone()) {
             continue;
         }
-        if edb.relations.contains_key(&pred) {
+        if edb_names.contains(pred.as_str()) {
             continue;
         }
         if let Some(defining_rules) = rules_by_head.get(&pred) {
@@ -633,14 +724,482 @@ fn select_active_rules<'a>(program: &'a DatalogProgram, needed: &HashSet<String>
         .collect()
 }
 
+/// Intern `name` in the predicate table, returning its dense index.
+fn intern_predicate(
+    name: &str,
+    index: &mut HashMap<String, usize>,
+    names: &mut Vec<String>,
+) -> usize {
+    if let Some(&id) = index.get(name) {
+        return id;
+    }
+    let id = names.len();
+    names.push(name.to_string());
+    index.insert(name.to_string(), id);
+    id
+}
+
+/// Tarjan state for strongly-connected-component discovery.
+struct TarjanState<'a> {
+    adj: &'a [Vec<usize>],
+    next_index: usize,
+    indices: Vec<Option<usize>>,
+    low: Vec<usize>,
+    stack: Vec<usize>,
+    on_stack: Vec<bool>,
+    component: Vec<usize>,
+    component_count: usize,
+}
+
+impl<'a> TarjanState<'a> {
+    fn new(adj: &'a [Vec<usize>]) -> Self {
+        let n = adj.len();
+        Self {
+            adj,
+            next_index: 0,
+            indices: vec![None; n],
+            low: vec![0; n],
+            stack: Vec::new(),
+            on_stack: vec![false; n],
+            component: vec![usize::MAX; n],
+            component_count: 0,
+        }
+    }
+
+    fn strongconnect(&mut self, node: usize) {
+        let index = self.next_index;
+        self.next_index += 1;
+        self.indices[node] = Some(index);
+        self.low[node] = index;
+        self.stack.push(node);
+        self.on_stack[node] = true;
+
+        let out_edges = self.adj[node].clone();
+        for next in out_edges {
+            if self.indices[next].is_none() {
+                self.strongconnect(next);
+                self.low[node] = self.low[node].min(self.low[next]);
+            } else if self.on_stack[next] {
+                if let Some(next_index) = self.indices[next] {
+                    self.low[node] = self.low[node].min(next_index);
+                }
+            }
+        }
+
+        if self.low[node] == self.indices[node].unwrap_or(usize::MAX) {
+            let component = self.component_count;
+            self.component_count += 1;
+            while let Some(member) = self.stack.pop() {
+                self.on_stack[member] = false;
+                self.component[member] = component;
+                if member == node {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/// Partition active rules into strata using the predicate dependency graph.
+///
+/// Positive body atoms contribute a non-strict dependency edge (`head` depends
+/// on `body`); negated atoms contribute a strict edge. Strongly-connected
+/// components are computed first, then strata are assigned over the
+/// condensation DAG. A negative edge inside one SCC is unstratifiable and is
+/// rejected instead of being evaluated to a non-terminating fixpoint.
+fn plan_strata<'a>(active_rules: &[&'a Rule]) -> Result<Vec<Vec<&'a Rule>>, String> {
+    let mut index: HashMap<String, usize> = HashMap::new();
+    let mut names: Vec<String> = Vec::new();
+    let mut edges: Vec<(usize, usize, bool)> = Vec::new();
+
+    for rule in active_rules {
+        let head = intern_predicate(&rule.head.name, &mut index, &mut names);
+        for atom in &rule.body {
+            if atom.is_inequality() {
+                continue;
+            }
+            let body = intern_predicate(&atom.name, &mut index, &mut names);
+            edges.push((head, body, atom.negated));
+        }
+    }
+
+    let n = names.len();
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for (head, body, _) in &edges {
+        adj[*head].push(*body);
+    }
+
+    let mut tarjan = TarjanState::new(&adj);
+    for node in 0..n {
+        if tarjan.indices[node].is_none() {
+            tarjan.strongconnect(node);
+        }
+    }
+    let component = tarjan.component;
+    let component_count = tarjan.component_count;
+
+    // A cycle containing a negated edge has no stratification.
+    for (head, body, negated) in &edges {
+        if *negated && component[*head] == component[*body] {
+            return Err(format!(
+                "unstratifiable negation: predicate `{}` occurs in a recursive cycle \
+                 that contains a negated dependency on `{}`; break the cycle or remove the \
+                 negation",
+                names[*head], names[*body]
+            ));
+        }
+    }
+
+    // Assign each component a stratum. Positive dependencies allow equality;
+    // negative dependencies require at least one extra stratum. The
+    // condensation graph is acyclic, so this relaxation terminates.
+    let mut component_stratum = vec![0usize; component_count];
+    let mut iterations = 0usize;
+    loop {
+        let mut changed = false;
+        iterations += 1;
+        if iterations > component_count + 1 {
+            return Err(
+                "unstratifiable negation: predicate dependency graph did not converge".to_string(),
+            );
+        }
+        for (head, body, negated) in &edges {
+            let head_component = component[*head];
+            let body_component = component[*body];
+            if head_component == body_component {
+                continue;
+            }
+            let required = component_stratum[body_component] + usize::from(*negated);
+            if component_stratum[head_component] < required {
+                component_stratum[head_component] = required;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    let max_stratum = component_stratum.iter().copied().max().unwrap_or(0);
+    let mut strata: Vec<Vec<&'a Rule>> = vec![Vec::new(); max_stratum + 1];
+    for rule in active_rules {
+        let head = index[&rule.head.name];
+        let stratum = component_stratum[component[head]];
+        strata[stratum].push(*rule);
+    }
+    Ok(strata)
+}
+
 /// First-column hash index over relation tuples, used to accelerate bound joins.
-type FirstColumnIndex<'a> = HashMap<&'a Val, Vec<&'a Vec<Val>>>;
+/// A frozen relation snapshot with a full-tuple hash set and one hash index per
+/// column. Frozen relations belong to already-evaluated strata (or the EDB), so
+/// the snapshot cannot become stale while a higher stratum is running.
+///
+/// Ground negated atoms are answered by [`RelationIndex::contains_exact`] in
+/// `O(1)`. Partially bound atoms use the index for the first bound column (or
+/// any bound column when the first is unbound), which keeps negation lookups
+/// proportional to the matching bucket rather than the relation size.
+#[derive(Debug, Clone, Default)]
+struct RelationIndex {
+    tuples: Vec<Vec<Val>>,
+    full: HashSet<Vec<Val>>,
+    columns: Vec<HashMap<Val, Vec<usize>>>,
+}
+
+impl RelationIndex {
+    fn new(tuples: Vec<Vec<Val>>) -> Self {
+        let arity = tuples.iter().map(Vec::len).max().unwrap_or(0);
+        let mut columns: Vec<HashMap<Val, Vec<usize>>> = vec![HashMap::new(); arity];
+        for (row, tuple) in tuples.iter().enumerate() {
+            for (column, value) in tuple.iter().enumerate() {
+                if column < columns.len() {
+                    columns[column].entry(value.clone()).or_default().push(row);
+                }
+            }
+        }
+        let full = tuples.iter().cloned().collect();
+        Self {
+            tuples,
+            full,
+            columns,
+        }
+    }
+
+    fn contains_exact(&self, tuple: &[Val]) -> bool {
+        self.full.contains(tuple)
+    }
+
+    /// `true` when any indexed tuple matches the compiled positive/negated
+    /// atom under the current variable bindings.
+    fn matches_compiled(&self, terms: &[CompiledTerm<'_>], bindings: &[Option<Val>]) -> bool {
+        if self.tuples.is_empty() {
+            return false;
+        }
+        if terms.len() != self.tuples[0].len() {
+            return false;
+        }
+
+        let mut bound_values: Vec<Option<&Val>> = Vec::with_capacity(terms.len());
+        let mut all_bound = true;
+        for term in terms {
+            let value = match term {
+                CompiledTerm::Const(value) => Some(*value),
+                CompiledTerm::Var(index) => bindings.get(*index).and_then(Option::as_ref),
+            };
+            if value.is_none() {
+                all_bound = false;
+            }
+            bound_values.push(value);
+        }
+
+        if all_bound {
+            let ground: Vec<Val> = bound_values
+                .into_iter()
+                .filter_map(|value| value.cloned())
+                .collect();
+            return self.contains_exact(&ground);
+        }
+
+        // If nothing is bound, existence of any tuple is enough: an unbound
+        // anonymous variable can unify with every column (range restriction is
+        // enforced separately for named variables).
+        let Some((column, key)) = bound_values
+            .iter()
+            .enumerate()
+            .find_map(|(column, value)| value.map(|value| (column, value)))
+        else {
+            return !self.tuples.is_empty();
+        };
+
+        self.columns
+            .get(column)
+            .and_then(|index| index.get(key))
+            .is_some_and(|rows| {
+                rows.iter()
+                    .any(|&row| row_matches_bindings(terms, &self.tuples[row], bindings))
+            })
+    }
+}
+
+/// A term compiled against the body's variable table.
+#[derive(Clone, Copy)]
+enum CompiledTerm<'a> {
+    Var(usize),
+    Const(&'a Val),
+}
+
+struct CompiledAtom<'a> {
+    body_index: usize,
+    name: &'a str,
+    terms: Vec<CompiledTerm<'a>>,
+}
+
+struct CompiledBody<'a> {
+    positive: Vec<CompiledAtom<'a>>,
+    filters: Vec<CompiledAtom<'a>>,
+    inequalities: Vec<(CompiledTerm<'a>, CompiledTerm<'a>)>,
+}
+
+fn compile_term<'a>(term: &'a Term, variables: &mut HashMap<&'a str, usize>) -> CompiledTerm<'a> {
+    match term {
+        Term::Const(value) => CompiledTerm::Const(value),
+        Term::Var(name) => {
+            let next = variables.len();
+            let index = *variables.entry(name.as_str()).or_insert(next);
+            CompiledTerm::Var(index)
+        }
+    }
+}
+
+fn compile_body<'a>(
+    body: &'a [Atom],
+    head_terms: &'a [Term],
+    variables: &mut HashMap<&'a str, usize>,
+) -> CompiledBody<'a> {
+    let mut positive = Vec::new();
+    let mut filters = Vec::new();
+    let mut inequalities = Vec::new();
+
+    for (body_index, atom) in body.iter().enumerate() {
+        if atom.is_inequality() {
+            if let (Some(left), Some(right)) = (atom.terms.first(), atom.terms.get(1)) {
+                inequalities.push((
+                    compile_term(left, variables),
+                    compile_term(right, variables),
+                ));
+            }
+            continue;
+        }
+        let compiled = CompiledAtom {
+            body_index,
+            name: atom.name.as_str(),
+            terms: atom
+                .terms
+                .iter()
+                .map(|term| compile_term(term, variables))
+                .collect(),
+        };
+        if atom.negated {
+            filters.push(compiled);
+        } else {
+            positive.push(compiled);
+        }
+    }
+
+    // Ensure head variables receive indices even if they do not occur in the
+    // body (an unsafe rule would leave them unbound and drop the row).
+    for term in head_terms {
+        compile_term(term, variables);
+    }
+
+    CompiledBody {
+        positive,
+        filters,
+        inequalities,
+    }
+}
+
+/// Non-allocating match check used by indices.
+fn row_matches_bindings(
+    terms: &[CompiledTerm<'_>],
+    tuple: &[Val],
+    bindings: &[Option<Val>],
+) -> bool {
+    if terms.len() != tuple.len() {
+        return false;
+    }
+    terms
+        .iter()
+        .zip(tuple.iter())
+        .all(|(term, value)| match term {
+            CompiledTerm::Var(index) => bindings
+                .get(*index)
+                .and_then(Option::as_ref)
+                .is_none_or(|existing| existing == value),
+            CompiledTerm::Const(constant) => *constant == value,
+        })
+}
+
+/// Bind one tuple against an atom's compiled terms. Newly bound variable
+/// indices are appended to `undo` so the caller can roll back.
+fn bind_terms(
+    terms: &[CompiledTerm<'_>],
+    tuple: &[Val],
+    bindings: &mut [Option<Val>],
+    undo: &mut Vec<usize>,
+) -> bool {
+    if terms.len() != tuple.len() {
+        return false;
+    }
+    for (term, value) in terms.iter().zip(tuple.iter()) {
+        match term {
+            CompiledTerm::Const(constant) => {
+                if *constant != value {
+                    return false;
+                }
+            }
+            CompiledTerm::Var(index) => match bindings.get(*index) {
+                Some(Some(existing)) if existing != value => return false,
+                Some(Some(_)) => {}
+                _ => {
+                    if let Some(slot) = bindings.get_mut(*index) {
+                        *slot = Some(value.clone());
+                        undo.push(*index);
+                    } else {
+                        return false;
+                    }
+                }
+            },
+        }
+    }
+    true
+}
+
+/// Backtracking join over positive atoms, with inequalities and negated atoms
+/// applied only after every positive variable is bound.
+#[allow(clippy::too_many_arguments)]
+fn join_atoms(
+    atom_index: usize,
+    positive: &[CompiledAtom<'_>],
+    relations: &[&HashSet<Vec<Val>>],
+    filters: &[CompiledAtom<'_>],
+    filter_indexes: &[&RelationIndex],
+    inequalities: &[(CompiledTerm<'_>, CompiledTerm<'_>)],
+    head: &[CompiledTerm<'_>],
+    bindings: &mut [Option<Val>],
+    undo: &mut Vec<usize>,
+    rows: &mut Vec<Vec<Val>>,
+) {
+    if atom_index == positive.len() {
+        for (filter, index) in filters.iter().zip(filter_indexes.iter()) {
+            if index.matches_compiled(&filter.terms, bindings) {
+                return;
+            }
+        }
+        for (left, right) in inequalities {
+            let left = resolve_compiled(left, bindings);
+            let right = resolve_compiled(right, bindings);
+            match (left, right) {
+                (Some(left), Some(right)) if left != right => {}
+                _ => return,
+            }
+        }
+
+        let mut row = Vec::with_capacity(head.len());
+        for term in head {
+            match term {
+                CompiledTerm::Const(value) => row.push((*value).clone()),
+                CompiledTerm::Var(index) => match bindings.get(*index).and_then(Option::as_ref) {
+                    Some(value) => row.push(value.clone()),
+                    // Unsafe head variable: match the historical behaviour of
+                    // dropping the incomplete row.
+                    None => return,
+                },
+            }
+        }
+        rows.push(row);
+        return;
+    }
+
+    let atom = &positive[atom_index];
+    for tuple in relations[atom_index].iter() {
+        let mark = undo.len();
+        if bind_terms(&atom.terms, tuple, bindings, undo) {
+            join_atoms(
+                atom_index + 1,
+                positive,
+                relations,
+                filters,
+                filter_indexes,
+                inequalities,
+                head,
+                bindings,
+                undo,
+                rows,
+            );
+        }
+        while undo.len() > mark {
+            if let Some(index) = undo.pop() {
+                bindings[index] = None;
+            }
+        }
+    }
+}
+
+fn resolve_compiled<'a>(term: &CompiledTerm<'a>, bindings: &'a [Option<Val>]) -> Option<&'a Val> {
+    match term {
+        CompiledTerm::Const(value) => Some(*value),
+        CompiledTerm::Var(index) => bindings.get(*index).and_then(Option::as_ref),
+    }
+}
 
 /// The Datalog interpreter: loads EDB, evaluates rules, returns results.
 pub struct Interpreter {
     edb: Edb,
     idb: HashMap<String, HashSet<Vec<Val>>>,
     empty: HashSet<Vec<Val>>,
+    /// Lazily-built indices for relations in frozen (lower) strata.
+    negation_indexes: HashMap<String, RelationIndex>,
 }
 
 impl Interpreter {
@@ -649,6 +1208,7 @@ impl Interpreter {
             edb,
             idb: HashMap::new(),
             empty: HashSet::new(),
+            negation_indexes: HashMap::new(),
         }
     }
 
@@ -695,201 +1255,101 @@ impl Interpreter {
                 .all(|query| self.goals_satisfied(&query.goals))
     }
 
-    /// Evaluate a body (rule body or query goals), optionally replacing one
-    /// positive body atom's relation with the semi-naive delta relation.
-    /// Returns the surviving variable substitutions.
-    fn evaluate_body(
-        &self,
+    /// Get (building and caching on first use) the frozen index for `name`.
+    ///
+    /// Stratified evaluation guarantees that a negated predicate has already
+    /// reached its fixed point, so the snapshot can safely be reused across
+    /// every rule and iteration in the negating stratum.
+    fn negation_index(&mut self, name: &str) -> &RelationIndex {
+        if !self.negation_indexes.contains_key(name) {
+            let tuples: Vec<Vec<Val>> = self.get_relation(name).iter().cloned().collect();
+            self.negation_indexes
+                .insert(name.to_string(), RelationIndex::new(tuples));
+        }
+        &self.negation_indexes[name]
+    }
+
+    /// Evaluate a body (rule body or query goals) and derive rows for
+    /// `head_terms`. Runs a backtracking tuple join with a single reusable
+    /// binding table, so a 200k-row scan does not allocate a `HashMap` per
+    /// intermediate substitution.
+    fn evaluate_rows(
+        &mut self,
         body: &[Atom],
+        head_terms: &[Term],
         delta_pos: Option<usize>,
         delta: &HashMap<String, HashSet<Vec<Val>>>,
-    ) -> Vec<HashMap<String, Val>> {
-        let mut substitutions = vec![HashMap::<String, Val>::new()];
+    ) -> Vec<Vec<Val>> {
+        let mut variables: HashMap<&str, usize> = HashMap::new();
+        let compiled = compile_body(body, head_terms, &mut variables);
+        let head: Vec<CompiledTerm<'_>> = head_terms
+            .iter()
+            .map(|term| compile_term(term, &mut variables))
+            .collect();
 
-        // 1. Positive relation atoms (inequalities and negations are filters).
-        for (atom_idx, atom) in body.iter().enumerate() {
-            if atom.negated || atom.is_inequality() {
-                continue;
-            }
-            let relation: Vec<&Vec<Val>> = if delta_pos == Some(atom_idx) {
-                match delta.get(&atom.name) {
-                    Some(d) if !d.is_empty() => d.iter().collect(),
-                    _ => return Vec::new(),
-                }
-            } else {
-                self.get_relation(&atom.name).iter().collect()
-            };
-            if relation.is_empty() {
-                return Vec::new();
-            }
-
-            // Build a first-column index if the relation has >= 32 tuples
-            let use_first_col_index = relation.len() >= 32 && !atom.terms.is_empty();
-            let mut col0_index: FirstColumnIndex<'_> = HashMap::new();
-            if use_first_col_index {
-                for &tuple in &relation {
-                    if let Some(first_val) = tuple.first() {
-                        col0_index.entry(first_val).or_default().push(tuple);
-                    }
-                }
-            }
-
-            let mut next_subs = Vec::new();
-            for sub in &substitutions {
-                // Check if term[0] resolves to a known Val (either Const or bound Var)
-                let bound_first: Option<&Val> = match atom.terms.first() {
-                    Some(Term::Const(v)) => Some(v),
-                    Some(Term::Var(var_name)) => sub.get(var_name),
-                    None => None,
-                };
-
-                if use_first_col_index {
-                    if let Some(key_val) = bound_first {
-                        if let Some(bucket) = col0_index.get(key_val) {
-                            for &tuple in bucket {
-                                if let Some(new_sub) = unify(sub, &atom.terms, tuple) {
-                                    next_subs.push(new_sub);
-                                }
-                            }
-                        }
-                        continue;
-                    }
-                }
-
-                for &tuple in &relation {
-                    if let Some(new_sub) = unify(sub, &atom.terms, tuple) {
-                        next_subs.push(new_sub);
-                    }
-                }
-            }
-            if next_subs.is_empty() {
-                return Vec::new();
-            }
-            substitutions = next_subs;
+        // Materialize every negated-relation index before taking the immutable
+        // relation borrows below.
+        for filter in &compiled.filters {
+            self.negation_index(filter.name);
         }
+        let filter_indexes: Vec<&RelationIndex> = compiled
+            .filters
+            .iter()
+            .map(|filter| &self.negation_indexes[filter.name])
+            .collect();
 
-        if substitutions.is_empty() {
-            return Vec::new();
-        }
-
-        // 2. Inequality constraints (`A != B`) are applied only after all
-        //    positive bindings exist, so every variable is grounded.
-        for atom in body.iter().filter(|atom| atom.is_inequality()) {
-            substitutions.retain(|sub| {
-                let left = atom.terms.first().and_then(|t| resolve_term(sub, t));
-                let right = atom.terms.get(1).and_then(|t| resolve_term(sub, t));
-                match (left, right) {
-                    (Some(a), Some(b)) => a != b,
-                    // Ungrounded inequalities are rejected by `validate_grounding`
-                    // before evaluation; keep the row only if we cannot evaluate.
-                    _ => false,
-                }
-            });
-            if substitutions.is_empty() {
-                return Vec::new();
-            }
-        }
-
-        // 3. Apply negation filters (with first-column index when relation >= 32 tuples)
-        for atom in body.iter().filter(|atom| atom.negated) {
-            let relation: Vec<&Vec<Val>> = self.get_relation(&atom.name).iter().collect();
-            if relation.is_empty() {
-                continue;
-            }
-            let use_first_col_index = relation.len() >= 32 && !atom.terms.is_empty();
-            let mut col0_index: FirstColumnIndex<'_> = HashMap::new();
-            if use_first_col_index {
-                for &tuple in &relation {
-                    if let Some(first_val) = tuple.first() {
-                        col0_index.entry(first_val).or_default().push(tuple);
-                    }
-                }
-            }
-
-            let before = substitutions.len();
-            substitutions.retain(|sub| {
-                let bound_first: Option<&Val> = match atom.terms.first() {
-                    Some(Term::Const(v)) => Some(v),
-                    Some(Term::Var(var_name)) => sub.get(var_name),
-                    None => None,
-                };
-                let matched = if use_first_col_index {
-                    if let Some(key_val) = bound_first {
-                        col0_index.get(key_val).is_some_and(|bucket| {
-                            bucket
-                                .iter()
-                                .any(|tuple| unify(sub, &atom.terms, tuple).is_some())
-                        })
-                    } else {
-                        relation
-                            .iter()
-                            .any(|tuple| unify(sub, &atom.terms, tuple).is_some())
-                    }
+        let relations: Vec<&HashSet<Vec<Val>>> = compiled
+            .positive
+            .iter()
+            .map(|atom| {
+                if delta_pos == Some(atom.body_index) {
+                    delta.get(atom.name).unwrap_or(&self.empty)
                 } else {
-                    relation
-                        .iter()
-                        .any(|tuple| unify(sub, &atom.terms, tuple).is_some())
-                };
-                if cfg!(test) && matched {
-                    eprintln!("    sub {:?} matched edge tuple, filtered out", sub);
+                    self.get_relation(atom.name)
                 }
-                !matched
-            });
-            if cfg!(test) {
-                eprintln!(
-                    "  negation '{}' filtered {} -> {} subs",
-                    atom.name,
-                    before,
-                    substitutions.len()
-                );
-            }
-        }
+            })
+            .collect();
 
-        substitutions
+        let mut bindings: Vec<Option<Val>> = vec![None; variables.len()];
+        let mut undo: Vec<usize> = Vec::new();
+        let mut rows = Vec::new();
+        join_atoms(
+            0,
+            &compiled.positive,
+            &relations,
+            &compiled.filters,
+            &filter_indexes,
+            &compiled.inequalities,
+            &head,
+            &mut bindings,
+            &mut undo,
+            &mut rows,
+        );
+        rows
     }
 
     /// Evaluate a single rule body and derive head tuples.
     fn evaluate_rule(
-        &self,
+        &mut self,
         rule: &Rule,
         delta_pos: Option<usize>,
         delta: &HashMap<String, HashSet<Vec<Val>>>,
     ) -> Vec<Vec<Val>> {
-        self.evaluate_body(&rule.body, delta_pos, delta)
-            .into_iter()
-            .map(|sub| {
-                rule.head
-                    .terms
-                    .iter()
-                    .filter_map(|term| match term {
-                        Term::Const(v) => Some(v.clone()),
-                        Term::Var(var) => sub.get(var).cloned(),
-                    })
-                    .collect()
-            })
-            .collect()
+        self.evaluate_rows(&rule.body, &rule.head.terms, delta_pos, delta)
     }
 
     /// Evaluate one conjunctive query and project its named variables.
     /// Returns `(variables, rows)`, with duplicate rows removed.
-    fn evaluate_query(&self, goals: &[Atom]) -> (Vec<String>, Vec<Vec<Val>>) {
-        let empty_delta = HashMap::new();
-        let substitutions = self.evaluate_body(goals, None, &empty_delta);
-
+    fn evaluate_query(&mut self, goals: &[Atom]) -> (Vec<String>, Vec<Vec<Val>>) {
         let variables = query_variables(goals);
-
-        let mut rows: Vec<Vec<Val>> = Vec::new();
-        let mut seen: HashSet<Vec<Val>> = HashSet::new();
-        for sub in &substitutions {
-            let row: Vec<Val> = variables
-                .iter()
-                .filter_map(|var| sub.get(var).cloned())
-                .collect();
-            if (variables.is_empty() || row.len() == variables.len()) && seen.insert(row.clone()) {
-                rows.push(row);
-            }
-        }
+        let head: Vec<Term> = variables
+            .iter()
+            .map(|name| Term::Var(name.clone()))
+            .collect();
+        let empty_delta = HashMap::new();
+        let mut rows = self.evaluate_rows(goals, &head, None, &empty_delta);
         rows.sort();
+        rows.dedup();
         (variables, rows)
     }
 
@@ -939,103 +1399,113 @@ impl Interpreter {
             );
         }
 
-        // Semi-naive fixed-point iteration — only over goal-reachable rules.
-        // `delta` holds tuples derived in the previous iteration; recursive body
-        // atoms are joined against the delta instead of the full relation.
-        let idb_predicates: HashSet<String> =
-            active_rules.iter().map(|r| r.head.name.clone()).collect();
-        // Seed the delta with explicit program facts so rules that consume them fire.
-        let mut delta: HashMap<String, HashSet<Vec<Val>>> = self.idb.clone();
-        let mut first_iteration = true;
-        let mut reached_fixpoint = active_rules.is_empty();
+        // Partition goal-reachable rules into strata. Lower strata are fully
+        // materialized before any higher stratum that negates them runs, so
+        // every `not p(...)` sees a frozen relation.
+        let strata = plan_strata(&active_rules)?;
         let mut steps_used = 0usize;
-        for _step in 0..step_budget {
-            if reached_fixpoint {
+        let mut queries_done = self.all_queries_satisfied(program);
+
+        for rules in &strata {
+            if queries_done {
                 break;
             }
-            if start.elapsed().as_secs() > 30 {
-                return Err("Datalog evaluation timed out (>30s)".to_string());
+            let idb_predicates: HashSet<String> =
+                rules.iter().map(|rule| rule.head.name.clone()).collect();
+
+            // Seed the delta with explicit facts / any tuples already derived
+            // for this stratum so rules that consume them fire.
+            let mut delta: HashMap<String, HashSet<Vec<Val>>> = HashMap::new();
+            for predicate in &idb_predicates {
+                if let Some(tuples) = self.idb.get(predicate) {
+                    if !tuples.is_empty() {
+                        delta.insert(predicate.clone(), tuples.clone());
+                    }
+                }
             }
-            steps_used += 1;
 
-            let mut derived: HashMap<String, HashSet<Vec<Val>>> = HashMap::new();
+            let mut first_iteration = true;
+            loop {
+                if start.elapsed().as_secs() > 30 {
+                    return Err("Datalog evaluation timed out (>30s)".to_string());
+                }
+                if steps_used >= step_budget {
+                    return Err(format!(
+                        "Datalog execution exceeded maximum step limit of {step_budget}"
+                    ));
+                }
+                steps_used += 1;
 
-            for rule in &active_rules {
-                let positive_idb_positions: Vec<usize> = rule
-                    .body
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, atom)| {
-                        !atom.negated
-                            && !atom.is_inequality()
-                            && idb_predicates.contains(&atom.name)
-                    })
-                    .map(|(idx, _)| idx)
-                    .collect();
-                let has_idb_body = rule
-                    .body
-                    .iter()
-                    .any(|atom| !atom.is_inequality() && idb_predicates.contains(&atom.name));
+                let mut derived: HashMap<String, HashSet<Vec<Val>>> = HashMap::new();
 
-                if positive_idb_positions.is_empty() {
-                    // Base rule (EDB-only) evaluates once; rules with only negated IDB
-                    // atoms are re-evaluated as the IDB grows.
-                    if !first_iteration && !has_idb_body {
+                for rule in rules {
+                    let positive_idb_positions: Vec<usize> = rule
+                        .body
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, atom)| {
+                            !atom.negated
+                                && !atom.is_inequality()
+                                && idb_predicates.contains(&atom.name)
+                        })
+                        .map(|(idx, _)| idx)
+                        .collect();
+
+                    if positive_idb_positions.is_empty() {
+                        // Base rule: its inputs are EDB or lower-stratum
+                        // relations, so evaluating it once per stratum is
+                        // sufficient.
+                        if !first_iteration {
+                            continue;
+                        }
+                        for tuple in self.evaluate_rule(rule, None, &delta) {
+                            derived
+                                .entry(rule.head.name.clone())
+                                .or_default()
+                                .insert(tuple);
+                        }
                         continue;
                     }
-                    for tuple in self.evaluate_rule(rule, None, &delta) {
-                        derived
-                            .entry(rule.head.name.clone())
-                            .or_default()
-                            .insert(tuple);
-                    }
-                    continue;
-                }
 
-                for pos in positive_idb_positions {
-                    for tuple in self.evaluate_rule(rule, Some(pos), &delta) {
-                        derived
-                            .entry(rule.head.name.clone())
-                            .or_default()
-                            .insert(tuple);
+                    for pos in positive_idb_positions {
+                        for tuple in self.evaluate_rule(rule, Some(pos), &delta) {
+                            derived
+                                .entry(rule.head.name.clone())
+                                .or_default()
+                                .insert(tuple);
+                        }
                     }
                 }
-            }
 
-            // Merge newly derived tuples into the IDB and build the next delta.
-            let mut next_delta: HashMap<String, HashSet<Vec<Val>>> = HashMap::new();
-            let mut changed = false;
-            for (pred, tuples) in derived {
-                let entry = self.idb.entry(pred.clone()).or_default();
-                for tuple in tuples {
-                    if entry.insert(tuple.clone()) {
-                        next_delta.entry(pred.clone()).or_default().insert(tuple);
-                        changed = true;
+                // Merge newly derived tuples into the IDB and build the next delta.
+                let mut next_delta: HashMap<String, HashSet<Vec<Val>>> = HashMap::new();
+                let mut changed = false;
+                for (predicate, tuples) in derived {
+                    let entry = self.idb.entry(predicate.clone()).or_default();
+                    for tuple in tuples {
+                        if entry.insert(tuple.clone()) {
+                            next_delta
+                                .entry(predicate.clone())
+                                .or_default()
+                                .insert(tuple);
+                            changed = true;
+                        }
                     }
                 }
-            }
 
-            delta = next_delta;
-            first_iteration = false;
-            if !changed {
-                reached_fixpoint = true;
-                break;
-            }
+                if !changed {
+                    break;
+                }
+                delta = next_delta;
+                first_iteration = false;
 
-            // For fully-ground goals, existence is monotone: once every goal atom is
-            // satisfied, no later derivation can invalidate it. Stop early instead of
-            // materializing the entire closure (a large win on long chains).
-            if self.all_queries_satisfied(program) {
-                reached_fixpoint = true;
-                break;
+                // Ground positive goals are monotone: once satisfied, further
+                // strata cannot invalidate them.
+                if self.all_queries_satisfied(program) {
+                    queries_done = true;
+                    break;
+                }
             }
-        }
-
-        if !reached_fixpoint {
-            return Err(format!(
-                "Datalog execution exceeded maximum step limit of {}",
-                step_budget
-            ));
         }
 
         // Evaluate every `?-` query against the shared materialized IDB.
@@ -1048,17 +1518,7 @@ impl Interpreter {
                 .unwrap_or_else(|| format!("query_{}", index + 1));
             results.push((name, rows));
         }
-
         Ok((results, steps_used))
-    }
-}
-
-/// Resolve a term against a substitution. Constants resolve to themselves;
-/// variables only resolve when bound.
-fn resolve_term(sub: &HashMap<String, Val>, term: &Term) -> Option<Val> {
-    match term {
-        Term::Const(v) => Some(v.clone()),
-        Term::Var(var) => sub.get(var).cloned(),
     }
 }
 
@@ -1101,33 +1561,24 @@ fn validate_body_grounding(body: &[Atom], context: &str) -> Result<(), String> {
             }
         }
     }
-    Ok(())
-}
 
-/// Unify a substitution with an atom's terms against a concrete tuple.
-/// Returns a new (extended) substitution if unification succeeds.
-fn unify(
-    sub: &HashMap<String, Val>,
-    terms: &[Term],
-    tuple: &[Val],
-) -> Option<HashMap<String, Val>> {
-    if terms.len() != tuple.len() {
-        return None;
-    }
-    let mut new_sub = sub.clone();
-    for (term, val) in terms.iter().zip(tuple.iter()) {
-        match term {
-            Term::Var(var) => match new_sub.get(var) {
-                Some(existing) if existing != val => return None,
-                _ => {
-                    new_sub.insert(var.clone(), val.clone());
+    // Range restriction for negation: every named variable in a negated atom
+    // must be bound before the negation runs. Anonymous `_` variables are
+    // wildcards and are exempt.
+    for atom in body.iter().filter(|atom| atom.negated) {
+        for term in &atom.terms {
+            if let Term::Var(var) = term {
+                if !var.starts_with("__anon_") && !bound.contains(var.as_str()) {
+                    return Err(format!(
+                        "{context}: variable `{var}` appears in a negated atom `{}` but is not \
+                         bound by a positive body atom (range restriction)",
+                        atom.name
+                    ));
                 }
-            },
-            Term::Const(c) if c != val => return None,
-            _ => {}
+            }
         }
     }
-    Some(new_sub)
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1206,9 +1657,11 @@ pub fn run_datalog_report(
     let mut program = parse(&tokens)?;
     program.merge_stdlib(stdlib_rules().as_ref().clone());
 
-    // Step 3: Load EDB once for every query in the program.
+    // Step 3: Load only the EDB relations reachable from the query goals.
+    let edb_names = edb_relation_names();
+    let needed = compute_needed_predicates_with(&program, &edb_names);
     let mut edb = Edb::default();
-    edb.load_from_graph(graph);
+    edb.load_from_graph_selective(graph, &needed);
 
     // Guard: check relation sizes
     for (name, facts) in &edb.relations {
@@ -1331,7 +1784,7 @@ fn query_variables(goals: &[Atom]) -> Vec<String> {
 
 fn json_value(value: &Val) -> String {
     match value {
-        Val::Str(s) => s.clone(),
+        Val::Str(s) => s.to_string(),
         Val::Int(n) => n.to_string(),
     }
 }
@@ -1568,7 +2021,7 @@ mod tests {
             .1
             .iter()
             .map(|t| match &t[0] {
-                Val::Str(s) => s.clone(),
+                Val::Str(s) => s.to_string(),
                 _ => String::new(),
             })
             .collect();

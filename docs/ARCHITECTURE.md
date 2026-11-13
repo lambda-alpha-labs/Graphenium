@@ -138,7 +138,9 @@ Axioms are classified into four buckets:
 | `native_eval_shortcut` | `Lean.ofReduceBool`, `Lean.trustCompiler` | `unverified_native_decide` (`AMBIGUOUS`) |
 | `external_axiom` | User `axiom`s, certificate axioms | `depends_on_axiom` (`AMBIGUOUS`) |
 
-This closes the syntactic-proof-gap blind spot: a theorem may contain no `sorry` token yet still depend on a user axiom or `native_decide`. `gm trust` resolves the transitive dependency cone, reports inherited axioms by class, and exits non-zero on disallowed external axioms, `sorryAx`, or (with `--forbid-native-decide`) native-decision shortcuts. Datalog exposes the same facts as `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`.
+This closes the syntactic-proof-gap blind spot: a theorem may contain no `sorry` token yet still depend on a user axiom or `native_decide`. `gm trust` resolves the transitive dependency cone, reports inherited axioms by class, and exits non-zero on disallowed external axioms, `sorryAx`, or (with `--forbid-native-decide`) native-decision shortcuts. Datalog exposes the same facts as `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`, plus hypothesis propagation via `depends_on_hypothesis/2`, `inherits_hypothesis/2`, and `conditional_theorem/1`.
+
+The extractor also records binder hypotheses. A declaration such as `theorem T (h : EdgeAtlasCertificate) : Goal` receives a `depends_on_hypothesis` edge to `EdgeAtlasCertificate` when that type is a project-defined structure, class, inductive, def, or opaque declaration. `gm trust` propagates these edges transitively and classifies the theorem as `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED`; conditional theorems fail CI unless their assumptions are allowed with `--allow-hypothesis` or `.graphenium/policy.json`. Datalog exposes `depends_on_hypothesis/2`, `inherits_hypothesis/2`, and `conditional_theorem/1`.
 
 ---
 
@@ -221,9 +223,13 @@ Graphenium parses your `.graphenium/policy.json` rules and translates them into 
 
 ### Evaluation Strategy
 
-The solver uses goal-directed rule selection, first-column hash indexes for bound joins, and semi-naive delta relations so recursive rules only join newly derived tuples. Fully-ground existence goals stop as soon as every goal atom is satisfied.
+The solver uses goal-directed rule selection, terminal-first backtracking joins, and semi-naive delta relations so recursive rules only join newly derived tuples. Fully-ground existence goals stop as soon as every goal atom is satisfied.
 
-Query syntax supports negation (`not` / `!`), inequality (`A != B` / `A /= B`), and multiple labelled `?-` blocks. Inequality constraints are evaluated only after all positive body atoms have bound their variables; an ungrounded inequality is a validation error. Multiple `?-` queries share one materialized EDB/IDB and one step budget, and `gm query --datalog ... --json` returns the `datalog.v1` report.
+Negation is **stratified**. Graphenium builds the predicate dependency graph over all rules reachable from the query goals, partitions predicates into strongly connected components, and evaluates strata in dependency order. A recursive cycle containing a negative edge is rejected with an explicit validation error instead of being evaluated to a non-terminating fixpoint. Lower strata are materialized before any higher stratum that negates them, so every `not p(...)` sees a frozen relation.
+
+Frozen relations maintain a full-tuple `HashSet` for ground checks and one hash index per column for partially bound joins. This keeps negation proportional to the matching bucket instead of scanning hundred-thousand-row relations. Query bodies also reorder positive atoms ahead of `not` and `!=` filters; a named variable that appears only in a negated atom is rejected by range-restriction validation.
+
+Query syntax supports negation (`not` / `!`), inequality (`A != B` / `A /= B`), and multiple labelled `?-` blocks. Inequality constraints are evaluated only after all positive body atoms have bound their variables; an ungrounded inequality is a validation error. Multiple `?-` queries share one materialized EDB/IDB and one step budget, and `gm query --datalog ... --json` returns the `datalog.v1` report. Only EDB relations reachable from the goals are materialized.
 
 ### Verification Predicates
 
@@ -234,6 +240,7 @@ Beyond architectural policy helpers, `stdlib.dl` includes:
 *   `unreachable_from(Entry, Node)` - finds symbols not transitively reachable from an entry point.
 *   `has_proof_gap(X)` / `tainted_by_proof_gap(X)` - detects Lean `sorry`/`admit` gaps and propagates taint through dependency chains.
 *   `uses_axiom(Decl, Axiom)` / `has_untrusted_axiom(X)` / `has_native_decide(X)` / `untrusted_theorem(X)` - audits semantic `#print axioms` facts, including non-kernel and `native_decide` trust shortcuts.
+*   `depends_on_hypothesis(X, H)` / `inherits_hypothesis(X, H)` / `conditional_theorem(X)` - detects binder hypotheses and propagates them transitively, so kernel-clean conditional theorems are queryable.
 *   Inequality constraints (`A != B` / `A /= B`) are first-class body items; they are evaluated after positive bindings and rejected when a variable is ungrounded.
 
 ---
@@ -254,4 +261,4 @@ Graphenium implements advanced network analysis algorithms to identify architect
 | **Dynamic Dispatch & Reflection** | Purely static analysis may miss runtime dependency injections. | Use Graphenium's **optional semantic pass** or import **runtime telemetry traces** to overlay execution paths. |
 | **Contextual Ambiguity** | Identical names in different folders can create identifier collisions. | Graphenium enforces the use of **qualified labels** and namespace scoping to distinguish identically named classes. |
 | **No Source-Code Mutation** | Graphenium is a gating layer; it does not write code edits. | Run Graphenium directly inside git commit hooks or CI pipelines to block bad agentic output before merge. |
-| **Syntactic Proof Gaps** | The default Lean extractor is token-based; custom axioms or tactics that conceal incompleteness may not be flagged without semantic input. | Ingest `#print axioms` explicitly (`gm run --lean-axioms`, `gm trust`) so `sorryAx`, external axioms, and `native_decide` shortcuts become graph edges. |
+| **Syntactic Proof Gaps** | The default Lean extractor is token-based; custom axioms, binder hypotheses, or tactics that conceal incompleteness may not be flagged without semantic input. | Ingest `#print axioms` explicitly (`gm run --lean-axioms`, `gm trust`) and use hypothesis-aware trust (`--allow-hypothesis`, `.graphenium/policy.json`) so `sorryAx`, external axioms, `native_decide` shortcuts, and unconstructed structure parameters become graph facts. |

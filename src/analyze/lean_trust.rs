@@ -16,7 +16,18 @@ use crate::extract::lean_axioms::{
 use crate::model::{make_id, GrapheniumGraph};
 
 /// Relations that propagate theorem dependencies.
-const DEPENDENCY_RELATIONS: &[&str] = &["calls", "depends_on", "imports", "inherits", "implements"];
+const DEPENDENCY_RELATIONS: &[&str] = &[
+    "calls",
+    "depends_on",
+    "imports",
+    "inherits",
+    "implements",
+    "depends_on_hypothesis",
+    "parameter_type",
+];
+
+/// Relations that introduce a hypothesis/parameter assumption.
+const HYPOTHESIS_RELATIONS: &[&str] = &["depends_on_hypothesis", "parameter_type"];
 
 /// Options controlling a trust audit.
 #[derive(Debug, Clone, Default)]
@@ -27,6 +38,13 @@ pub struct TrustOptions {
     pub forbid_native_decide: bool,
     /// Additional external axioms that are explicitly allowed.
     pub allowed_axioms: Vec<String>,
+    /// Explicitly flagged hypotheses (declaration labels, qualified names, or
+    /// node IDs).
+    pub hypotheses: Vec<String>,
+    /// Hypotheses that are explicitly allowed despite being inherited.
+    pub allowed_hypotheses: Vec<String>,
+    /// Warn when an inherited parameter targets a structure/class/opaque type.
+    pub warn_structure_params: bool,
 }
 
 /// One inherited axiom.
@@ -37,15 +55,73 @@ pub struct InheritedAxiom {
     pub allowed: bool,
 }
 
+/// One inherited hypothesis or binder parameter.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Assumption {
+    pub name: String,
+    /// `hypothesis` for `depends_on_hypothesis`, `parameter_type` for the
+    /// alternative relation emitted by some extractors.
+    pub kind: String,
+    /// `direct` when the audited theorem itself declares the binder;
+    /// `transitive` when a downstream dependency introduces it.
+    #[serde(rename = "direct_or_transitive")]
+    pub scope: String,
+    /// Human-readable declaration that introduced the binder.
+    pub introduced_by: String,
+    pub source_file: String,
+    /// Internal hint used by `--warn-structure-params`; never serialized.
+    #[serde(skip)]
+    pub hidden: bool,
+    /// Alternative spellings (node ID, label, qualified label) used to match
+    /// `--allow-hypothesis`; never serialized.
+    #[serde(skip)]
+    pub aliases: Vec<String>,
+}
+
+/// Explicit three-way trust classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum TrustStatus {
+    /// Kernel-clean and free of inherited hypotheses.
+    Unconditional,
+    /// Kernel-clean but conditional on one or more hypotheses.
+    Conditional,
+    /// Inherits a proof gap, forbidden native decision, or disallowed axiom.
+    Tainted,
+}
+
+impl TrustStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TrustStatus::Unconditional => "UNCONDITIONAL",
+            TrustStatus::Conditional => "CONDITIONAL",
+            TrustStatus::Tainted => "TAINTED",
+        }
+    }
+}
+
 /// Trust result for one theorem.
 #[derive(Debug, Clone, Serialize)]
 pub struct TheoremTrust {
     pub theorem: String,
     pub node_id: String,
+    pub status: TrustStatus,
     /// Node IDs in the transitive dependency cone (including the theorem).
     pub dependencies: Vec<String>,
     /// Directly and transitively inherited axioms.
     pub axioms: Vec<InheritedAxiom>,
+    #[serde(default)]
+    pub kernel_axioms: Vec<String>,
+    #[serde(default)]
+    pub external_axioms: Vec<String>,
+    #[serde(default)]
+    pub assumptions: Vec<Assumption>,
+    #[serde(default)]
+    pub proof_gaps: Vec<String>,
+    #[serde(default)]
+    pub native_decide: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub has_sorry: bool,
     pub has_native_decide: bool,
     /// External axioms that are not allowlisted.
@@ -75,6 +151,7 @@ impl TrustReport {
         for theorem in &self.theorems {
             out.push_str(&format!("## `{}`\n\n", theorem.theorem));
             out.push_str(&format!("- Node: `{}`\n", theorem.node_id));
+            out.push_str(&format!("- Status: `{}`\n", theorem.status.as_str()));
             out.push_str(&format!(
                 "- Dependencies: {} node(s)\n",
                 theorem.dependencies.len()
@@ -97,6 +174,26 @@ impl TrustReport {
                     ));
                 }
             }
+            if theorem.assumptions.is_empty() {
+                out.push_str("- Assumptions: none\n");
+            } else {
+                out.push_str("- Assumptions:\n");
+                for assumption in &theorem.assumptions {
+                    out.push_str(&format!(
+                        "  - `{}` ({}, {}) introduced by `{}`\n",
+                        assumption.name,
+                        assumption.kind,
+                        assumption.scope,
+                        assumption.introduced_by
+                    ));
+                }
+            }
+            if !theorem.warnings.is_empty() {
+                out.push_str("- Warnings:\n");
+                for warning in &theorem.warnings {
+                    out.push_str(&format!("  - {warning}\n"));
+                }
+            }
             if !theorem.disallowed_axioms.is_empty() {
                 out.push_str(&format!(
                     "- Disallowed: {}\n",
@@ -115,6 +212,50 @@ impl TrustReport {
         });
         out
     }
+}
+
+/// Lightweight aggregate used by `gm check`, `verify_changes`, and
+/// `get_graph_info` to surface conditional theorems without changing the MCP
+/// tool count.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct TrustSummary {
+    pub theorems: usize,
+    pub unconditional: usize,
+    pub conditional: usize,
+    pub tainted: usize,
+    pub assumptions: Vec<String>,
+    pub conditional_theorems: Vec<String>,
+}
+
+/// Summarize Lean trust data already present in the graph. Returns `None` when
+/// no axiom or hypothesis data has been loaded.
+pub fn summarize(graph: &GrapheniumGraph) -> Option<TrustSummary> {
+    let report = evaluate_trust(graph, None, &TrustOptions::default()).ok()?;
+    if report.theorems.is_empty() {
+        return None;
+    }
+    let mut summary = TrustSummary {
+        theorems: report.theorems.len(),
+        ..TrustSummary::default()
+    };
+    for theorem in &report.theorems {
+        match theorem.status {
+            TrustStatus::Unconditional => summary.unconditional += 1,
+            TrustStatus::Conditional => {
+                summary.conditional += 1;
+                summary.conditional_theorems.push(theorem.theorem.clone());
+            }
+            TrustStatus::Tainted => summary.tainted += 1,
+        }
+        for assumption in &theorem.assumptions {
+            if !summary.assumptions.contains(&assumption.name) {
+                summary.assumptions.push(assumption.name.clone());
+            }
+        }
+    }
+    summary.assumptions.sort();
+    summary.conditional_theorems.sort();
+    Some(summary)
 }
 
 /// Evaluate the trust cone for one or all reported theorems.
@@ -151,7 +292,8 @@ pub fn evaluate_trust(
                 if matches!(
                     edge.relation.as_str(),
                     "depends_on_axiom" | "unverified_sorry" | "unverified_native_decide"
-                ) {
+                ) || HYPOTHESIS_RELATIONS.contains(&edge.relation.as_str())
+                {
                     ids.push(edge.source.clone());
                 }
             }
@@ -174,17 +316,20 @@ pub fn evaluate_trust(
         .iter()
         .map(|name| normalize_axiom_name(name))
         .collect();
+    let allowed_hypotheses: HashSet<String> = options
+        .allowed_hypotheses
+        .iter()
+        .map(|name| normalize_axiom_name(name))
+        .collect();
+    let flagged_hypotheses: HashSet<String> = options
+        .hypotheses
+        .iter()
+        .map(|name| normalize_axiom_name(name))
+        .collect();
 
     let mut theorems = Vec::new();
     for node_id in targets {
-        let theorem_name = graph
-            .node_data(&node_id)
-            .map(|node| {
-                node.qualified_label
-                    .clone()
-                    .unwrap_or_else(|| node.label.clone())
-            })
-            .unwrap_or_else(|| node_id.clone());
+        let theorem_name = node_display_name(graph, &node_id);
 
         let dependencies = dependency_cone(graph, &node_id);
         let mut axiom_names: BTreeSet<String> = BTreeSet::new();
@@ -215,6 +360,10 @@ pub fn evaluate_trust(
 
         let mut axioms = Vec::new();
         let mut disallowed = Vec::new();
+        let mut kernel_axioms = Vec::new();
+        let mut external_axioms = Vec::new();
+        let mut proof_gaps = Vec::new();
+        let mut native_decide = Vec::new();
         let mut has_sorry = false;
         let mut has_native_decide = false;
 
@@ -234,6 +383,12 @@ pub fn evaluate_trust(
                 }
                 AxiomClass::ExternalAxiom => allowed.contains(&normalize_axiom_name(&name)),
             };
+            match class {
+                AxiomClass::StandardKernel => kernel_axioms.push(name.clone()),
+                AxiomClass::IncompleteProofGap => proof_gaps.push(name.clone()),
+                AxiomClass::NativeEvalShortcut => native_decide.push(name.clone()),
+                AxiomClass::ExternalAxiom => external_axioms.push(name.clone()),
+            }
             if !is_allowed {
                 disallowed.push(name.clone());
             }
@@ -249,19 +404,88 @@ pub fn evaluate_trust(
         axioms.dedup_by(|a, b| normalize_axiom_name(&a.name) == normalize_axiom_name(&b.name));
         disallowed.sort();
         disallowed.dedup_by(|a, b| normalize_axiom_name(a) == normalize_axiom_name(b));
+        for list in [
+            &mut kernel_axioms,
+            &mut external_axioms,
+            &mut proof_gaps,
+            &mut native_decide,
+        ] {
+            list.sort();
+            list.dedup_by(|a, b| normalize_axiom_name(a) == normalize_axiom_name(b));
+        }
 
-        let passed = !has_sorry
-            && !(options.forbid_native_decide && has_native_decide)
-            && disallowed.iter().all(|name| {
-                classify_axiom(name) == AxiomClass::NativeEvalShortcut
-                    && !options.forbid_native_decide
-            });
+        let mut assumptions = collect_assumptions(graph, &node_id, &dependencies);
+        add_flagged_hypotheses(
+            graph,
+            &node_id,
+            &theorem_name,
+            &dependencies,
+            &flagged_hypotheses,
+            &mut assumptions,
+        );
+        // Explicit `--hypothesis` overrides also work when the extractor missed
+        // a binder edge. Only apply this fallback to a single audited theorem;
+        // when auditing every theorem, auto-detected edges drive the result.
+        if options.theorem.is_some() {
+            add_global_flagged_hypothesis(
+                graph,
+                &node_id,
+                &theorem_name,
+                &options.hypotheses,
+                &mut assumptions,
+            );
+        }
+        assumptions.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let all_hypotheses_allowed = assumptions
+            .iter()
+            .all(|assumption| hypothesis_allowed(assumption, &allowed_hypotheses));
+        let has_disallowed_external = external_axioms
+            .iter()
+            .any(|name| !allowed.contains(&normalize_axiom_name(name)));
+        let tainted = has_sorry
+            || (options.forbid_native_decide && has_native_decide)
+            || has_disallowed_external;
+        let conditional = !assumptions.is_empty();
+        let status = if tainted {
+            TrustStatus::Tainted
+        } else if conditional {
+            TrustStatus::Conditional
+        } else {
+            TrustStatus::Unconditional
+        };
+        let passed = !tainted && (assumptions.is_empty() || all_hypotheses_allowed);
+
+        let warnings = if options.warn_structure_params {
+            assumptions
+                .iter()
+                .filter(|assumption| {
+                    assumption.hidden && !hypothesis_allowed(assumption, &allowed_hypotheses)
+                })
+                .map(|assumption| {
+                    format!(
+                        "`{}` is an unconstructed structure/opaque parameter introduced by `{}`; \
+                         pass --allow-hypothesis {} to accept it explicitly",
+                        assumption.name, assumption.introduced_by, assumption.name
+                    )
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         theorems.push(TheoremTrust {
             theorem: theorem_name,
             node_id,
+            status,
             dependencies,
             axioms,
+            kernel_axioms,
+            external_axioms,
+            assumptions,
+            proof_gaps,
+            native_decide,
+            warnings,
             has_sorry,
             has_native_decide,
             disallowed_axioms: disallowed,
@@ -283,6 +507,184 @@ fn normalize_axiom_name(name: &str) -> String {
         .trim_matches(|c| c == '\'' || c == '"' || c == '`')
         .replace('.', "_")
         .to_ascii_lowercase()
+}
+
+/// Human-readable name for a node, preferring its qualified label.
+fn node_display_name(graph: &GrapheniumGraph, node_id: &str) -> String {
+    graph
+        .node_data(node_id)
+        .map(|node| node.display_label().to_string())
+        .unwrap_or_else(|| node_id.to_string())
+}
+
+fn hypothesis_allowed(assumption: &Assumption, allowed: &HashSet<String>) -> bool {
+    let mut candidates = assumption.aliases.iter();
+    candidates.any(|alias| allowed.contains(&normalize_axiom_name(alias)))
+        || allowed.contains(&normalize_axiom_name(&assumption.name))
+}
+
+/// Collect hypothesis edges in the dependency cone of `theorem_id`.
+fn collect_assumptions(
+    graph: &GrapheniumGraph,
+    theorem_id: &str,
+    dependencies: &[String],
+) -> Vec<Assumption> {
+    let mut assumptions = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    for dependency in dependencies {
+        for edge in graph.edges_iter() {
+            if edge.source != *dependency || !HYPOTHESIS_RELATIONS.contains(&edge.relation.as_str())
+            {
+                continue;
+            }
+            if edge.target == *dependency {
+                continue;
+            }
+            let target = graph.node_data(&edge.target);
+            let name = target.map(|node| node.label.clone()).unwrap_or_else(|| {
+                if edge.tgt_original.is_empty() {
+                    edge.target.clone()
+                } else {
+                    edge.tgt_original.clone()
+                }
+            });
+            if !seen.insert(edge.target.clone()) {
+                continue;
+            }
+            let scope = if dependency == theorem_id {
+                "direct"
+            } else {
+                "transitive"
+            };
+            let introduced_by = node_display_name(graph, dependency);
+            let source_file = target
+                .map(|node| node.source_file.clone())
+                .unwrap_or_else(|| edge.source_file.clone());
+            let mut aliases = vec![name.clone(), edge.target.clone()];
+            if let Some(node) = target {
+                aliases.push(node.id.clone());
+                aliases.push(node.label.clone());
+                if let Some(qualified) = &node.qualified_label {
+                    aliases.push(qualified.clone());
+                }
+            }
+            assumptions.push(Assumption {
+                name,
+                kind: if edge.relation == "parameter_type" {
+                    "parameter_type".to_string()
+                } else {
+                    "hypothesis".to_string()
+                },
+                scope: scope.to_string(),
+                introduced_by,
+                source_file,
+                hidden: edge.confidence == crate::model::Confidence::Ambiguous,
+                aliases,
+            });
+        }
+    }
+
+    assumptions
+}
+
+/// Add dependency-cone nodes explicitly named with `--hypothesis`.
+fn add_flagged_hypotheses(
+    graph: &GrapheniumGraph,
+    theorem_id: &str,
+    theorem_name: &str,
+    dependencies: &[String],
+    flagged: &HashSet<String>,
+    assumptions: &mut Vec<Assumption>,
+) {
+    if flagged.is_empty() {
+        return;
+    }
+    for (index, dependency) in dependencies.iter().enumerate() {
+        let Some(node) = graph.node_data(dependency) else {
+            continue;
+        };
+        let mut names = vec![
+            normalize_axiom_name(&node.id),
+            normalize_axiom_name(&node.label),
+        ];
+        if let Some(qualified) = &node.qualified_label {
+            names.push(normalize_axiom_name(qualified));
+        }
+        if !names.iter().any(|name| flagged.contains(name)) {
+            continue;
+        }
+        let name = node.label.clone();
+        if assumptions
+            .iter()
+            .any(|assumption| normalize_axiom_name(&assumption.name) == normalize_axiom_name(&name))
+        {
+            continue;
+        }
+        let direct = index == 0 && dependency == theorem_id;
+        let mut aliases = vec![name.clone(), node.id.clone(), node.label.clone()];
+        if let Some(qualified) = &node.qualified_label {
+            aliases.push(qualified.clone());
+        }
+        assumptions.push(Assumption {
+            name,
+            kind: "hypothesis".to_string(),
+            scope: if direct { "direct" } else { "transitive" }.to_string(),
+            introduced_by: theorem_name.to_string(),
+            source_file: node.source_file.clone(),
+            hidden: false,
+            aliases,
+        });
+    }
+}
+
+/// Fallback for explicit `--hypothesis` names that could not be resolved to a
+/// dependency edge.
+fn add_global_flagged_hypothesis(
+    graph: &GrapheniumGraph,
+    theorem_id: &str,
+    theorem_name: &str,
+    flagged: &[String],
+    assumptions: &mut Vec<Assumption>,
+) {
+    for raw in flagged {
+        let node_id = find_declaration_node(graph, raw)
+            .or_else(|| graph.contains_node(raw).then(|| raw.clone()));
+        let Some(node_id) = node_id else {
+            continue;
+        };
+        if node_id == theorem_id {
+            continue;
+        }
+        let Some(node) = graph.node_data(&node_id) else {
+            continue;
+        };
+        let name = node.label.clone();
+        if assumptions
+            .iter()
+            .any(|assumption| normalize_axiom_name(&assumption.name) == normalize_axiom_name(&name))
+        {
+            continue;
+        }
+        let mut aliases = vec![
+            name.clone(),
+            node.id.clone(),
+            node.label.clone(),
+            raw.clone(),
+        ];
+        if let Some(qualified) = &node.qualified_label {
+            aliases.push(qualified.clone());
+        }
+        assumptions.push(Assumption {
+            name,
+            kind: "hypothesis".to_string(),
+            scope: "transitive".to_string(),
+            introduced_by: theorem_name.to_string(),
+            source_file: node.source_file.clone(),
+            hidden: false,
+            aliases,
+        });
+    }
 }
 
 /// Transitive dependency cone rooted at `start`, following only edges whose

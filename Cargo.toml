@@ -54,7 +54,7 @@ lang-csharp = ["dep:tree-sitter-c-sharp"]
 clap = { version = "4", features = ["derive"] }
 
 # Serialization
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 
 # Graph

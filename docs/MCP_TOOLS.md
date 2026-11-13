@@ -43,7 +43,7 @@ Compliance audit       -> verify_changes
 
 Combines `graph_info`, `graph_stats`, `unresolved_references`, `resolution_report`, and `ambiguous_symbols`.
 
-**Purpose:** Handshake and health check. Always returns project root, schema version, build timestamp, extraction modes, source languages, node/edge/hyperedge/community counts, active policy gates, graph trust mode, the index path when known, and a Lean trust summary (sorry gaps, `native_decide` shortcuts, external axiom edges) whenever semantic `#print axioms` facts are present.
+**Purpose:** Handshake and health check. Always returns project root, schema version, build timestamp, extraction modes, source languages, node/edge/hyperedge/community counts, active policy gates, graph trust mode, the index path when known, and a Lean trust summary (sorry gaps, `native_decide` shortcuts, external axiom edges, hypothesis/parameter edges, and `UNCONDITIONAL` / `CONDITIONAL` / `TAINTED` theorem counts) whenever semantic `#print axioms` or hypothesis facts are present.
 
 **Optional flags:**
 
@@ -190,7 +190,9 @@ Combines `shortest_path`, `safest_path`, `query_transitive`, and `module_depende
 
 Executes a declarative first-order logic program over the compiled EDB.
 
-**Standard library predicates:** `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, `uses_axiom`, `has_untrusted_axiom`, `has_native_decide`, and `untrusted_theorem`.
+**Standard library predicates:** `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, `uses_axiom`, `has_untrusted_axiom`, `has_native_decide`, `untrusted_theorem`, `depends_on_hypothesis`, `inherits_hypothesis`, and `conditional_theorem`.
+
+**Negation semantics:** negation is stratified over SCC-ordered predicate strata. Lower strata are fully materialized before any higher stratum negates them; unstratifiable recursive negation is rejected explicitly. Frozen relations use full-tuple and per-column hash indexes, so `not` checks do not scan large relations.
 
 **Syntax:** bodies accept `A != B` / `A /= B` (variables must be bound by a positive atom), and a program may contain multiple `?-` blocks, optionally labelled: `?- [proof_gaps] has_proof_gap(X).`
 

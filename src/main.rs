@@ -414,6 +414,20 @@ enum Commands {
         #[arg(long = "allow-axiom")]
         allow_axiom: Vec<String>,
 
+        /// Hypothesis to flag explicitly (repeatable; matches declaration
+        /// labels, qualified names, or node IDs)
+        #[arg(long = "hypothesis")]
+        hypothesis: Vec<String>,
+
+        /// Hypothesis to allow despite being inherited (repeatable)
+        #[arg(long = "allow-hypothesis")]
+        allow_hypothesis: Vec<String>,
+
+        /// Warn when a theorem inherits an unconstructed structure/opaque
+        /// parameter
+        #[arg(long)]
+        warn_structure_params: bool,
+
         /// Emit a machine-readable lean-trust.v1 report
         #[arg(long)]
         json: bool,
@@ -718,6 +732,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             theorem,
             forbid_native_decide,
             allow_axiom,
+            hypothesis,
+            allow_hypothesis,
+            warn_structure_params,
             json,
         } => {
             let graph_path = resolve_graph_path(graph, &out_dir);
@@ -727,6 +744,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 theorem,
                 forbid_native_decide,
                 allow_axiom,
+                hypothesis,
+                allow_hypothesis,
+                warn_structure_params,
                 json,
             )
         }
@@ -1520,6 +1540,9 @@ fn cmd_trust(
     theorem: Option<String>,
     forbid_native_decide: bool,
     allow_axiom: Vec<String>,
+    hypothesis: Vec<String>,
+    allow_hypothesis: Vec<String>,
+    warn_structure_params: bool,
     json: bool,
 ) -> graphenium::Result<()> {
     let graph = export::json::load_graph(graph_path)?;
@@ -1530,10 +1553,38 @@ fn cmd_trust(
         ),
         None => None,
     };
+
+    // Layer repository policy underneath explicit CLI flags. The policy file
+    // lives at <project-root>/.graphenium/policy.json; fall back to the current
+    // directory when the graph does not carry a project root.
+    let project_root = graph
+        .metadata
+        .project_root
+        .as_deref()
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_dir().ok());
+    let trust_policy = project_root
+        .as_deref()
+        .map(graphenium::policy::ArchPolicyConfig::load_for_project)
+        .transpose()?
+        .unwrap_or_default()
+        .trust_config();
+
+    let mut allow_axiom = allow_axiom;
+    allow_axiom.extend(trust_policy.allow_axioms);
+    let mut hypothesis = hypothesis;
+    hypothesis.extend(trust_policy.hypotheses);
+    let mut allow_hypothesis = allow_hypothesis;
+    allow_hypothesis.extend(trust_policy.allow_hypotheses);
+
     let options = graphenium::analyze::lean_trust::TrustOptions {
         theorem,
-        forbid_native_decide,
+        forbid_native_decide: forbid_native_decide
+            || trust_policy.forbid_native_decide.unwrap_or(false),
         allowed_axioms: allow_axiom,
+        hypotheses: hypothesis,
+        allowed_hypotheses: allow_hypothesis,
+        warn_structure_params,
     };
     let report =
         graphenium::analyze::lean_trust::evaluate_trust(&graph, axiom_report.as_ref(), &options)
@@ -1554,13 +1605,32 @@ fn cmd_trust(
         Ok(())
     } else {
         Err(graphenium::GrapheniumError::Validation(
-            "Lean trust audit failed: disallowed axioms, sorryAx, or forbidden native_decide"
+            "Lean trust audit failed: TAINTED theorem, disallowed axiom, or conditional theorem \
+             with an unallowed hypothesis"
                 .to_string(),
         ))
     }
 }
 
 // ── `check` command ────────────────────────────────────────────────────────────
+
+/// Print a compact Lean trust summary when axiom/hypothesis data is loaded.
+fn print_lean_trust_summary(graph: &graphenium::model::GrapheniumGraph) {
+    let Some(summary) = graphenium::analyze::lean_trust::summarize(graph) else {
+        return;
+    };
+    println!("\n## Lean Trust");
+    println!(
+        "Theorems: {} · UNCONDITIONAL: {} · CONDITIONAL: {} · TAINTED: {}",
+        summary.theorems, summary.unconditional, summary.conditional, summary.tainted
+    );
+    if !summary.assumptions.is_empty() {
+        println!("Assumptions: {}", summary.assumptions.join(", "));
+    }
+    for theorem in &summary.conditional_theorems {
+        println!("  - CONDITIONAL: {theorem}");
+    }
+}
 
 fn cmd_check(
     graph_path: &Path,
@@ -1573,6 +1643,7 @@ fn cmd_check(
     surprise_threshold: Option<f64>,
 ) -> graphenium::Result<()> {
     let graph = export::json::load_graph(graph_path)?;
+    print_lean_trust_summary(&graph);
 
     if delta {
         let plan_id = plan.ok_or_else(|| {
