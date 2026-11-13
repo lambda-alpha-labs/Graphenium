@@ -115,12 +115,32 @@ The core build takes about one minute on a laptop and six jobs in CI.
 
 This is the part that makes MUB-6 a Graphenium showcase rather than just a Lean project.
 
-The original reference program used Soufflé syntax. The repository now runs the same clique logic entirely inside Graphenium:
+The original reference program used Soufflé syntax. The repository now runs the same clique logic entirely inside Graphenium. Because `gm query --datalog` is **goal-only** since 0.26.0, the `.dl` file must expose one labelled `?-` goal per result the CI script wants to read:
+
+```prolog
+% ... rules that define basis/1 and mub_pair/2 ...
+?- [f6_bases] basis(B).
+?- [f6_mub_pairs] mub_pair(B1, B2).
+```
 
 ```bash
 gm query "" --datalog "$(cat graphenium/mub_cliques.dl)" \
-  --graph graphenium-out/f6_graph.json
+  --graph graphenium-out/f6_graph.json --json
 ```
+
+The JSON response is a single `datalog.v1` document whose `queries[]` array preserves both labels, so the Makefile can assert the 16 bases and 0 MUB pairs without scraping text:
+
+```json
+{
+  "schema_version": "datalog.v1",
+  "queries": [
+    { "name": "f6_bases", "row_count": 16, "rows": ["…"] },
+    { "name": "f6_mub_pairs", "row_count": 0, "rows": [] }
+  ]
+}
+```
+
+If a caller really needs every materialized IDB relation (rather than only explicit goals), add `--show-derived`; that populates the optional `derived[]` array. The default remains goal-only, matching the CLI contract documented in `docs/COMMAND_REFERENCE.md`.
 
 `graphenium/build_graph.py` converts the exact `ortho` and `mub` facts into small Graphenium graph JSON files. The Datalog program then enumerates:
 
@@ -135,7 +155,7 @@ The bridge maps the mathematical relations onto Graphenium's existing graph EDB:
 | mutual unbiasedness | `imports` | both directions |
 | canonical order \(i < j\) | `contains` | one direction |
 
-Interleaving the canonical-order atoms with the adjacency atoms keeps every partial clique in increasing vertex order, so the join stays small. On Graphenium 0.24.0:
+Interleaving the canonical-order atoms with the adjacency atoms keeps every partial clique in increasing vertex order, so the join stays small. On Graphenium 0.26.1:
 
 - **F6:** 16 bases, 0 MUB pairs between bases, about **1.1 s**;
 - **S6:** no basis and no orthogonal pair, well under a second.

@@ -48,7 +48,26 @@ struct LeanDecl {
     /// Raw declaration text from the header/signature region. Used to recover
     /// binder types `(h : T)` / `[Fact P]` before the `:=` body.
     header_text: String,
+    /// Binder groups parsed from the declaration header.
+    header_binders: Vec<LeanBinderGroup>,
+    /// `variable` binders active in the enclosing section/namespace scopes.
+    variable_binders: Vec<LeanBinderGroup>,
     has_sorry: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BinderKind {
+    Explicit,
+    Implicit,
+    Instance,
+}
+
+/// One binder group extracted from a declaration signature or `variable` line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LeanBinderGroup {
+    kind: BinderKind,
+    /// Leading identifier of the binder type, when the type is a simple name.
+    type_name: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -94,6 +113,13 @@ pub fn extract_with_root(
     );
 
     let mut scope_stack: Vec<ScopeEntry> = Vec::new();
+    // Variables declared with `variable (...)` are active until the enclosing
+    // section/namespace ends. One frame per scope, plus a base frame.
+    let mut variable_frames: Vec<Vec<LeanBinderGroup>> = vec![Vec::new()];
+    let mut pending_variable: Option<String> = None;
+    // A declaration keyword may be separated from its name/signature by a
+    // newline (`theorem\n  foo (h : Cert) : …`).
+    let mut pending_decl: Option<(usize, String)> = None;
     let mut decls: Vec<LeanDecl> = Vec::new();
     let mut label_to_nid: HashMap<String, String> = HashMap::new();
     label_to_nid.insert(file_stem.to_string(), file_node_id.clone());
@@ -107,6 +133,21 @@ pub fn extract_with_root(
         let cleaned = strip_lean_comments(raw_line, &mut in_block_comment);
         let trimmed = cleaned.trim();
         if trimmed.is_empty() {
+            continue;
+        }
+
+        // Continue a multi-line `variable (...) [..]` declaration.
+        if let Some(mut buffer) = pending_variable.take() {
+            buffer.push(' ');
+            buffer.push_str(trimmed);
+            if binder_text_is_balanced(&buffer) {
+                variable_frames
+                    .last_mut()
+                    .expect("base variable frame")
+                    .extend(extract_binder_groups(&buffer));
+            } else {
+                pending_variable = Some(buffer);
+            }
             continue;
         }
 
@@ -152,6 +193,7 @@ pub fn extract_with_root(
                     kind: ScopeKind::Namespace,
                     name: Some(ns_name.to_string()),
                 });
+                variable_frames.push(Vec::new());
             }
             continue;
         }
@@ -161,16 +203,55 @@ pub fn extract_with_root(
                 kind: ScopeKind::Section,
                 name: (!section_name.is_empty()).then(|| section_name.to_string()),
             });
+            variable_frames.push(Vec::new());
             continue;
         }
         if prefixed == "end" || prefixed.starts_with("end ") {
-            scope_stack.pop();
+            if scope_stack.pop().is_some() && variable_frames.len() > 1 {
+                variable_frames.pop();
+            }
+            continue;
+        }
+
+        // 2b. `variable (...)` / `variable [...]` declarations provide binder
+        // types for declarations in the active section/namespace. They may span
+        // multiple lines.
+        if prefixed == "variable" || prefixed.starts_with("variable ") {
+            let rest = prefixed.strip_prefix("variable").unwrap_or("").trim();
+            if rest.is_empty() {
+                pending_variable = Some(String::new());
+            } else {
+                let mut buffer = rest.to_string();
+                if binder_text_is_balanced(&buffer) {
+                    variable_frames
+                        .last_mut()
+                        .expect("base variable frame")
+                        .extend(extract_binder_groups(&buffer));
+                } else {
+                    buffer.push(' ');
+                    pending_variable = Some(buffer);
+                }
+            }
             continue;
         }
 
         // 3. Detect top-level declaration keywords (after optional modifiers)
+        let mut decl_start_line = line_num;
+        let mut decl_text: std::borrow::Cow<'_, str> = std::borrow::Cow::Borrowed(trimmed);
+        if let Some((start, mut head)) = pending_decl.take() {
+            head.push(' ');
+            head.push_str(trimmed);
+            if parse_lean_decl_header(&head).is_some() {
+                decl_start_line = start;
+                decl_text = std::borrow::Cow::Owned(head);
+            } else {
+                pending_decl = Some((start, head));
+                continue;
+            }
+        }
+
         if let Some((kw, mut declared_name, mut short_name, after_name, anonymous_sig)) =
-            parse_lean_decl_header(trimmed)
+            parse_lean_decl_header(decl_text.as_ref())
         {
             if let Some(sig) = anonymous_sig {
                 // Anonymous instances have no source name. Derive a stable ID
@@ -239,19 +320,34 @@ pub fn extract_with_root(
             let mut has_sorry = false;
             collect_lean_tokens(after_name, &mut body_tokens, &mut has_sorry);
 
+            let variable_binders: Vec<LeanBinderGroup> = variable_frames
+                .iter()
+                .flat_map(|frame| frame.iter().cloned())
+                .collect();
+
             decls.push(LeanDecl {
                 node_id,
                 label: short_name,
                 kind: kw.to_string(),
-                start_line: line_num,
+                start_line: decl_start_line,
                 end_line: total_lines,
                 body_tokens,
                 header_text: after_name.to_string(),
+                header_binders: extract_binder_groups(after_name),
+                variable_binders,
                 has_sorry,
             });
+        } else if pending_decl.is_none() && is_bare_declaration_keyword(trimmed) {
+            pending_decl = Some((line_num, trimmed.to_string()));
         } else if let Some(current) = decls.last_mut() {
             current.header_text.push(' ');
             current.header_text.push_str(trimmed);
+            // Headers can span several lines; re-parse after each continuation
+            // so binders split across lines are still discovered. Stop once the
+            // signature has ended (`:=`, `|`, or `where`).
+            if lean_signature_end(&current.header_text) >= current.header_text.len() {
+                current.header_binders = extract_binder_groups(&current.header_text);
+            }
             collect_lean_tokens(trimmed, &mut current.body_tokens, &mut current.has_sorry);
         }
     }
@@ -324,19 +420,33 @@ pub fn extract_with_root(
         if !is_parameterized_decl_kind(&d.kind) {
             continue;
         }
-        for token in extract_binder_type_tokens(&d.header_text) {
-            let short = token.rsplit('.').next().unwrap_or(&token);
-            let (target_id, resolved_kind) = match type_like.get(short) {
+        for group in d.header_binders.iter().chain(d.variable_binders.iter()) {
+            // Square brackets are Lean typeclass constraints (`[CommRing R]`).
+            // They are not certificate/hypothesis parameters and must never make
+            // an ordinary Mathlib theorem CONDITIONAL.
+            if group.kind == BinderKind::Instance {
+                continue;
+            }
+            let Some(type_token) = group.type_name.as_deref() else {
+                continue;
+            };
+            let short = type_token.rsplit('.').next().unwrap_or(type_token);
+            let (target_raw, resolved_kind) = match type_like.get(short) {
                 Some((id, kind)) => ((*id).to_string(), Some(*kind)),
                 None => {
-                    if !looks_like_project_type(short) {
+                    // Primitive data (`Nat`, `List Nat`) and standard typeclass
+                    // names are filtered here; only simple project/certificate
+                    // types survive.
+                    if !looks_like_hypothesis_type(short) {
                         continue;
                     }
-                    (make_id(&[short]), None)
+                    // Preserve the raw (possibly qualified) spelling so the
+                    // cross-file resolver can bind it to the real declaration.
+                    (type_token.to_string(), None)
                 }
             };
-            let key = (d.node_id.clone(), target_id.clone());
-            if target_id == d.node_id || !seen_hypotheses.insert(key) {
+            let key = (d.node_id.clone(), make_id(&[target_raw.as_str()]));
+            if target_raw == d.node_id || !seen_hypotheses.insert(key) {
                 continue;
             }
 
@@ -352,7 +462,7 @@ pub fn extract_with_root(
             };
             let mut edge = Edge::new(
                 d.node_id.as_str(),
-                target_id.as_str(),
+                target_raw.as_str(),
                 "depends_on_hypothesis",
                 confidence,
                 file_path,
@@ -384,16 +494,98 @@ fn is_parameterized_decl_kind(kind: &str) -> bool {
     )
 }
 
+/// True when a line consists only of a declaration keyword (plus modifiers or
+/// attributes) and its name/signature continue on the next line.
+fn is_bare_declaration_keyword(line: &str) -> bool {
+    matches!(
+        strip_lean_prefixes(line),
+        "theorem"
+            | "lemma"
+            | "def"
+            | "abbrev"
+            | "structure"
+            | "class"
+            | "inductive"
+            | "axiom"
+            | "opaque"
+            | "instance"
+    )
+}
+
 fn is_hidden_structure_kind(kind: &str) -> bool {
     matches!(kind, "structure" | "class" | "inductive" | "opaque")
 }
 
-/// Heuristic: a capitalized identifier that is not a common Lean/stdlib type.
-/// These are candidates for project-defined declarations in another file.
-fn looks_like_project_type(name: &str) -> bool {
+/// Heuristic: a capitalized identifier that is not a common Lean/stdlib type
+/// or a typeclass constraint. These are candidates for project-defined
+/// certificate/structure declarations in another file.
+pub(crate) fn looks_like_hypothesis_type(name: &str) -> bool {
     name.chars().next().is_some_and(char::is_uppercase)
         && !is_builtin_lean_type(name)
+        && !is_likely_typeclass_name(name)
         && !is_lean_keyword(name)
+}
+
+/// Common Mathlib/Lean typeclass names. Square-bracket binders are skipped
+/// outright, but this also guards explicit `(C : CommRing R)` style binders and
+/// elaborated semantic binders whose `binderInfo` may be missing.
+fn is_likely_typeclass_name(name: &str) -> bool {
+    if matches!(
+        name,
+        "CommRing"
+            | "Ring"
+            | "CommSemiring"
+            | "Semiring"
+            | "CommGroup"
+            | "Group"
+            | "AddCommGroup"
+            | "AddGroup"
+            | "Monoid"
+            | "AddMonoid"
+            | "AddCommMonoid"
+            | "Field"
+            | "DivisionRing"
+            | "Module"
+            | "Algebra"
+            | "LinearOrder"
+            | "PartialOrder"
+            | "Preorder"
+            | "Lattice"
+            | "MeasurableSpace"
+            | "TopologicalSpace"
+            | "MetricSpace"
+            | "NormedSpace"
+            | "NormedField"
+            | "NormedAddCommGroup"
+            | "Category"
+            | "Functor"
+            | "Monad"
+            | "LawfulBEq"
+            | "DecidableEq"
+            | "DecidableRel"
+            | "Inhabited"
+            | "Nonempty"
+            | "Fintype"
+            | "Finite"
+            | "Unique"
+            | "Subsingleton"
+            | "Nontrivial"
+            | "IsDomain"
+            | "IsIntegralDomain"
+            | "IsField"
+            | "Prime"
+            | "CharP"
+            | "Fact"
+            | "NeZero"
+    ) {
+        return true;
+    }
+    [
+        "Ring", "Group", "Monoid", "Semiring", "Space", "Algebra", "Module", "Field", "Order",
+        "Lattice", "Category", "Functor", "Monad",
+    ]
+    .iter()
+    .any(|suffix| name.len() > suffix.len() && name.ends_with(suffix))
 }
 
 fn is_builtin_lean_type(name: &str) -> bool {
@@ -419,6 +611,17 @@ fn is_builtin_lean_type(name: &str) -> bool {
             | "Char"
             | "List"
             | "Array"
+            | "Vector"
+            | "Matrix"
+            | "Polynomial"
+            | "Equiv"
+            | "LinearMap"
+            | "Submodule"
+            | "Ideal"
+            | "Finsupp"
+            | "ZMod"
+            | "Rat"
+            | "Complex"
             | "Option"
             | "Fin"
             | "Finset"
@@ -482,33 +685,54 @@ fn lean_signature_end(header: &str) -> usize {
             ')' | ']' | '}' | '⦄' | '⟩' => depth = (depth - 1).max(0),
             _ => {}
         }
-        if depth == 0 && header[offset..].starts_with(":=") {
-            return offset;
+        if depth == 0 {
+            if header[offset..].starts_with(":=") {
+                return offset;
+            }
+            // Equation-compiler definitions end their signature at the first
+            // top-level `|` (`def f (h : Cert) : Nat | 0 => …`).
+            if ch == '|' {
+                return offset;
+            }
         }
     }
     find_where_token(header).unwrap_or(header.len())
 }
 
-/// Collect identifier tokens from the type portion of every binder group in a
-/// Lean declaration signature. Binder names before a top-level `:` are ignored
-/// (e.g. `(h : EdgeAtlasCertificate)` yields `EdgeAtlasCertificate`).
-fn extract_binder_type_tokens(header: &str) -> Vec<String> {
+/// True when every `(`, `[`, `{` has a matching close. Used to decide whether
+/// a `variable ...` declaration continues on the next line.
+fn binder_text_is_balanced(text: &str) -> bool {
+    let mut depth = 0i32;
+    for ch in text.chars() {
+        match ch {
+            '(' | '[' | '{' | '⦃' => depth += 1,
+            ')' | ']' | '}' | '⦄' => depth -= 1,
+            _ => {}
+        }
+        if depth < 0 {
+            return false;
+        }
+    }
+    depth == 0
+}
+
+/// Extract every binder group from a declaration signature or `variable`
+/// declaration, stopping at `:=`, `|`, or `where`.
+fn extract_binder_groups(header: &str) -> Vec<LeanBinderGroup> {
     let signature = &header[..lean_signature_end(header)];
     let chars: Vec<(usize, char)> = signature.char_indices().collect();
-    let mut tokens = Vec::new();
+    let mut groups = Vec::new();
     let mut i = 0usize;
     while i < chars.len() {
         let (start, open) = chars[i];
-        let close = match open {
-            '(' => Some(')'),
-            '[' => Some(']'),
-            '{' => Some('}'),
-            '⦃' => Some('⦄'),
-            _ => None,
-        };
-        let Some(close) = close else {
-            i += 1;
-            continue;
+        let (close, kind) = match open {
+            '(' => (')', BinderKind::Explicit),
+            '[' => (']', BinderKind::Instance),
+            '{' | '⦃' => (if open == '{' { '}' } else { '⦄' }, BinderKind::Implicit),
+            _ => {
+                i += 1;
+                continue;
+            }
         };
 
         let mut depth = 0i32;
@@ -532,45 +756,37 @@ fn extract_binder_type_tokens(header: &str) -> Vec<String> {
             .unwrap_or(signature.len());
         let inner_start = start + open.len_utf8();
         if inner_start <= end_byte {
-            collect_binder_group_tokens(&signature[inner_start..end_byte], &mut tokens);
+            let inner = &signature[inner_start..end_byte];
+            groups.push(LeanBinderGroup {
+                kind,
+                type_name: binder_type_name(inner),
+            });
         }
         i = j + 1;
     }
-    tokens
+    groups
 }
 
-fn collect_binder_group_tokens(inner: &str, out: &mut Vec<String>) {
+/// Return the simple type name from a binder group body `name : Type`.
+fn binder_type_name(inner: &str) -> Option<String> {
     // If the group contains a top-level `:`, everything after it is the type.
     let mut depth = 0i32;
     let mut type_start = 0usize;
+    let mut found = false;
     for (offset, ch) in inner.char_indices() {
         match ch {
             '(' | '[' | '{' | '⦃' => depth += 1,
             ')' | ']' | '}' | '⦄' => depth = (depth - 1).max(0),
             ':' if depth == 0 && !inner[offset..].starts_with(":=") => {
                 type_start = offset + 1;
+                found = true;
                 break;
             }
             _ => {}
         }
     }
-    let type_expr = &inner[type_start..];
-
-    for raw in type_expr.split(|c: char| {
-        !c.is_alphanumeric() && c != '_' && c != '.' && c != '\'' && c != '!' && c != '?'
-    }) {
-        let token = raw.trim_matches(|c: char| c == '\'' || c == '!' || c == '?');
-        if token.is_empty() {
-            continue;
-        }
-        let token = token.trim_matches('.');
-        if token.is_empty() {
-            continue;
-        }
-        if !out.iter().any(|existing| existing == token) {
-            out.push(token.to_string());
-        }
-    }
+    let type_expr = if found { &inner[type_start..] } else { inner };
+    crate::extract::lean_axioms::simple_head_type_name(type_expr)
 }
 
 fn strip_lean_comments(line: &str, block_depth: &mut usize) -> String {
@@ -962,6 +1178,66 @@ theorem numeric (n : Nat) (xs : List Nat) : Nat := n
             "Nat/List binders must not create hypothesis edges: {:?}",
             r.edges
         );
+    }
+
+    #[test]
+    fn ignores_typeclass_constraints() {
+        let src = br#"
+theorem generic {R : Type} [CommRing R] (n : Nat) (xs : List Nat) : R :=
+  n
+"#;
+        let r = extract(src, "Typeclasses.lean");
+        assert!(
+            !r.edges
+                .iter()
+                .any(|e| e.relation == "depends_on_hypothesis"),
+            "typeclass constraints and primitive data must not create hypothesis edges: {:?}",
+            r.edges
+        );
+    }
+
+    #[test]
+    fn extracts_multiline_and_section_variable_hypotheses() {
+        let src = br#"
+structure EdgeAtlasCertificate where
+  witness : Nat
+
+section Atlas
+variable (sectionCert : EdgeAtlasCertificate)
+
+theorem multiline
+    (h :
+      EdgeAtlasCertificate) :
+    1 = 1 := by
+  exact rfl
+
+theorem uses_section_variable :
+    1 = 1 := by
+  exact rfl
+
+theorem
+    split_keyword
+    (h : EdgeAtlasCertificate) :
+    1 = 1 := by
+  exact rfl
+end Atlas
+"#;
+        let r = extract(src, "MultiLine.lean");
+        let cert = r
+            .nodes
+            .iter()
+            .find(|n| n.label == "EdgeAtlasCertificate")
+            .unwrap();
+        for theorem in ["multiline", "uses_section_variable", "split_keyword"] {
+            let node = r.nodes.iter().find(|n| n.label == theorem).unwrap();
+            assert!(
+                r.edges.iter().any(|e| e.relation == "depends_on_hypothesis"
+                    && e.source == node.id
+                    && e.target == cert.id),
+                "{theorem} should depend on the multiline/section hypothesis: {:?}",
+                r.edges
+            );
+        }
     }
 
     #[test]

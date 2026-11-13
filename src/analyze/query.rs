@@ -890,38 +890,56 @@ fn plan_strata<'a>(active_rules: &[&'a Rule]) -> Result<Vec<Vec<&'a Rule>>, Stri
     Ok(strata)
 }
 
-/// First-column hash index over relation tuples, used to accelerate bound joins.
-/// A frozen relation snapshot with a full-tuple hash set and one hash index per
-/// column. Frozen relations belong to already-evaluated strata (or the EDB), so
+/// Frozen relation snapshot with a full-tuple hash set and bound-mask hash
+/// indexes. Frozen relations belong to already-evaluated strata (or the EDB), so
 /// the snapshot cannot become stale while a higher stratum is running.
 ///
-/// Ground negated atoms are answered by [`RelationIndex::contains_exact`] in
-/// `O(1)`. Partially bound atoms use the index for the first bound column (or
-/// any bound column when the first is unbound), which keeps negation lookups
-/// proportional to the matching bucket rather than the relation size.
+/// All-ground negated atoms use [`RelationIndex::contains_exact`] in `O(1)`.
+/// Partially bound atoms use an index keyed by the exact set of bound columns,
+/// so negation never falls back to a linear scan regardless of which column
+/// (leading or not) participates in the join.
 #[derive(Debug, Clone, Default)]
 struct RelationIndex {
     tuples: Vec<Vec<Val>>,
     full: HashSet<Vec<Val>>,
-    columns: Vec<HashMap<Val, Vec<usize>>>,
+    masks: HashMap<usize, HashMap<Vec<Val>, Vec<usize>>>,
+    arity: usize,
 }
 
 impl RelationIndex {
     fn new(tuples: Vec<Vec<Val>>) -> Self {
         let arity = tuples.iter().map(Vec::len).max().unwrap_or(0);
-        let mut columns: Vec<HashMap<Val, Vec<usize>>> = vec![HashMap::new(); arity];
-        for (row, tuple) in tuples.iter().enumerate() {
-            for (column, value) in tuple.iter().enumerate() {
-                if column < columns.len() {
-                    columns[column].entry(value.clone()).or_default().push(row);
-                }
-            }
-        }
         let full = tuples.iter().cloned().collect();
         Self {
             tuples,
             full,
-            columns,
+            masks: HashMap::new(),
+            arity,
+        }
+    }
+
+    /// Build the index for one bound-column mask on first use.
+    fn ensure_mask(&mut self, mask: usize) {
+        if mask == 0 || self.arity == 0 {
+            return;
+        }
+        let full_mask = self.full_mask();
+        if mask == full_mask || self.masks.contains_key(&mask) {
+            return;
+        }
+        let mut index: HashMap<Vec<Val>, Vec<usize>> = HashMap::new();
+        for (row, tuple) in self.tuples.iter().enumerate() {
+            let key = mask_key(tuple, mask);
+            index.entry(key).or_default().push(row);
+        }
+        self.masks.insert(mask, index);
+    }
+
+    fn full_mask(&self) -> usize {
+        if self.arity >= usize::BITS as usize {
+            usize::MAX
+        } else {
+            (1usize << self.arity) - 1
         }
     }
 
@@ -941,44 +959,64 @@ impl RelationIndex {
 
         let mut bound_values: Vec<Option<&Val>> = Vec::with_capacity(terms.len());
         let mut all_bound = true;
-        for term in terms {
+        let mut mask = 0usize;
+        for (column, term) in terms.iter().enumerate() {
             let value = match term {
                 CompiledTerm::Const(value) => Some(*value),
                 CompiledTerm::Var(index) => bindings.get(*index).and_then(Option::as_ref),
             };
-            if value.is_none() {
+            if value.is_some() {
+                mask |= 1usize << column;
+            } else {
                 all_bound = false;
             }
             bound_values.push(value);
         }
 
-        if all_bound {
-            let ground: Vec<Val> = bound_values
-                .into_iter()
-                .filter_map(|value| value.cloned())
-                .collect();
-            return self.contains_exact(&ground);
-        }
-
-        // If nothing is bound, existence of any tuple is enough: an unbound
-        // anonymous variable can unify with every column (range restriction is
-        // enforced separately for named variables).
-        let Some((column, key)) = bound_values
-            .iter()
-            .enumerate()
-            .find_map(|(column, value)| value.map(|value| (column, value)))
-        else {
+        let Some(key) = bound_values_key(&bound_values) else {
+            // Nothing is bound: existence of any tuple is enough.
             return !self.tuples.is_empty();
         };
 
-        self.columns
-            .get(column)
-            .and_then(|index| index.get(key))
-            .is_some_and(|rows| {
+        if all_bound {
+            return self.contains_exact(&key);
+        }
+
+        if let Some(index) = self.masks.get(&mask) {
+            return index.get(&key).is_some_and(|rows| {
                 rows.iter()
                     .any(|&row| row_matches_bindings(terms, &self.tuples[row], bindings))
-            })
+            });
+        }
+
+        // The evaluation planner normally pre-builds every required mask; this
+        // fallback preserves correctness if a caller constructs an index
+        // directly.
+        self.tuples
+            .iter()
+            .any(|tuple| row_matches_bindings(terms, tuple, bindings))
     }
+}
+
+fn bound_values_key(bound_values: &[Option<&Val>]) -> Option<Vec<Val>> {
+    let key: Vec<Val> = bound_values
+        .iter()
+        .filter_map(|value| value.cloned())
+        .collect();
+    if key.is_empty() {
+        None
+    } else {
+        Some(key)
+    }
+}
+
+fn mask_key(tuple: &[Val], mask: usize) -> Vec<Val> {
+    tuple
+        .iter()
+        .enumerate()
+        .filter(|(column, _)| mask & (1usize << column) != 0)
+        .map(|(_, value)| value.clone())
+        .collect()
 }
 
 /// A term compiled against the body's variable table.
@@ -1255,20 +1293,6 @@ impl Interpreter {
                 .all(|query| self.goals_satisfied(&query.goals))
     }
 
-    /// Get (building and caching on first use) the frozen index for `name`.
-    ///
-    /// Stratified evaluation guarantees that a negated predicate has already
-    /// reached its fixed point, so the snapshot can safely be reused across
-    /// every rule and iteration in the negating stratum.
-    fn negation_index(&mut self, name: &str) -> &RelationIndex {
-        if !self.negation_indexes.contains_key(name) {
-            let tuples: Vec<Vec<Val>> = self.get_relation(name).iter().cloned().collect();
-            self.negation_indexes
-                .insert(name.to_string(), RelationIndex::new(tuples));
-        }
-        &self.negation_indexes[name]
-    }
-
     /// Evaluate a body (rule body or query goals) and derive rows for
     /// `head_terms`. Runs a backtracking tuple join with a single reusable
     /// binding table, so a 200k-row scan does not allocate a `HashMap` per
@@ -1288,9 +1312,42 @@ impl Interpreter {
             .collect();
 
         // Materialize every negated-relation index before taking the immutable
-        // relation borrows below.
+        // relation borrows below. Pre-build exactly the bound-column masks used
+        // by these filters (not every possible subset), keeping memory bounded
+        // while still guaranteeing O(1) lookups for non-leading columns.
+        let mut positive_vars: HashSet<usize> = HashSet::new();
+        for atom in &compiled.positive {
+            for term in &atom.terms {
+                if let CompiledTerm::Var(index) = term {
+                    positive_vars.insert(*index);
+                }
+            }
+        }
+        let mut required_masks: HashMap<&str, HashSet<usize>> = HashMap::new();
         for filter in &compiled.filters {
-            self.negation_index(filter.name);
+            let mut mask = 0usize;
+            for (column, term) in filter.terms.iter().enumerate() {
+                let bound = match term {
+                    CompiledTerm::Const(_) => true,
+                    CompiledTerm::Var(index) => positive_vars.contains(index),
+                };
+                if bound {
+                    mask |= 1usize << column;
+                }
+            }
+            required_masks.entry(filter.name).or_default().insert(mask);
+        }
+        for (name, masks) in required_masks {
+            if !self.negation_indexes.contains_key(name) {
+                let tuples: Vec<Vec<Val>> = self.get_relation(name).iter().cloned().collect();
+                self.negation_indexes
+                    .insert(name.to_string(), RelationIndex::new(tuples));
+            }
+            if let Some(index) = self.negation_indexes.get_mut(name) {
+                for mask in masks {
+                    index.ensure_mask(mask);
+                }
+            }
         }
         let filter_indexes: Vec<&RelationIndex> = compiled
             .filters
@@ -1371,6 +1428,41 @@ impl Interpreter {
         program: &DatalogProgram,
         step_budget: usize,
     ) -> Result<(Vec<(String, Vec<Vec<Val>>)>, usize), String> {
+        self.solve_internal(program, step_budget, false)
+            .map(|(results, steps, _)| (results, steps))
+    }
+
+    /// Like [`Interpreter::solve_with_steps`], but also returns a snapshot of
+    /// every materialized IDB relation. Used by `--show-derived`.
+    pub fn solve_with_steps_and_idb(
+        &mut self,
+        program: &DatalogProgram,
+        step_budget: usize,
+    ) -> Result<
+        (
+            Vec<(String, Vec<Vec<Val>>)>,
+            usize,
+            HashMap<String, Vec<Vec<Val>>>,
+        ),
+        String,
+    > {
+        self.solve_internal(program, step_budget, true)
+            .map(|(results, steps, idb)| (results, steps, idb.unwrap_or_default()))
+    }
+
+    fn solve_internal(
+        &mut self,
+        program: &DatalogProgram,
+        step_budget: usize,
+        capture_idb: bool,
+    ) -> Result<
+        (
+            Vec<(String, Vec<Vec<Val>>)>,
+            usize,
+            Option<HashMap<String, Vec<Vec<Val>>>>,
+        ),
+        String,
+    > {
         let start = Instant::now();
 
         validate_grounding(program)?;
@@ -1518,7 +1610,18 @@ impl Interpreter {
                 .unwrap_or_else(|| format!("query_{}", index + 1));
             results.push((name, rows));
         }
-        Ok((results, steps_used))
+        let idb_snapshot = capture_idb.then(|| {
+            self.idb
+                .iter()
+                .map(|(name, tuples)| {
+                    (
+                        name.clone(),
+                        tuples.iter().cloned().collect::<Vec<Vec<Val>>>(),
+                    )
+                })
+                .collect()
+        });
+        Ok((results, steps_used, idb_snapshot))
     }
 }
 
@@ -1620,6 +1723,16 @@ pub struct DatalogQueryResult {
     pub truncated: bool,
 }
 
+/// One materialized IDB relation included by `--show-derived`.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DatalogDerivedRelation {
+    pub name: String,
+    pub arity: usize,
+    pub row_count: usize,
+    /// Rows rendered like query rows (string values unquoted).
+    pub rows: Vec<Vec<String>>,
+}
+
 /// Machine-readable report for a whole Datalog invocation (possibly several
 /// `?-` queries evaluated against one shared EDB/IDB).
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1629,6 +1742,11 @@ pub struct DatalogReport {
     /// Number of EDB tuples materialized from the graph.
     pub edb_facts: usize,
     pub queries: Vec<DatalogQueryResult>,
+    /// Materialized IDB relations, present only when explicitly requested with
+    /// `--show-derived` (or the equivalent library option). Goal-only output
+    /// remains the default.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub derived: Vec<DatalogDerivedRelation>,
 }
 
 /// Run a complete Datalog program and return a structured report.
@@ -1636,6 +1754,17 @@ pub fn run_datalog_report(
     graph: &crate::model::GrapheniumGraph,
     query: &str,
     step_budget: usize,
+) -> Result<DatalogReport, String> {
+    run_datalog_report_with_options(graph, query, step_budget, false)
+}
+
+/// Like [`run_datalog_report`], optionally including every materialized IDB
+/// relation (`--show-derived`). Goal-only output remains the default.
+pub fn run_datalog_report_with_options(
+    graph: &crate::model::GrapheniumGraph,
+    query: &str,
+    step_budget: usize,
+    include_derived: bool,
 ) -> Result<DatalogReport, String> {
     // Guard: query too long
     if query.len() > 10_000 {
@@ -1678,7 +1807,14 @@ pub fn run_datalog_report(
 
     // Step 4: Evaluate every query against the shared materialized state.
     let mut interpreter = Interpreter::new(edb);
-    let (results, steps_used) = interpreter.solve_with_steps(&program, step_budget)?;
+    let (results, steps_used, idb) = if include_derived {
+        let (results, steps_used, idb) =
+            interpreter.solve_with_steps_and_idb(&program, step_budget)?;
+        (results, steps_used, Some(idb))
+    } else {
+        let (results, steps_used) = interpreter.solve_with_steps(&program, step_budget)?;
+        (results, steps_used, None)
+    };
 
     // Step 5: Build the structured report.
     let queries = program
@@ -1707,10 +1843,36 @@ pub fn run_datalog_report(
         })
         .collect();
 
+    let derived = idb
+        .map(|idb| {
+            let mut relations: Vec<DatalogDerivedRelation> = idb
+                .into_iter()
+                .map(|(name, mut tuples)| {
+                    tuples.sort();
+                    let arity = tuples.first().map(Vec::len).unwrap_or(0);
+                    let row_count = tuples.len();
+                    let rows = tuples
+                        .iter()
+                        .map(|row| row.iter().map(json_value).collect())
+                        .collect();
+                    DatalogDerivedRelation {
+                        name,
+                        arity,
+                        row_count,
+                        rows,
+                    }
+                })
+                .collect();
+            relations.sort_by(|a, b| a.name.cmp(&b.name));
+            relations
+        })
+        .unwrap_or_default();
+
     Ok(DatalogReport {
         schema_version: "datalog.v1",
         edb_facts,
         queries,
+        derived,
     })
 }
 
@@ -1721,13 +1883,25 @@ pub fn run_datalog_query(
     query: &str,
     step_budget: usize,
 ) -> Result<String, String> {
+    run_datalog_query_with_options(graph, query, step_budget, false)
+}
+
+/// Like [`run_datalog_query`], optionally appending materialized IDB relations.
+pub fn run_datalog_query_with_options(
+    graph: &crate::model::GrapheniumGraph,
+    query: &str,
+    step_budget: usize,
+    include_derived: bool,
+) -> Result<String, String> {
     // Preserve the historical empty-graph sentinel for the text surface.
     if graph.node_count() == 0 {
         return Ok("(empty graph — no nodes to query)".to_string());
     }
 
-    let report = run_datalog_report(graph, query, step_budget)?;
-    if report.queries.is_empty() || report.queries.iter().all(|q| q.rows.is_empty()) {
+    let report = run_datalog_report_with_options(graph, query, step_budget, include_derived)?;
+    if report.queries.is_empty()
+        || (report.queries.iter().all(|q| q.rows.is_empty()) && report.derived.is_empty())
+    {
         return Ok("(no results)".to_string());
     }
 
@@ -1753,6 +1927,22 @@ pub fn run_datalog_query(
         output.push('\n');
     }
 
+    for relation in &report.derived {
+        output.push_str(&format!(
+            "## Derived relation `{}({})`\n\n",
+            relation.name,
+            (0..relation.arity)
+                .map(|index| format!("C{index}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+        output.push_str(&format!("{} row(s)\n\n", relation.row_count));
+        for (i, row) in relation.rows.iter().enumerate() {
+            output.push_str(&format!("| {} | `{}` |\n", i + 1, row.join("`, `")));
+        }
+        output.push('\n');
+    }
+
     Ok(output)
 }
 
@@ -1763,7 +1953,18 @@ pub fn run_datalog_json(
     query: &str,
     step_budget: usize,
 ) -> Result<String, String> {
-    let report = run_datalog_report(graph, query, step_budget)?;
+    run_datalog_json_with_options(graph, query, step_budget, false)
+}
+
+/// Like [`run_datalog_json`], optionally including every materialized IDB
+/// relation under `derived`.
+pub fn run_datalog_json_with_options(
+    graph: &crate::model::GrapheniumGraph,
+    query: &str,
+    step_budget: usize,
+    include_derived: bool,
+) -> Result<String, String> {
+    let report = run_datalog_report_with_options(graph, query, step_budget, include_derived)?;
     serde_json::to_string_pretty(&report).map_err(|e| e.to_string())
 }
 

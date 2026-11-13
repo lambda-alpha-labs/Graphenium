@@ -4,6 +4,26 @@ This changelog summarizes key updates and engineering milestones for Graphenium,
 
 ---
 
+## v0.26.1 - 2026-11-13
+
+### Fixed
+*   **Lean Trust Axiom Deduplication (`src/extract/lean_axioms.rs`, `src/analyze/lean_trust.rs`):** Axioms are now collected by canonical key before rendering, so `Quot.sound` and `quot_sound` (the normalized node ID) can no longer both appear in one report. Kernel labels are always rendered exactly as Lean reports them: `propext`, `Classical.choice`, `Quot.sound`. Axiom nodes/edges ingested from `lean-axioms.v1` reports use the same canonical spelling.
+*   **`gm trust --json` Output Hygiene (`src/main.rs`, `src/error.rs`):** Machine-readable trust runs now print exactly one `lean-trust.v1` JSON document on stdout, including when evaluation cannot start (missing theorem, unreadable report). Failure reasons are carried in `failure_reasons` fields, and the CLI exits non-zero without writing `[graphenium] error:` lines to stderr.
+*   **Structure-Parameter Auto-Detection (`src/extract/lean.rs`, `src/extract/lean_axioms.rs`):** The Lean extractor now scans multi-line `theorem`/`lemma`/`def` signatures up to `:=`, `|`, or `where`, and tracks active `section`/`namespace` `variable (...)` / `variable [...]` declarations. Cross-file hypothesis targets preserve their raw Lean spelling (`EdgeAtlasCertificate`) so the resolver can bind them to the real declaration instead of dropping a dangling normalized ID. `lean-axioms.v1` ingestion also flattens elaborated `ConstantInfo.type` (`forallE`) binders under `binders` or `type`. Typeclass constraints (`[CommRing R]`) and primitive data (`(n : Nat)`) are deliberately excluded from `CONDITIONAL` status.
+*   **Datalog Negation at Scale (`src/analyze/query.rs`):** Frozen lower-stratum relations now build bound-mask hash indexes on demand, not just per-column indexes, so partially bound `not p(...)` lookups remain O(1) regardless of which column joins. Positive atoms bind all variables before `not` and `!=` / `/=` constraints are evaluated; unbound named variables in `not` still fail range-restriction validation. The 200k-edge regression test completes well inside the 1s release budget.
+
+### Added
+*   **`gm query --datalog --show-derived`:** Optionally include every materialized IDB relation (`derived[]`) in `datalog.v1` JSON or as extra text sections. Goal-only output remains the default.
+
+### Changed
+*   **Goal-Only Datalog Output (breaking, introduced in 0.26.0):** `gm query --datalog` now emits only the rows projected by explicit `?-` goals (plus EDB/IDB facts needed to answer them). Scripts written for 0.25 that relied on a single conjoined goal to print every derived IDB relation must either split the output into explicit labelled goals (`?- [bases] … .`, `?- [pairs] … .`) or pass `--show-derived`.
+*   **Version:** Bumped to `0.26.1`.
+
+### Tests
+*   Canonical `Quot.sound` deduplication, cross-file/multi-line/section-variable hypothesis detection, `[CommRing R]` / `(n : Nat)` guardrail regression, JSON stderr hygiene, `--show-derived`/goal-only output, and the existing 200k-edge negation benchmark.
+
+---
+
 ## v0.26.0 - 2026-11-13
 
 ### Added

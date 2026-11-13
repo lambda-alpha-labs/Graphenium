@@ -11,7 +11,8 @@ use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use serde::Serialize;
 
 use crate::extract::lean_axioms::{
-    classify_axiom, find_declaration_node, AxiomClass, LeanAxiomReport,
+    classify_axiom, find_declaration_node, insert_canonical_axiom, normalize_axiom_name,
+    AxiomClass, LeanAxiomReport,
 };
 use crate::model::{make_id, GrapheniumGraph};
 
@@ -126,6 +127,9 @@ pub struct TheoremTrust {
     pub has_native_decide: bool,
     /// External axioms that are not allowlisted.
     pub disallowed_axioms: Vec<String>,
+    /// Human-readable reasons this theorem failed the gate. Empty on success.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failure_reasons: Vec<String>,
     pub passed: bool,
 }
 
@@ -135,10 +139,26 @@ pub struct TrustReport {
     pub schema_version: &'static str,
     pub axioms_source_hash: Option<String>,
     pub theorems: Vec<TheoremTrust>,
+    /// Human-readable reasons the overall audit failed. Empty on success.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failure_reasons: Vec<String>,
     pub passed: bool,
 }
 
 impl TrustReport {
+    /// Build a minimal, valid `lean-trust.v1` report for a failed invocation
+    /// (for example, a missing theorem or unreadable axiom report). `--json`
+    /// callers receive valid JSON on stdout even when evaluation cannot start.
+    pub fn failure(reason: impl Into<String>) -> Self {
+        Self {
+            schema_version: "lean-trust.v1",
+            axioms_source_hash: None,
+            theorems: Vec::new(),
+            failure_reasons: vec![reason.into()],
+            passed: false,
+        }
+    }
+
     pub fn to_json(&self) -> Result<String, String> {
         serde_json::to_string_pretty(self).map_err(|e| e.to_string())
     }
@@ -332,11 +352,16 @@ pub fn evaluate_trust(
         let theorem_name = node_display_name(graph, &node_id);
 
         let dependencies = dependency_cone(graph, &node_id);
-        let mut axiom_names: BTreeSet<String> = BTreeSet::new();
-
+        // Canonicalize by normalized key first, then pick the most informative
+        // spelling. This is what prevents `Quot.sound` and `quot_sound` from
+        // both appearing in one report.
+        let mut canonical_axioms: std::collections::BTreeMap<String, String> =
+            std::collections::BTreeMap::new();
         for dependency in &dependencies {
             if let Some(axioms) = declared.get(dependency) {
-                axiom_names.extend(axioms.iter().cloned());
+                for name in axioms {
+                    insert_canonical_axiom(&mut canonical_axioms, name);
+                }
             }
             for edge in graph.edges_iter() {
                 if edge.source != *dependency {
@@ -344,14 +369,14 @@ pub fn evaluate_trust(
                 }
                 match edge.relation.as_str() {
                     "depends_on_axiom" => {
-                        axiom_names.insert(edge.tgt_original.clone());
-                        axiom_names.insert(edge.target.clone());
+                        insert_canonical_axiom(&mut canonical_axioms, &edge.tgt_original);
+                        insert_canonical_axiom(&mut canonical_axioms, &edge.target);
                     }
                     "unverified_sorry" => {
-                        axiom_names.insert("sorryAx".to_string());
+                        insert_canonical_axiom(&mut canonical_axioms, "sorryAx");
                     }
                     "unverified_native_decide" => {
-                        axiom_names.insert("Lean.ofReduceBool".to_string());
+                        insert_canonical_axiom(&mut canonical_axioms, "Lean.ofReduceBool");
                     }
                     _ => {}
                 }
@@ -367,9 +392,7 @@ pub fn evaluate_trust(
         let mut has_sorry = false;
         let mut has_native_decide = false;
 
-        for name in axiom_names {
-            // A node ID and its original spelling can both land here; keep the
-            // more human-readable spelling when one classifies as standard.
+        for name in canonical_axioms.into_values() {
             let class = classify_axiom(&name);
             let is_allowed = match class {
                 AxiomClass::StandardKernel => true,
@@ -397,21 +420,6 @@ pub fn evaluate_trust(
                 class: class.as_str().to_string(),
                 allowed: is_allowed,
             });
-        }
-
-        // De-duplicate human-readable/normalized duplicates.
-        axioms.sort_by(|a, b| a.name.cmp(&b.name));
-        axioms.dedup_by(|a, b| normalize_axiom_name(&a.name) == normalize_axiom_name(&b.name));
-        disallowed.sort();
-        disallowed.dedup_by(|a, b| normalize_axiom_name(a) == normalize_axiom_name(b));
-        for list in [
-            &mut kernel_axioms,
-            &mut external_axioms,
-            &mut proof_gaps,
-            &mut native_decide,
-        ] {
-            list.sort();
-            list.dedup_by(|a, b| normalize_axiom_name(a) == normalize_axiom_name(b));
         }
 
         let mut assumptions = collect_assumptions(graph, &node_id, &dependencies);
@@ -456,6 +464,40 @@ pub fn evaluate_trust(
         };
         let passed = !tainted && (assumptions.is_empty() || all_hypotheses_allowed);
 
+        let failure_reasons = if passed {
+            Vec::new()
+        } else {
+            let mut reasons = Vec::new();
+            if has_sorry {
+                reasons.push("inherits `sorryAx` (incomplete proof gap)".to_string());
+            }
+            if options.forbid_native_decide && has_native_decide {
+                reasons.push(
+                    "inherits `Lean.ofReduceBool` / `Lean.trustCompiler` while \
+                     --forbid-native-decide is set"
+                        .to_string(),
+                );
+            }
+            for name in &external_axioms {
+                if !allowed.contains(&normalize_axiom_name(name)) {
+                    reasons.push(format!(
+                        "inherits disallowed external axiom `{name}`; pass \
+                         --allow-axiom {name} after review"
+                    ));
+                }
+            }
+            for assumption in &assumptions {
+                if !hypothesis_allowed(assumption, &allowed_hypotheses) {
+                    reasons.push(format!(
+                        "conditional on unallowed hypothesis `{}` introduced by `{}`; pass \
+                         --allow-hypothesis {} to accept it explicitly",
+                        assumption.name, assumption.introduced_by, assumption.name
+                    ));
+                }
+            }
+            reasons
+        };
+
         let warnings = if options.warn_structure_params {
             assumptions
                 .iter()
@@ -489,24 +531,28 @@ pub fn evaluate_trust(
             has_sorry,
             has_native_decide,
             disallowed_axioms: disallowed,
+            failure_reasons,
             passed,
         });
     }
 
     let passed = theorems.iter().all(|theorem| theorem.passed);
+    let failure_reasons = theorems
+        .iter()
+        .flat_map(|theorem| {
+            theorem
+                .failure_reasons
+                .iter()
+                .map(|reason| format!("{}: {reason}", theorem.theorem))
+        })
+        .collect();
     Ok(TrustReport {
         schema_version: "lean-trust.v1",
         axioms_source_hash: axiom_report.and_then(|report| report.source_hash.clone()),
         theorems,
+        failure_reasons,
         passed,
     })
-}
-
-fn normalize_axiom_name(name: &str) -> String {
-    name.trim()
-        .trim_matches(|c| c == '\'' || c == '"' || c == '`')
-        .replace('.', "_")
-        .to_ascii_lowercase()
 }
 
 /// Human-readable name for a node, preferring its qualified label.
@@ -844,6 +890,52 @@ mod tests {
         )
         .unwrap();
         assert!(result.passed);
+    }
+
+    #[test]
+    fn canonical_kernel_axioms_are_deduplicated() {
+        let (mut graph, theorem_id) = graph_with_theorem();
+        let quotient_id = make_id(&["quot_sound"]);
+        graph.upsert_node(Node::new(
+            &quotient_id,
+            "quot_sound",
+            FileType::Code,
+            "Proof.lean",
+        ));
+        // Simulate an older graph or resolver that recorded both the raw Lean
+        // spelling and the normalized node ID.
+        graph.add_edge(Edge::new(
+            &theorem_id,
+            "Quot.sound",
+            "depends_on_axiom",
+            Confidence::Inferred,
+            "Proof.lean",
+        ));
+        graph.add_edge(Edge::new(
+            &theorem_id,
+            "quot_sound",
+            "depends_on_axiom",
+            Confidence::Ambiguous,
+            "Proof.lean",
+        ));
+
+        let result = evaluate_trust(
+            &graph,
+            None,
+            &TrustOptions {
+                theorem: Some("MUB6.no_four_mubs_dim6".to_string()),
+                ..TrustOptions::default()
+            },
+        )
+        .unwrap();
+        let theorem = &result.theorems[0];
+        assert_eq!(theorem.kernel_axioms, vec!["Quot.sound".to_string()]);
+        assert_eq!(theorem.axioms.len(), 1);
+        assert_eq!(theorem.axioms[0].name, "Quot.sound");
+        assert!(!theorem
+            .axioms
+            .iter()
+            .any(|axiom| axiom.name == "quot_sound"));
     }
 
     #[test]

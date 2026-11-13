@@ -180,6 +180,73 @@ end NoFourMUBs.EdgeXFinal
     report
 }
 
+/// Mirrors the real NoFourMUBs layout: the certificate lives in another file,
+/// the theorem uses a section `variable`, and a Mathlib-style generic theorem
+/// uses `[CommRing R]` / `(n : Nat)` parameters.
+fn setup_cross_file_hypotheses(root: &Path) -> std::path::PathBuf {
+    let seed_dir = root.join("NoFourMUBs").join("SeedAtlas");
+    std::fs::create_dir_all(&seed_dir).unwrap();
+    std::fs::write(
+        seed_dir.join("EdgeXAtlas.lean"),
+        br#"
+namespace NoFourMUBs.SeedAtlas.EdgeX
+
+structure EdgeAtlasCertificate where
+  witness : Nat
+
+end NoFourMUBs.SeedAtlas.EdgeX
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        seed_dir.join("EdgeXFinal.lean"),
+        br#"
+import NoFourMUBs.SeedAtlas.EdgeXAtlas
+
+namespace NoFourMUBs
+
+open SeedAtlas EdgeX
+
+section
+
+variable (C : EdgeAtlasCertificate)
+
+theorem EdgeXFinal.no_four_mubs_seed :
+    1 = 1 := by
+  exact rfl
+
+theorem multiline_seed
+    (h :
+      EdgeAtlasCertificate) :
+    1 = 1 := by
+  exact rfl
+
+end
+
+theorem generic {R : Type} [CommRing R] (n : Nat) : n = n := rfl
+
+end NoFourMUBs
+"#,
+    )
+    .unwrap();
+
+    let report = root.join("axioms-cross-file.json");
+    std::fs::write(
+        &report,
+        br#"{
+  "schema_version": "lean-axioms.v1",
+  "source_hash": "cafebabe",
+  "declarations": [
+    { "name": "NoFourMUBs.EdgeXFinal.no_four_mubs_seed", "axioms": ["propext"] },
+    { "name": "NoFourMUBs.multiline_seed", "axioms": ["propext"] },
+    { "name": "NoFourMUBs.generic", "axioms": ["propext", "Classical.choice", "Quot.sound"] }
+  ]
+}"#,
+    )
+    .unwrap();
+    report
+}
+
 fn run_with_hypotheses(root: &Path) {
     let output = gm()
         .arg("run")
@@ -292,6 +359,109 @@ fn conditional_hypotheses_are_detected_allowlisted_and_transitive() {
                     .contains("no_four_mubs_seed")),
         "{assumptions:?}"
     );
+}
+
+#[test]
+fn cross_file_and_multiline_hypotheses_are_detected_without_flags() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_cross_file_hypotheses(root);
+    let output = gm()
+        .arg("run")
+        .arg(root)
+        .args([
+            "--no-semantic",
+            "--no-viz",
+            "--lean-axioms",
+            "axioms-cross-file.json",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // No --hypothesis, no --allow-hypothesis: the certificate binder must be
+    // discovered from the multi-line/section-variable signature and resolved
+    // across files. JSON output stays valid and stderr stays clean.
+    let output = gm()
+        .args([
+            "trust",
+            "--graph",
+            "graphenium-out/graph.json",
+            "--theorem",
+            "NoFourMUBs.EdgeXFinal.no_four_mubs_seed",
+            "--warn-structure-params",
+            "--forbid-native-decide",
+            "--json",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "conditional theorem must fail");
+    assert!(
+        output.stderr.is_empty(),
+        "--json failures must not emit stderr noise: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let theorem = &report["theorems"][0];
+    assert_eq!(theorem["status"], "CONDITIONAL");
+    assert_eq!(theorem["passed"], false);
+    assert!(
+        theorem["assumptions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|assumption| assumption["name"] == "EdgeAtlasCertificate"),
+        "{theorem}"
+    );
+    assert!(!report["failure_reasons"].as_array().unwrap().is_empty());
+
+    // Multi-line explicit binder is also detected.
+    let output = gm()
+        .args([
+            "trust",
+            "--graph",
+            "graphenium-out/graph.json",
+            "--theorem",
+            "NoFourMUBs.multiline_seed",
+            "--json",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["theorems"][0]["status"], "CONDITIONAL");
+
+    // Guardrail: typeclass constraints and primitive data remain UNCONDITIONAL.
+    let output = gm()
+        .args([
+            "trust",
+            "--graph",
+            "graphenium-out/graph.json",
+            "--theorem",
+            "NoFourMUBs.generic",
+            "--json",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "generic theorem should pass: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stderr.is_empty());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let theorem = &report["theorems"][0];
+    assert_eq!(theorem["status"], "UNCONDITIONAL");
+    assert_eq!(theorem["passed"], true);
+    assert_eq!(theorem["assumptions"], serde_json::json!([]));
 }
 
 #[test]

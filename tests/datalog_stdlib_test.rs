@@ -1,7 +1,8 @@
 //! Integration tests for the pre-loaded Datalog Standard Library.
 
 use graphenium::analyze::query::{
-    run_datalog_json, run_datalog_query, run_datalog_report, stdlib_rules, DatalogProgram,
+    run_datalog_json, run_datalog_json_with_options, run_datalog_query, run_datalog_report,
+    run_datalog_report_with_options, stdlib_rules, DatalogProgram,
 };
 use graphenium::model::{Edge, FileType, GrapheniumGraph, Node};
 
@@ -265,6 +266,48 @@ fn test_datalog_json_is_valid_for_empty_results() {
     assert_eq!(parsed["queries"][0]["row_count"], 0);
     assert_eq!(parsed["queries"][0]["rows"], serde_json::json!([]));
     assert!(parsed["queries"][0]["steps_used"].is_number());
+}
+
+#[test]
+fn test_show_derived_is_opt_in_and_includes_idb_relations() {
+    let graph = chain_graph();
+    let query = r#"
+        e(A, B) :- calls(A, B, _).
+        ?- [missing_reverse] e(A, B), not e(B, A).
+    "#;
+
+    // Default remains goal-only.
+    let report = run_datalog_report(&graph, query, 1000).unwrap();
+    assert!(
+        report.derived.is_empty(),
+        "goal-only output must not include derived relations"
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&run_datalog_json(&graph, query, 1000).unwrap()).unwrap();
+    assert!(json.get("derived").is_none(), "{json}");
+
+    let report = run_datalog_report_with_options(&graph, query, 1000, true).unwrap();
+    let relation = report
+        .derived
+        .iter()
+        .find(|relation| relation.name == "e")
+        .expect("e should be materialized");
+    assert_eq!(relation.arity, 2);
+    assert_eq!(relation.row_count, 2);
+    assert_eq!(
+        relation.rows,
+        vec![
+            vec!["a".to_string(), "b".to_string()],
+            vec!["b".to_string(), "c".to_string()],
+        ]
+    );
+
+    let json: serde_json::Value =
+        serde_json::from_str(&run_datalog_json_with_options(&graph, query, 1000, true).unwrap())
+            .unwrap();
+    assert_eq!(json["schema_version"], "datalog.v1");
+    assert_eq!(json["derived"][0]["name"], "e");
+    assert_eq!(json["derived"][0]["row_count"], 2);
 }
 
 #[test]

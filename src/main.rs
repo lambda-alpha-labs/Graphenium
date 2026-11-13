@@ -182,6 +182,11 @@ enum Commands {
         #[arg(long)]
         datalog: Option<String>,
 
+        /// With --datalog, include every materialized IDB relation in the
+        /// output in addition to the goal results (default: goal-only)
+        #[arg(long)]
+        show_derived: bool,
+
         /// Maximum output token budget (rough estimate)
         #[arg(long, default_value = "2000")]
         budget: usize,
@@ -455,6 +460,11 @@ enum Commands {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
+    // `gm trust --json` already reports failures in-band on stdout; suppress
+    // the generic CLI error line so stderr stays clean and machine-parseable
+    // consumers see exactly one JSON document.
+    let quiet_errors = matches!(&cli.command, Commands::Trust { json: true, .. });
+
     let _result = match cli.command {
         Commands::Init { path } => {
             match graphenium::detect::initialize_workspace(&path) {
@@ -518,6 +528,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Query {
             question,
             datalog,
+            show_derived,
             dfs,
             safe,
             budget,
@@ -537,9 +548,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match graphenium::export::json::load_graph(graph_path) {
                     Ok(g) => {
                         let rendered = if json {
-                            query::run_datalog_json(&g, dl, 1000)
+                            query::run_datalog_json_with_options(&g, dl, 1000, show_derived)
                         } else {
-                            query::run_datalog_query(&g, dl, 1000)
+                            query::run_datalog_query_with_options(&g, dl, 1000, show_derived)
                         };
                         match rendered {
                             Ok(r) => {
@@ -753,7 +764,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if let Err(e) = &_result {
-        eprintln!("[graphenium] error: {e}");
+        if !quiet_errors {
+            eprintln!("[graphenium] error: {e}");
+        }
         process::exit(1);
     }
     _result.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
@@ -1197,9 +1210,12 @@ async fn cmd_run(
                 String::from_utf8_lossy(&output.stderr).trim()
             )));
         }
-        Some(graphenium::extract::lean_axioms::parse_print_axioms_text(
-            &String::from_utf8_lossy(&output.stdout),
-        ))
+        Some(
+            graphenium::extract::lean_axioms::parse_report(&String::from_utf8_lossy(
+                &output.stdout,
+            ))
+            .map_err(graphenium::GrapheniumError::Validation)?,
+        )
     } else if let Some(path) = lean_axioms {
         let report_path = if path.is_absolute() {
             path
@@ -1545,50 +1561,64 @@ fn cmd_trust(
     warn_structure_params: bool,
     json: bool,
 ) -> graphenium::Result<()> {
-    let graph = export::json::load_graph(graph_path)?;
-    let axiom_report = match axioms {
-        Some(path) => Some(
-            graphenium::extract::lean_axioms::load_report(path)
-                .map_err(graphenium::GrapheniumError::Validation)?,
-        ),
-        None => None,
-    };
+    let evaluated: Result<graphenium::analyze::lean_trust::TrustReport, String> = (|| {
+        let graph = export::json::load_graph(graph_path).map_err(|e| e.to_string())?;
+        let axiom_report = match axioms {
+            Some(path) => Some(
+                graphenium::extract::lean_axioms::load_report(path).map_err(|e| e.to_string())?,
+            ),
+            None => None,
+        };
 
-    // Layer repository policy underneath explicit CLI flags. The policy file
-    // lives at <project-root>/.graphenium/policy.json; fall back to the current
-    // directory when the graph does not carry a project root.
-    let project_root = graph
-        .metadata
-        .project_root
-        .as_deref()
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::current_dir().ok());
-    let trust_policy = project_root
-        .as_deref()
-        .map(graphenium::policy::ArchPolicyConfig::load_for_project)
-        .transpose()?
-        .unwrap_or_default()
-        .trust_config();
+        // Layer repository policy underneath explicit CLI flags. The policy
+        // file lives at <project-root>/.graphenium/policy.json; fall back to the
+        // current directory when the graph does not carry a project root.
+        let project_root = graph
+            .metadata
+            .project_root
+            .as_deref()
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::current_dir().ok());
+        let trust_policy = project_root
+            .as_deref()
+            .map(graphenium::policy::ArchPolicyConfig::load_for_project)
+            .transpose()
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default()
+            .trust_config();
 
-    let mut allow_axiom = allow_axiom;
-    allow_axiom.extend(trust_policy.allow_axioms);
-    let mut hypothesis = hypothesis;
-    hypothesis.extend(trust_policy.hypotheses);
-    let mut allow_hypothesis = allow_hypothesis;
-    allow_hypothesis.extend(trust_policy.allow_hypotheses);
+        let mut allow_axiom = allow_axiom;
+        allow_axiom.extend(trust_policy.allow_axioms);
+        let mut hypothesis = hypothesis;
+        hypothesis.extend(trust_policy.hypotheses);
+        let mut allow_hypothesis = allow_hypothesis;
+        allow_hypothesis.extend(trust_policy.allow_hypotheses);
 
-    let options = graphenium::analyze::lean_trust::TrustOptions {
-        theorem,
-        forbid_native_decide: forbid_native_decide
-            || trust_policy.forbid_native_decide.unwrap_or(false),
-        allowed_axioms: allow_axiom,
-        hypotheses: hypothesis,
-        allowed_hypotheses: allow_hypothesis,
-        warn_structure_params,
-    };
-    let report =
+        let options = graphenium::analyze::lean_trust::TrustOptions {
+            theorem,
+            forbid_native_decide: forbid_native_decide
+                || trust_policy.forbid_native_decide.unwrap_or(false),
+            allowed_axioms: allow_axiom,
+            hypotheses: hypothesis,
+            allowed_hypotheses: allow_hypothesis,
+            warn_structure_params,
+        };
         graphenium::analyze::lean_trust::evaluate_trust(&graph, axiom_report.as_ref(), &options)
-            .map_err(graphenium::GrapheniumError::Validation)?;
+    })();
+
+    let report = match evaluated {
+        Ok(report) => report,
+        Err(message) => {
+            if json {
+                let report = graphenium::analyze::lean_trust::TrustReport::failure(message.clone());
+                if let Ok(rendered) = report.to_json() {
+                    println!("{rendered}");
+                }
+                return Err(graphenium::GrapheniumError::Validation(message));
+            }
+            return Err(graphenium::GrapheniumError::Validation(message));
+        }
+    };
 
     if json {
         println!(
@@ -1603,6 +1633,12 @@ fn cmd_trust(
 
     if report.passed {
         Ok(())
+    } else if json {
+        // Failure details are already in the JSON document on stdout. Keep
+        // stderr clean and communicate the failure through the exit code.
+        Err(graphenium::GrapheniumError::Validation(
+            "Lean trust audit failed".to_string(),
+        ))
     } else {
         Err(graphenium::GrapheniumError::Validation(
             "Lean trust audit failed: TAINTED theorem, disallowed axiom, or conditional theorem \

@@ -82,17 +82,19 @@ gm query "<query>" [flags]
     *   `lexical`: Relevance matching against symbol names, qualified paths, and source files.
     *   `structural`: Topological distance sorting radiating outward from matched seed nodes.
     *   `hybrid`: Combined score weighting lexical relevance (60%) and structural distance (40%).
-*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Evaluation uses goal-directed pruning, stratified negation over SCC-ordered strata, semi-naive delta relations, and full-tuple plus per-column hash indexes, with early stopping for fully-ground existence goals. Unstratifiable negative recursion is rejected explicitly. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs.
-    *   **Negation:** `not p(...)` is evaluated only after all positive atoms have bound their variables; frozen lower-stratum relations are indexed so negation does not scan large relations. A named variable that appears only in a negated atom is rejected by range-restriction validation.
+*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Evaluation uses goal-directed pruning, stratified negation over SCC-ordered strata, semi-naive delta relations, and full-tuple plus bound-mask hash indexes, with early stopping for fully-ground existence goals. Unstratifiable negative recursion is rejected explicitly. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs.
+    *   **Output is goal-only by default (breaking change in 0.26.0):** only the rows projected by explicit `?-` goals are returned. A single conjoined goal no longer prints every derived IDB relation. Emit one labelled goal per output (`?- [bases] basis(B).`, `?- [pairs] mub_pair(B1, B2).`) or pass `--show-derived`.
+    *   **Negation:** `not p(...)` is evaluated only after all positive atoms have bound their variables; frozen lower-stratum relations are indexed by full tuple and by the exact set of bound columns, so negation does not scan large relations. A named variable that appears only in a negated atom is rejected by range-restriction validation.
     *   **Inequality:** rule and query bodies accept `A != B` (and `A /= B`). Variables must be bound by a positive body atom; an ungrounded inequality is a validation error.
     *   **Multiple queries:** a program may contain several `?-` blocks, optionally labelled (`?- [proof_gaps] has_proof_gap(X).`). The EDB and fixpoint are materialized once and shared by every query.
     *   Built-in predicates include `calls_transitive`, `depends_transitive`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, `uses_axiom`, `has_untrusted_axiom`, `has_native_decide`, `untrusted_theorem`, `depends_on_hypothesis`, `inherits_hypothesis`, and `conditional_theorem`.
+*   `--show-derived` (bool) — With `--datalog`, also include every materialized IDB relation (JSON `derived[]` or extra text sections). Default is goal-only.
 *   `--budget <tokens>` (integer, default: `2000`) — Limits Graphenium's printed output to remain within the specified context-token limit.
 *   `--dfs` (bool) — Uses Depth-First Search for structural tracing (default: BFS).
 *   `--safe` (bool) — Restricts query-tracing strictly to AST-proven (`EXTRACTED`) dependencies.
 *   `--graph <path>` (string, default: `<out-dir>/graph.json`) — Overrides the source index file location.
 *   `--out-dir <path>` (string, default: `graphenium-out`) — Resolves the default graph path.
-*   `--json` (bool) — With `--datalog`, emits a `datalog.v1` report (`schema_version`, `edb_facts`, and per-query `name`, `query`, `variables`, `rows`, `row_count`, `steps_used`, `truncated`). Without `--datalog`, outputs lexical/structural results as JSON.
+*   `--json` (bool) — With `--datalog`, emits a `datalog.v1` report (`schema_version`, `edb_facts`, per-query `name`, `query`, `variables`, `rows`, `row_count`, `steps_used`, `truncated`, and optional `derived[]` with `--show-derived`). Without `--datalog`, outputs lexical/structural results as JSON.
 *   `--path-prefix <path>` (string) — Restricts results to symbols located inside the specified directory path.
 *   `--exclude-path <path>` (string) — Filters out results located inside the specified directory path.
 *   `--generated-code-mode <mode>` (string, default: `include`) — How to handle files classified as generated: `include`, `exclude`, or `only`.
@@ -307,7 +309,7 @@ gm trust [flags]
 *   `--hypothesis <name>` (repeatable) — Explicitly flag a hypothesis by declaration label, qualified name, or node ID. Useful when a binder is hidden behind notation or generated code.
 *   `--allow-hypothesis <name>` (repeatable) — Accept an inherited hypothesis. Without this (or a policy allowance), a `CONDITIONAL` theorem exits non-zero.
 *   `--warn-structure-params` (bool) — Warn about unconstructed `structure` / `class` / `opaque` parameters that are inherited without an explicit allowance.
-*   `--json` (bool) — Emit a `lean-trust.v1` report.
+*   `--json` (bool) — Emit a `lean-trust.v1` report. stdout contains exactly one valid JSON document (failure reasons appear in `failure_reasons` fields); stderr stays clean on gate failures and the exit code communicates pass/fail.
 
 Each audited theorem receives one of three statuses:
 
