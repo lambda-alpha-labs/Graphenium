@@ -157,7 +157,7 @@ gm run . --no-semantic --no-viz --lean-axioms axioms.json
 gm trust --theorem MyProject.main_theorem --forbid-native-decide --json
 ```
 
-`gm trust` classifies each theorem as `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED`. It exits non-zero on `sorryAx`, a non-allowlisted external axiom, a forbidden `Lean.ofReduceBool` / `Lean.trustCompiler`, or an unapproved binder hypothesis. Binder hypotheses (including multi-line signatures, active `variable` declarations, cross-file certificate types, and elaborated `forallE` binders) are detected automatically; `[CommRing R]` typeclass constraints and `(n : Nat)` parameters are ignored. Kernel labels are canonicalized and `--json` keeps stdout machine-readable with clean stderr. Pass `--allow-hypothesis <name>` (or configure `trust.allow_hypotheses` in `.graphenium/policy.json`) only after reviewing the structure/certificate parameter.
+`gm trust` classifies each theorem as `UNCONDITIONAL`, `CONDITIONAL`, or `TAINTED`. It exits non-zero on `sorryAx`, a non-allowlisted external axiom, a forbidden `Lean.ofReduceBool` / `Lean.trustCompiler`, or an unapproved binder hypothesis. Binder hypotheses (including multi-line signatures, active `variable` declarations, cross-file certificate types, and elaborated `forallE` binders) are detected automatically; transparent `def`/`abbrev` aliases, `[CommRing R]` typeclass constraints, and `(n : Nat)` parameters are ignored. Kernel labels are canonicalized and `--json` keeps stdout machine-readable with clean stderr. Pass `--allow-hypothesis <name>` (or configure `trust.allow_hypotheses` in `.graphenium/policy.json`) only after reviewing the structure/certificate parameter.
 
 ---
 

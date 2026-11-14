@@ -192,7 +192,7 @@ Executes a declarative first-order logic program over the compiled EDB.
 
 **Standard library predicates:** `calls_transitive`, `imports_transitive`, `depends_transitive`, `same_community`, `is_hub`, `is_orphan`, `circular_dependency`, `bypasses_layer`, `contains_transitive`, `aliased_container_call`, `unreachable_from`, `has_proof_gap`, `tainted_by_proof_gap`, `uses_axiom`, `has_untrusted_axiom`, `has_native_decide`, `untrusted_theorem`, `depends_on_hypothesis`, `inherits_hypothesis`, and `conditional_theorem`.
 
-**Negation semantics:** negation is stratified over SCC-ordered predicate strata. Lower strata are fully materialized before any higher stratum negates them; unstratifiable recursive negation is rejected explicitly. Frozen relations use full-tuple and bound-mask hash indexes, so `not` checks do not scan large relations even when the join uses a non-leading column.
+**Negation semantics:** negation is stratified over SCC-ordered predicate strata. Lower strata are fully materialized before any higher stratum negates them; unstratifiable recursive negation is rejected explicitly. Positive body atoms are indexed on the columns bound by earlier atoms, and frozen relations use full-tuple and bound-mask hash indexes, so neither joins nor `not` checks scan large relations when a non-leading column is bound.
 
 **Output semantics:** the MCP tool returns goal-only results by default — one result set per `?-` goal. The CLI `gm query --datalog --show-derived` flag additionally exposes every materialized IDB relation; the MCP surface intentionally stays goal-only.
 

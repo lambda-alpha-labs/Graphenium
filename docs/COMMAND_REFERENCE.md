@@ -82,7 +82,7 @@ gm query "<query>" [flags]
     *   `lexical`: Relevance matching against symbol names, qualified paths, and source files.
     *   `structural`: Topological distance sorting radiating outward from matched seed nodes.
     *   `hybrid`: Combined score weighting lexical relevance (60%) and structural distance (40%).
-*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Evaluation uses goal-directed pruning, stratified negation over SCC-ordered strata, semi-naive delta relations, and full-tuple plus bound-mask hash indexes, with early stopping for fully-ground existence goals. Unstratifiable negative recursion is rejected explicitly. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs.
+*   `--datalog <program>` (string) — Executes a declarative Datalog program against Graphenium's relational EDB. Standard library rules (`stdlib.dl`) are automatically merged pre-flight. Evaluation uses goal-directed pruning, stratified negation over SCC-ordered strata, semi-naive delta relations, and full-tuple plus bound-mask hash indexes for both positive joins and negation, with early stopping for fully-ground existence goals. Unstratifiable negative recursion is rejected explicitly. Solver execution is bounded to 1,000 inference steps; base EDB relations are accepted up to 10 million facts. Prefer bound queries (`?- calls('seed', X).`) over unbounded predicates (`?- is_hub(X).`) on large graphs.
     *   **Output is goal-only by default (breaking change in 0.26.0):** only the rows projected by explicit `?-` goals are returned. A single conjoined goal no longer prints every derived IDB relation. Emit one labelled goal per output (`?- [bases] basis(B).`, `?- [pairs] mub_pair(B1, B2).`) or pass `--show-derived`.
     *   **Negation:** `not p(...)` is evaluated only after all positive atoms have bound their variables; frozen lower-stratum relations are indexed by full tuple and by the exact set of bound columns, so negation does not scan large relations. A named variable that appears only in a negated atom is rejected by range-restriction validation.
     *   **Inequality:** rule and query bodies accept `A != B` (and `A /= B`). Variables must be bound by a positive body atom; an ungrounded inequality is a validation error.
@@ -306,7 +306,7 @@ gm trust [flags]
 *   `--theorem <name>` (string) — Audit one theorem (qualified Lean name or node ID). Omit to audit every declaration with axiom, proof-gap, or hypothesis data.
 *   `--forbid-native-decide` (bool) — Fail when `Lean.ofReduceBool` / `Lean.trustCompiler` is inherited.
 *   `--allow-axiom <name>` (repeatable) — Allow a specific external axiom. Standard kernel axioms are always allowed; `sorryAx` is never allowed.
-*   `--hypothesis <name>` (repeatable) — Explicitly flag a hypothesis by declaration label, qualified name, or node ID. Useful when a binder is hidden behind notation or generated code.
+*   `--hypothesis <name>` (repeatable) — Explicitly flag a hypothesis by declaration label, qualified name, or node ID. Useful when a binder is hidden behind notation or generated code. Explicit flags report `direct_or_transitive: "direct"`, matching auto-detected binders.
 *   `--allow-hypothesis <name>` (repeatable) — Accept an inherited hypothesis. Without this (or a policy allowance), a `CONDITIONAL` theorem exits non-zero.
 *   `--warn-structure-params` (bool) — Warn about unconstructed `structure` / `class` / `opaque` parameters that are inherited without an explicit allowance.
 *   `--json` (bool) — Emit a `lean-trust.v1` report. stdout contains exactly one valid JSON document (failure reasons appear in `failure_reasons` fields); stderr stays clean on gate failures and the exit code communicates pass/fail.
@@ -321,7 +321,7 @@ Each audited theorem receives one of three statuses:
 
 Exits non-zero for `TAINTED`, or for `CONDITIONAL` unless every inherited hypothesis is allowed.
 
-Binder detection is automatic for single- and multi-line signatures, active `section`/`namespace` `variable` declarations, cross-file certificate types, and elaborated `forallE` binders in `lean-axioms.v1` JSON. Square-bracket typeclass constraints (`[CommRing R]`) and primitive data parameters (`(n : Nat)`) are ignored. Kernel axiom labels are canonicalized, so reports never contain both `Quot.sound` and `quot_sound`.
+Binder detection is automatic for single- and multi-line signatures, active `section`/`namespace` `variable` declarations, cross-file certificate types, and elaborated `forallE` binders in `lean-axioms.v1` JSON. Transparent `def`/`abbrev` aliases, square-bracket typeclass constraints (`[CommRing R]`), and primitive data parameters (`(n : Nat)`) are ignored. Kernel axiom labels are canonicalized, so reports never contain both `Quot.sound` and `quot_sound`.
 
 Hypotheses can also be configured in `.graphenium/policy.json`:
 

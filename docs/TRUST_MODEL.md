@@ -57,7 +57,7 @@ Token-based `sorry` detection cannot see a theorem that is syntactically complet
 | `external_axiom` | User `axiom`s, certificate axioms | `depends_on_axiom` (`AMBIGUOUS`) |
 | `hypothesis` | Theorem binders such as `(h : EdgeAtlasCertificate)`, `[Fact P]` | `depends_on_hypothesis` (`INFERRED` / `AMBIGUOUS` for hidden structures) |
 
-These facts are baked in with `gm run --lean-axioms <report>` (or explicitly generated with `--run-lean-axioms <file>`). Reports may also carry elaborated binders: a declaration can include `binders: [{ "name": "C", "type": "…EdgeAtlasCertificate", "kind": "explicit" }]` or a `type` object encoding Lean's `ConstantInfo.type` (`forallE` chain). Graphenium flattens those binders into `depends_on_hypothesis` edges, which captures implicit/section hypotheses that a single-line source scan cannot see. Square-bracket typeclass constraints (`[CommRing R]`) and primitive data parameters (`(n : Nat)`) are deliberately excluded.
+These facts are baked in with `gm run --lean-axioms <report>` (or explicitly generated with `--run-lean-axioms <file>`). Reports may also carry elaborated binders: a declaration can include `binders: [{ "name": "C", "type": "…EdgeAtlasCertificate", "kind": "explicit" }]` or a `type` object encoding Lean's `ConstantInfo.type` (`forallE` chain). Graphenium flattens those binders into `depends_on_hypothesis` edges, which captures implicit/section hypotheses that a single-line source scan cannot see. Binder types that resolve to a transparent project `def`/`abbrev` are ordinary data, not unconstructed certificates, so they do not produce hypothesis edges. Square-bracket typeclass constraints (`[CommRing R]`) and primitive data parameters (`(n : Nat)`) are deliberately excluded as well.
 
 `gm trust` resolves the theorem's transitive dependency cone and reports inherited axioms by class; it exits non-zero on `sorryAx`, non-allowlisted external axioms, or (with `--forbid-native-decide`) native-decision shortcuts. Axioms are keyed canonically, so `Quot.sound` and its normalized node ID `quot_sound` render once as `Quot.sound`, and `Classical.choice` / `propext` keep their Lean spellings. With `--json`, stdout is exactly one `lean-trust.v1` document (including `failure_reasons` on failure), stderr stays clean, and the exit code communicates the gate result. Datalog exposes the same facts as `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, and `untrusted_theorem/1`, plus hypothesis propagation via `depends_on_hypothesis/2`, `inherits_hypothesis/2`, and `conditional_theorem/1`.
 
@@ -73,7 +73,7 @@ Every audited theorem is classified as:
 | `CONDITIONAL` | Kernel-clean, but takes or transitively inherits a hypothesis/structure parameter. | Fails unless every inherited hypothesis is allowlisted. |
 | `TAINTED` | Inherits `sorryAx`, a forbidden `Lean.ofReduceBool` / `Lean.trustCompiler`, or a disallowed external axiom. | Always fails. |
 
-`lean-trust.v1` entries include `kernel_axioms`, `external_axioms`, `proof_gaps`, `native_decide`, and `assumptions[]`. Each assumption records its `name`, `kind`, `direct_or_transitive` scope, the declaration that introduced it, and its source file:
+`lean-trust.v1` entries include `kernel_axioms`, `external_axioms`, `proof_gaps`, `native_decide`, and `assumptions[]`. Each assumption records its `name`, `kind`, `direct_or_transitive` scope, the declaration that introduced it, and its source file. Auto-detected binders and explicit `--hypothesis` declarations both report `"direct"`:
 
 ```json
 {

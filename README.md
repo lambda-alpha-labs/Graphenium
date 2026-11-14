@@ -125,7 +125,7 @@ For agents, this replaces 30,000-token brute-force `grep`/file-read loops with ~
 Before touching disk, the agent declares its proposed classes, functions, and dependency edges in an in-memory planning workspace (`create_planning_workspace`, `add_planned_symbol`). Graphenium models the future topology of the repository in milliseconds. If the design violates an invariant, the agent receives an exact topological counterexample *in memory* before wasting thousands of tokens rewriting physical files - eliminating the "agent linter deadlock" loop.
 
 ### Pillar 3: Embedded Semi-Naive Datalog Verification Engine
-Graphenium compiles the codebase and Virtual AST into strongly typed EDB relations (`node`, `calls`, `imports`, `inherits`, `implements`, `contains`, `degree`, `hub`) and evaluates first-order rules (`stdlib.dl`) with goal-directed pruning, stratified negation, SCC-ordered strata, semi-naive delta iteration, and full-tuple plus bound-mask hash indexes (up to 10M EDB facts within a bounded step budget).
+Graphenium compiles the codebase and Virtual AST into strongly typed EDB relations (`node`, `calls`, `imports`, `inherits`, `implements`, `contains`, `degree`, `hub`) and evaluates first-order rules (`stdlib.dl`) with goal-directed pruning, stratified negation, SCC-ordered strata, semi-naive delta iteration, and full-tuple plus bound-mask hash indexes used by both positive joins and negation (up to 10M EDB facts within a bounded step budget).
 
 Beyond simple folder rules, `stdlib.dl` proves:
 *   Multi-hop transitive layer bypasses (`bypasses_layer(X, Y, Z)`).

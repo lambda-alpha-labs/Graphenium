@@ -127,7 +127,7 @@ gm query "" --datalog "?- calls_transitive('main', X)." --json
 gm query "" --datalog "?- [calls] calls_transitive('main', X)." --json --show-derived
 ```
 
-Datalog bodies accept `A != B` / `A /= B`; variables must be bound by a positive atom, and ungrounded inequalities are rejected. Negation is stratified: recursive negative cycles are rejected, lower strata are fully materialized before higher strata negate them, and frozen relations use full-tuple plus bound-mask hash indexes. Output is goal-only by default (one result set per `?-` goal); use `--show-derived` to add all materialized IDB relations. `--json` emits a `datalog.v1` report (`edb_facts` plus per-query `variables`, `rows`, `row_count`, `steps_used`, and `truncated`, with optional `derived[]`).
+Datalog bodies accept `A != B` / `A /= B`; variables must be bound by a positive atom, and ungrounded inequalities are rejected. Negation is stratified: recursive negative cycles are rejected, lower strata are fully materialized before higher strata negate them, and positive atoms plus frozen relations use full-tuple and bound-mask hash indexes. Output is goal-only by default (one result set per `?-` goal); use `--show-derived` to add all materialized IDB relations. `--json` emits a `datalog.v1` report (`edb_facts` plus per-query `variables`, `rows`, `row_count`, `steps_used`, and `truncated`, with optional `derived[]`).
 
 ### 6.1 Audit Lean 4 Trust Boundaries
 

@@ -229,7 +229,7 @@ Instead of repeating flags in CI, declare trust policy alongside architecture ru
 }
 ```
 
-`--warn-structure-params` flags unconstructed `structure` / `class` / `opaque` parameters. Binder hypotheses are auto-detected from multi-line signatures, active `section`/`namespace` `variable` declarations, cross-file certificate types, and elaborated `forallE` binders; typeclass constraints (`[CommRing R]`) and primitive data (`(n : Nat)`) are deliberately ignored. Kernel axiom labels are canonicalized so `Quot.sound` and `quot_sound` cannot both appear, and `--json` emits one valid `lean-trust.v1` document on stdout (with `failure_reasons` on failure) while keeping stderr clean. The same facts are available to Datalog via `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, `untrusted_theorem/1`, `depends_on_hypothesis/2`, `inherits_hypothesis/2`, and `conditional_theorem/1`.
+`--warn-structure-params` flags unconstructed `structure` / `class` / `opaque` parameters. Binder hypotheses are auto-detected from multi-line signatures, active `section`/`namespace` `variable` declarations, cross-file certificate types, and elaborated `forallE` binders; transparent `def`/`abbrev` aliases, typeclass constraints (`[CommRing R]`), and primitive data (`(n : Nat)`) are deliberately ignored. Kernel axiom labels are canonicalized so `Quot.sound` and `quot_sound` cannot both appear, and `--json` emits one valid `lean-trust.v1` document on stdout (with `failure_reasons` on failure) while keeping stderr clean. The same facts are available to Datalog via `uses_axiom/2`, `has_untrusted_axiom/1`, `has_native_decide/1`, `untrusted_theorem/1`, `depends_on_hypothesis/2`, `inherits_hypothesis/2`, and `conditional_theorem/1`.
 
 ### Portable CI Artifacts
 
@@ -240,7 +240,7 @@ gm run . --no-semantic --no-viz --out-dir /tmp/gm-out --cache-dir /tmp/gm-cache 
 gm check --graph /tmp/gm-out/graph.json --min-resolution 80 --max-ambiguous 5 --strict
 ```
 
-Persisted `source_file`, manifest keys, and AST cache payloads are repo-relative, so artifacts can be uploaded, cached, or moved between runners without leaking absolute workspace paths.
+Persisted `source_file`, manifest keys, and AST cache payloads are repo-relative, so artifacts can be uploaded, cached, or moved between runners without leaking absolute workspace paths. AST cache keys include the extractor format version and the gm crate version, and `gm run` prunes entries from other versions; scope any CI cache to a single gm version rather than sharing it across upgrades.
 
 For snapshot-to-snapshot containment, compare a pre-change snapshot with the current index:
 
