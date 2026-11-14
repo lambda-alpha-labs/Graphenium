@@ -934,6 +934,16 @@ impl RelationIndex {
         self.masks.insert(mask, index);
     }
 
+    /// Mask with every column bound. Such lookups use [`Self::contains_exact`],
+    /// so callers can skip building a redundant row-index for it.
+    fn full_mask(&self) -> usize {
+        if self.arity >= usize::BITS as usize {
+            usize::MAX
+        } else {
+            (1usize << self.arity) - 1
+        }
+    }
+
     fn contains_exact(&self, tuple: &[Val]) -> bool {
         self.full.contains(tuple)
     }
@@ -1198,7 +1208,8 @@ fn atom_bound_key(terms: &[CompiledTerm<'_>], bindings: &[Option<Val>]) -> Optio
 fn join_atoms(
     atom_index: usize,
     positive: &[CompiledAtom<'_>],
-    indexes: &[RelationIndex],
+    relations: &[&HashSet<Vec<Val>>],
+    indexes: &[Option<RelationIndex>],
     masks: &[usize],
     filters: &[CompiledAtom<'_>],
     filter_indexes: &[&RelationIndex],
@@ -1240,12 +1251,14 @@ fn join_atoms(
     }
 
     let atom = &positive[atom_index];
-    let index = &indexes[atom_index];
     let mask = masks[atom_index];
-    let bound_key = atom_bound_key(&atom.terms, bindings);
     let candidates: Box<dyn Iterator<Item = &Vec<Val>>> = if mask == 0 {
-        Box::new(index.tuples.iter())
+        Box::new(relations[atom_index].iter())
     } else {
+        let index = indexes[atom_index]
+            .as_ref()
+            .expect("non-zero positive mask must have an index");
+        let bound_key = atom_bound_key(&atom.terms, bindings);
         match bound_key
             .as_ref()
             .and_then(|key| index.masks.get(&mask).and_then(|rows| rows.get(key)))
@@ -1260,6 +1273,7 @@ fn join_atoms(
             join_atoms(
                 atom_index + 1,
                 positive,
+                relations,
                 indexes,
                 masks,
                 filters,
@@ -1400,7 +1414,11 @@ impl Interpreter {
             }
             if let Some(index) = self.negation_indexes.get_mut(name) {
                 for mask in masks {
-                    index.ensure_mask(mask);
+                    // Fully ground filters are answered by `contains_exact`;
+                    // indexing every tuple would duplicate `full` for nothing.
+                    if mask != index.full_mask() {
+                        index.ensure_mask(mask);
+                    }
                 }
             }
         }
@@ -1425,15 +1443,19 @@ impl Interpreter {
         // Index every positive atom by the columns that are already bound when
         // it is reached. Without this, a two-atom join such as
         // `p(A,C) :- e(A,B), e(B,C)` scans `e` once per `e` tuple (quadratic),
-        // which makes 40k-edge graphs take minutes.
+        // which makes 40k-edge graphs take minutes. Atoms with no bound column
+        // iterate the source relation directly, so the common single-atom case
+        // never pays for cloning the relation or building a `full` set.
         let positive_masks = positive_bound_masks(&compiled.positive);
-        let positive_indexes: Vec<RelationIndex> = relations
+        let positive_indexes: Vec<Option<RelationIndex>> = relations
             .iter()
             .zip(positive_masks.iter())
             .map(|(relation, &mask)| {
-                let mut index = RelationIndex::new(relation.iter().cloned().collect());
-                index.ensure_mask(mask);
-                index
+                (mask != 0).then(|| {
+                    let mut index = RelationIndex::new(relation.iter().cloned().collect());
+                    index.ensure_mask(mask);
+                    index
+                })
             })
             .collect();
 
@@ -1443,6 +1465,7 @@ impl Interpreter {
         join_atoms(
             0,
             &compiled.positive,
+            &relations,
             &positive_indexes,
             &positive_masks,
             &compiled.filters,
